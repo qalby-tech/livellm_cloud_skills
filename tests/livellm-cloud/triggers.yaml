@@ -1,0 +1,34 @@
+# Prompts for trigger testing. The skill should load for the first list and
+# stay out of the second. Target: at least 18 of 20, and 0 of 10.
+should_trigger:
+  - Log into our supplier portal and download last month's invoices.
+  - Open a real browser and check whether our checkout page works.
+  - I need a browser my agent can drive, one that stays logged in.
+  - Scrape the prices from this site using a real Chrome.
+  - Give me a clean Linux box to run the test suite on.
+  - Run this script on a server, not on my laptop.
+  - Spin up an Ubuntu machine I can SSH into.
+  - I need a Windows desktop to try this installer.
+  - Use a desktop to fill in the form in this Windows app.
+  - Deploy this repo and give it a Postgres.
+  - Put this Docker image online with a URL.
+  - Ship my app from GitHub to LiveLLM.
+  - Roll my app back to the previous build.
+  - Create a Redis for my app.
+  - I need a Postgres database for tests, reachable from the internet.
+  - What is running in my LiveLLM workspace right now?
+  - How much of my LiveLLM plan am I using?
+  - Is anything down in LiveLLM?
+  - Stop the machines you created earlier.
+  - Watch the browser while it fills out this form and take over for the code.
+should_not_trigger:
+  - Set up LiteLLM as a proxy for OpenAI and Anthropic models.
+  - Launch an EC2 instance on AWS.
+  - Write a docker-compose file for my local stack.
+  - What is the difference between Chrome and Firefox?
+  - Explain how CDP works in general.
+  - Deploy this to Vercel.
+  - Create a Postgres table for users.
+  - Write a Playwright test for my local dev server.
+  - Summarize this PDF.
+  - What's the weather in Berlin?

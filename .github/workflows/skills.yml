@@ -1,0 +1,39 @@
+name: skills
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyyaml
+      - run: python3 tools/validate.py
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Zip each skill
+        run: |
+          mkdir -p dist
+          cd skills
+          for s in */; do
+            s="${s%/}"
+            zip -qr "../dist/$s.zip" "$s"
+          done
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
