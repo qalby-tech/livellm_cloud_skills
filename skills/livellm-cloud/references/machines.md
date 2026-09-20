@@ -19,7 +19,12 @@ Windows when something needs a screen.
   "cpus": 4,
   "memory": "8Gi",
   "storageSize": "40Gi",
-  "credentials": { "username": "agent", "password": "GENERATE-A-STRONG-ONE" }
+  "stopAfter": "4h",
+  "credentials": {
+    "username": "agent",
+    "password": "GENERATE-A-STRONG-ONE",
+    "sshKeys": ["ssh-ed25519 AAAA… agent"]
+  }
 }
 ```
 
@@ -32,6 +37,16 @@ The login is set once, at creation, and can never be read back. Generate the
 password, use it, and give it to the user once so they can get in too. A first
 boot takes a few minutes; `wait` covers it.
 
+**Log in with a key, not a password.** Generate a keypair, put the public half
+in `credentials.sshKeys`, keep the private half where you run — never on the
+machine, never in a file the user might commit. The keys the workspace's owner
+added are installed too, so they can get in without asking you.
+
+**`stopAfter` stops the machine when you are done with it**: `"4h"`, `"90m"`,
+up to 30 days, or `"off"` for a machine meant to keep running. Stopping keeps
+the disk and everything on it — nothing is deleted — and it is the honest
+default for a machine made for one job. `connect` shows when it will stop.
+
 ## Reach it
 
 ```
@@ -39,11 +54,14 @@ python3 scripts/llc.py connect ci-box
 ```
 
 `ssh` carries `host` and `port` (the script reads them from the machine's
-status). Log in with the username and password from the create step:
+status). Log in with the key you gave it, or the password from the create step:
 
 ```
-ssh -p PORT agent@HOST
+ssh -i ./id_ed25519 -p PORT agent@HOST
 ```
+
+The SSH port opens a little after the machine reports ready — retry for a
+minute before calling it broken.
 
 Then work as usual: copy files with `scp`, run the job, read the output. Keep
 what you run in the user's own directory, and leave the machine as you found it
@@ -76,5 +94,12 @@ line, and the user's own eyes on the console page for the rest.
   timeout, then report what the status said.
 - **SSH refuses the password.** It is the one set at creation. If the user lost
   it, they can change it in the console; it can't be read back.
+- **A key the user just added doesn't work.** Workspace keys reach a running
+  machine within a few seconds, but only on machines the platform knows the
+  login of — a machine made before that was recorded needs its owner to save
+  the login once, in the console. The platform owns that file: a key added by
+  hand inside the machine is removed again.
+- **The machine stopped by itself.** It had a stop time. Say so, and start it
+  from the console or give it `"stopAfter": "off"` on a save.
 - **The plan is full (402).** Stop and show usage. Suggest what could be removed
   and let the user decide.

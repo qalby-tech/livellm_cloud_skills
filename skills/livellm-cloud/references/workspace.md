@@ -25,6 +25,21 @@ something that doesn't fit is refused with a 402. When that happens:
 
 Stopped machines still use their disk. Kept builds count too.
 
+## SSH keys
+
+The workspace's own SSH keys are installed on every Ubuntu machine, including
+ones already running. Only the user can add or remove one — a workspace key
+opens every machine they have, so an agent is refused. You can read the list:
+
+```
+python3 scripts/llc.py ssh-keys
+```
+
+For a machine you create, put your own public key in its
+`credentials.sshKeys`: it reaches that machine alone, which is the right scope
+for work you were asked to do. To get the user's own key onto their machines,
+send them to the console's Keys page.
+
 ## Is anything wrong
 
 ```

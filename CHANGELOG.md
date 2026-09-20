@@ -5,6 +5,15 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.1.0
+
+- SSH keys: a machine can be created with its own public keys
+  (`credentials.sshKeys`), and `ssh-keys` reads the workspace keys its owner
+  set — those are installed on every Ubuntu machine, including running ones.
+- A machine can be given a stop time (`stopAfter`), so one made for a single
+  job doesn't run forever. `connect` shows when it stops; stopping keeps the
+  disk.
+
 ## 1.0.0
 
 - Checked end to end against a running LiveLLM: an agent signs in with the

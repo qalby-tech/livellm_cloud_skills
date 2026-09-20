@@ -5,7 +5,7 @@ Only the Python standard library. Every command prints JSON on stdout. Errors
 print JSON on stderr with a "next" field saying what to do, and set an exit
 code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
 
-    llc.py login | logout | whoami
+    llc.py login | logout | whoami | ssh-keys
     llc.py ls [--type TYPE]
     llc.py create TYPE --json FILE --yes
     llc.py wait ID [--timeout 600]
@@ -266,6 +266,11 @@ def wait(args):
     raise Problem(f"{args.id} is still not ready", "tell the user what the events say; do not guess", EXIT_NOT_READY)
 
 
+def ssh_keys(_args):
+    """The workspace's SSH keys. Only the user can change them, in the console."""
+    out(request("GET", "/v1/ssh-keys", token=token()))
+
+
 def connect(args):
     tok = token()
     body = {"tool": args.tool} if args.tool else {}
@@ -273,10 +278,14 @@ def connect(args):
     if str(info.get("type", "")).startswith("vm-"):
         # A machine is reached over SSH; its address lives in the status.
         for w in request("GET", "/v1/status", token=tok).get("workloads", []):
-            if w.get("id") == args.id and w.get("ssh"):
+            if w.get("id") != args.id:
+                continue
+            if w.get("ssh"):
                 host, _, port = w["ssh"].rpartition(":")
                 info["ssh"] = {"address": w["ssh"], "host": host, "port": port}
-                break
+            if w.get("expiresAt"):
+                info["stopsAt"] = w["expiresAt"]
+            break
     if args.env:
         for key, value in [("LIVELLM_CDP_URL", (info.get("cdp") or {}).get("url")),
                            ("LIVELLM_CONNECT_TOKEN", info.get("token")),
@@ -308,6 +317,8 @@ def main():
     login_p.set_defaults(fn=login)
     sub.add_parser("logout", help="end this sign-in").set_defaults(fn=logout)
     sub.add_parser("whoami", help="workspace, access and usage").set_defaults(fn=whoami)
+
+    sub.add_parser("ssh-keys", help="the workspace's SSH keys (read-only)").set_defaults(fn=ssh_keys)
 
     ls_p = sub.add_parser("ls", help="list resources")
     ls_p.add_argument("--type")

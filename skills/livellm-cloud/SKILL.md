@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.0.0
+  version: 1.1.0
   documentation: https://docs.live-llm.com
 ---
 
@@ -16,8 +16,9 @@ Everything goes through `scripts/llc.py`, which talks to the API and prints JSON
 
 ## Rules
 
-1. Never print, log, commit or paste the sign-in file, its tokens or an API key.
-   Never put them on a machine, a web page, or into an app's settings.
+1. Never print, log, commit or paste the sign-in file, its tokens, an API key
+   or a private SSH key. Never put them on a machine, a web page, or into an
+   app's settings.
 2. Create, resize and delete only what the user asked for. If you decide you
    need something extra, ask first and say what it uses against their plan.
 3. Delete only resources you created. Never delete anything to get under the
@@ -28,7 +29,9 @@ Everything goes through `scripts/llc.py`, which talks to the API and prints JSON
 6. Hand login codes, CAPTCHAs, payments and confirmations to the user through
    the live view link. Never try to solve or get around them.
 7. Generate strong passwords for databases and ports, pass them to the app that
-   needs them, and show the user once. They can't be read back later.
+   needs them, and show the user once. They can't be read back later. For a
+   machine you create, log in with an SSH key of your own rather than the
+   password, and give it a stop time when the work has an end.
 8. Use only `scripts/llc.py`, plain SSH, and a browser library such as
    Playwright. Nothing else needs to run.
 
