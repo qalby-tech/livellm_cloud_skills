@@ -47,6 +47,8 @@ neither set removes the other.
 up to 30 days, or `"off"` for a machine meant to keep running. Stopping keeps
 the disk and everything on it — nothing is deleted — and it is the honest
 default for a machine made for one job. `connect` shows when it will stop.
+Stopping a machine, by hand or by its own time, clears the stop time: start it
+again and it keeps running until you give it a new one.
 
 ## Reach it
 

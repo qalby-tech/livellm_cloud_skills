@@ -5,6 +5,10 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.1.2
+
+- Says that stopping a machine clears its stop time.
+
 ## 1.1.1
 
 - Says how long a key change takes to reach a running machine: a minute or two,
