@@ -96,8 +96,8 @@ line, and the user's own eyes on the console page for the rest.
 - **SSH refuses the password.** It is the one set at creation. If the user lost
   it, they can change it in the console; it can't be read back.
 - **A key the user just added doesn't work.** A workspace key reaches a running
-  machine within seconds — but only one that started with at least one key of
-  its own or of the workspace's. A machine that booted with none takes its
+  machine in a minute or two — but only one that started with at least one key
+  of its own or of the workspace's. A machine that booted with none takes its
   first key after a restart, and one whose login the platform never recorded
   needs its owner to save that once in the console. The console's Keys page
   names both after a change. This is also why the machines you create should
