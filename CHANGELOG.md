@@ -8,4 +8,6 @@ Claude Code users get the update only when the version changes.
 ## 0.1.0 (unreleased)
 
 - Repository layout, validation and release packaging.
-- `livellm-cloud` skill placeholder. Not ready to use yet.
+- `livellm-cloud`: sign-in with a one-click approval link, then browsers,
+  machines, desktops, apps and databases, with a reference per tool and
+  Playwright examples.

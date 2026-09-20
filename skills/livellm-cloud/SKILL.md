@@ -1,6 +1,6 @@
 ---
 name: livellm-cloud
-description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP while a person watches the live view, run commands on Linux machines over SSH, operate Ubuntu or Windows desktops, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
+description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP while a person watches the live view, run commands on Linux machines over SSH, open Ubuntu or Windows desktops for the user, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
 license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
@@ -11,8 +11,126 @@ metadata:
 
 # LiveLLM Cloud
 
-This skill is still being written and is not ready to use.
+Real computers the user owns: browsers, machines, desktops, apps and databases.
+Everything goes through `scripts/llc.py`, which talks to the API and prints JSON.
 
-If it loads, tell the user that the LiveLLM Cloud skill is not released yet, and
-point them to https://docs.live-llm.com for the API in the meantime. Do not call
-the API on their behalf from this skill.
+## Rules
+
+1. Never print, log, commit or paste the sign-in file, its tokens or an API key.
+   Never put them on a machine, a web page, or into an app's settings.
+2. Create, resize and delete only what the user asked for. If you decide you
+   need something extra, ask first and say what it uses against their plan.
+3. Delete only resources you created. Never delete anything to get under the
+   plan limit.
+4. When the plan is full (a 402), stop and show usage. The user decides.
+5. Never open a port to the internet without a password or an allowed-address
+   list, unless the user asked for a public site.
+6. Hand login codes, CAPTCHAs, payments and confirmations to the user through
+   the live view link. Never try to solve or get around them.
+7. Generate strong passwords for databases and ports, pass them to the app that
+   needs them, and show the user once. They can't be read back later.
+8. Use only `scripts/llc.py`, plain SSH, and a browser library such as
+   Playwright. Nothing else needs to run.
+
+## Signing in
+
+Run `python3 scripts/llc.py whoami`. If it says "not signed in":
+
+```
+python3 scripts/llc.py login
+```
+
+It prints one link with a code. Give the user the link, ask them to click Allow,
+and wait for the command to finish. The sign-in is saved for next time. It asks
+for "create" access: use everything, and manage what this agent creates. For
+runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
+`LIVELLM_API_URL` points at a self-hosted LiveLLM.
+
+## Pick the tool
+
+| The user wants | Resource | Read |
+|---|---|---|
+| A site automated, logged into, scraped or tested in real Chrome | Browser | `references/browsers.md` |
+| Commands run, code built or tested, a server | Linux machine | `references/machines.md` |
+| A desktop watched, Windows, anything with a screen | Desktop machine | `references/machines.md` |
+| A service or site online | App | `references/apps.md` |
+| A database or a cache | Postgres or Redis | `references/databases.md` |
+| Cost, limits, what is running, alerts, signed-in agents | Workspace | `references/workspace.md` |
+
+## The loop
+
+1. **Check the sign-in.** `whoami`. If signed out, `login` and give the user the
+   link. Nothing else works until they click Allow.
+2. **Look before creating.** `ls` shows every resource, its state and who made
+   it. Reuse what the user already has: a browser already logged in to a site is
+   worth more than a fresh one.
+3. **Create only what was asked for.** `create <type> --json body.json --yes`.
+4. **Wait.** `wait <id>` until it is ready. On a timeout, tell the user what the
+   status said. Never guess.
+5. **Connect.** `connect <id>` prints the address and a token that opens it for
+   15 minutes. Pass them straight to your client; reconnecting asks again.
+6. **Work, and hand over when a person is needed.** Send the live view link for
+   login codes, payments, and anything you should not decide alone.
+7. **Finish.** Say what exists now and give the links. Stop or delete only what
+   you created, and say so before you do.
+
+## Examples
+
+### Log into a site and take something out of it
+
+```
+python3 scripts/llc.py ls --type browser
+python3 scripts/llc.py connect shop --tool cdp
+```
+
+Connect a Playwright client to `cdp.url` with the header from `cdp.headers`
+(see `assets/cdp_connect.py`), drive the page, and when the site asks for a
+code, run `connect shop --tool view` and give the user that link so they can
+type it while you wait. Leave the browser running: it stays logged in for
+next time.
+
+### Run a job on a clean machine
+
+```
+python3 scripts/llc.py create vm-ubuntu --json machine.json --yes
+python3 scripts/llc.py wait ci-box
+python3 scripts/llc.py connect ci-box
+```
+
+`machine.json` carries the id, the size and the login to create
+(`references/machines.md`). Connect prints the SSH address. Run the job, collect
+the output, and delete the machine when the user is done with it: you made it.
+
+### Ship an app with a database
+
+```
+python3 scripts/llc.py create storage --json db.json --yes
+python3 scripts/llc.py create pod --json app.json --yes
+python3 scripts/llc.py progress web
+```
+
+Generate the database password, pass it to the app as a write-only value, and
+show the user once. When a build fails, read `progress`, fix the repository and
+run `build web` again. To go back to what worked: `builds web`, then
+`deploy web <build> --yes`.
+
+## When something is refused
+
+Every error prints `{"error": ..., "next": ...}`. Do what `next` says.
+
+| Answer | What it means | What to do |
+|---|---|---|
+| not signed in, 401 | No sign-in, or it ended | `login`, give the user the link |
+| 402 | The plan is full | Stop, show usage, let the user choose |
+| 403 | Beyond this agent's access, or someone else's resource | Tell the user which access it needs |
+| 404 | No such resource here | `ls`; the id is probably wrong |
+| 409 | The resource is mid-change | Wait a few seconds, retry once |
+| 422 | A value was refused; the message names it | Fix that value, never retry unchanged |
+| 5xx | Platform trouble | Retry twice with a pause, then tell the user |
+
+More in `references/troubleshooting.md`.
+
+## If LiveLLM tools are connected
+
+When the agent already has LiveLLM tools of its own, use them instead of this
+script. The steps and the rules above stay the same.

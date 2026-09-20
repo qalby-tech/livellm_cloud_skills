@@ -267,12 +267,20 @@ def wait(args):
 
 
 def connect(args):
+    tok = token()
     body = {"tool": args.tool} if args.tool else {}
-    info = request("POST", f"/v1/workloads/{urllib.parse.quote(args.id)}/connect", body, token=token())
+    info = request("POST", f"/v1/workloads/{urllib.parse.quote(args.id)}/connect", body, token=tok)
+    if str(info.get("type", "")).startswith("vm-"):
+        # A machine is reached over SSH; its address lives in the status.
+        for w in request("GET", "/v1/status", token=tok).get("workloads", []):
+            if w.get("id") == args.id and w.get("ssh"):
+                host, _, port = w["ssh"].rpartition(":")
+                info["ssh"] = {"address": w["ssh"], "host": host, "port": port}
+                break
     if args.env:
         for key, value in [("LIVELLM_CDP_URL", (info.get("cdp") or {}).get("url")),
                            ("LIVELLM_CONNECT_TOKEN", info.get("token")),
-                           ("LIVELLM_SSH", (info.get("ssh") or {}).get("command"))]:
+                           ("LIVELLM_SSH_ADDRESS", (info.get("ssh") or {}).get("address"))]:
             if value:
                 print(f"export {key}={json.dumps(value)}")
         return
