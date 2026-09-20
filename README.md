@@ -5,6 +5,15 @@ browser and log into sites while you watch, run jobs on Linux machines, work in 
 or Windows desktops, deploy apps and create databases. You stay in charge: every agent
 signs in with your approval, and you can sign it out at any time.
 
+This repo holds two things: the **skill** an AI assistant loads, and
+**`livellm`**, the command line for a person at a keyboard. Both drive the same
+public API.
+
+```sh
+go install github.com/qalby-tech/livellm_cloud_skills/cli@latest
+livellm login
+```
+
 > Checked end to end against a running LiveLLM: signing in, creating an app, a
 > database, a browser and a machine, reaching each one, and cleaning up afterwards.
 
