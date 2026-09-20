@@ -1,11 +1,11 @@
 ---
 name: livellm-cloud
-description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP while a person watches the live view, run commands on Linux machines over SSH, open Ubuntu or Windows desktops for the user, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
+description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP while a person watches the live view, run commands on Linux machines over SSH, work on Ubuntu or Windows desktops by screenshot and click, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
 license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.2.0
+  version: 1.3.0
   documentation: https://docs.live-llm.com
 ---
 
@@ -56,7 +56,7 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 |---|---|---|
 | A site automated, logged into, scraped or tested in real Chrome | Browser | `references/browsers.md` |
 | Commands run, code built or tested, a server | Linux machine | `references/machines.md` |
-| A desktop watched, Windows, anything with a screen | Desktop machine | `references/machines.md` |
+| A desktop worked on or watched, Windows, anything with a screen | Desktop machine | `references/machines.md` |
 | A service or site online | App | `references/apps.md` |
 | A database or a cache | Postgres or Redis | `references/databases.md` |
 | Cost, limits, what is running, alerts, signed-in agents | Workspace | `references/workspace.md` |

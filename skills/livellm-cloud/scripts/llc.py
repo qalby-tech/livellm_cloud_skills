@@ -9,7 +9,7 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py ls [--type TYPE]
     llc.py create TYPE --json FILE --yes
     llc.py wait ID [--timeout 600]
-    llc.py connect ID [--tool cdp|view|api] [--env]
+    llc.py connect ID [--tool cdp|view|api|computer] [--env]
     llc.py build ID | builds ID | deploy ID BUILD --yes | progress ID
     llc.py restart ID --yes
     llc.py rm ID --yes
@@ -309,6 +309,7 @@ def connect(args):
             break
     if args.env:
         for key, value in [("LIVELLM_CDP_URL", (info.get("cdp") or {}).get("url")),
+                           ("LIVELLM_COMPUTER_URL", (info.get("computer") or {}).get("url")),
                            ("LIVELLM_CONNECT_TOKEN", info.get("token")),
                            ("LIVELLM_SSH_ADDRESS", (info.get("ssh") or {}).get("address"))]:
             if value:
@@ -363,7 +364,7 @@ def main():
 
     connect_p = sub.add_parser("connect", help="how to reach a resource's tool")
     connect_p.add_argument("id")
-    connect_p.add_argument("--tool", choices=["cdp", "view", "api"])
+    connect_p.add_argument("--tool", choices=["cdp", "view", "api", "computer"])
     connect_p.add_argument("--env", action="store_true", help="print shell exports instead of JSON")
     connect_p.set_defaults(fn=connect)
 

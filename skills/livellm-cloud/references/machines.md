@@ -72,16 +72,39 @@ unless they asked you to change it.
 
 ## Desktops
 
-A desktop machine adds a screen.
+A desktop machine adds a screen, and you can work on it.
 
-To let the user watch or use it, send them the machine's page in the LiveLLM
+```
+python3 scripts/llc.py connect desk-1 --tool computer
+```
+
+That answers with an address, a token and the actions it takes. Each call does
+one thing and hands the screen back:
+
+```
+curl -s -X POST "$URL" -H "Authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"action": "screenshot"}'
+
+# {"action":"screenshot","image":"<base64 PNG>","width":1920,"height":1080}
+```
+
+The actions are the ones a computer-use tool already uses, with the same
+fields: `screenshot`, `zoom`, `cursor_position`, `mouse_move`, `left_click`,
+`right_click`, `middle_click`, `double_click`, `triple_click`,
+`left_click_drag`, `left_mouse_down`, `left_mouse_up`, `type`, `key`,
+`hold_key`, `scroll`, `wait`. Coordinates are the pixels of the screenshot you
+were given — nothing is scaled — and `"screenshot": false` skips the picture
+when you don't need it.
+
+Look before you act: take a screenshot, decide from what is on it, then act,
+then look again. The screen is a person's desktop, not a terminal — prefer SSH
+for anything with a command line, and a browser for web work.
+
+To let the user watch or take over, send them the machine's page in the LiveLLM
 console: the screen opens there, and Windows machines also offer a remote
-desktop file for their own client.
-
-`connect win-1 --tool view` returns a screen stream for a VNC client, not a page
-to open in a tab. Driving a desktop from the agent (clicking and typing) is not
-available yet: use a browser for web work, SSH for anything with a command
-line, and the user's own eyes on the console page for the rest.
+desktop file for their own client. `connect desk-1 --tool view` returns a
+screen stream for a VNC client, not a page to open in a tab.
 
 ## Stopping and deleting
 
@@ -108,5 +131,9 @@ line, and the user's own eyes on the console page for the rest.
   added by hand inside the machine is removed on the next change.
 - **The machine stopped by itself.** It had a stop time. Say so, and start it
   from the console or give it `"stopAfter": "off"` on a save.
+- **The screen is black.** It is asleep. Send a `mouse_move` or a `key`, wait a
+  moment, then take the screenshot again.
+- **The screen asks for a password.** It is locked, and that is the user's to
+  type. Send them the machine's page in the console rather than guessing.
 - **The plan is full (402).** Stop and show usage. Suggest what could be removed
   and let the user decide.
