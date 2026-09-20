@@ -5,8 +5,8 @@ browser and log into sites while you watch, run jobs on Linux machines, work in 
 or Windows desktops, deploy apps and create databases. You stay in charge: every agent
 signs in with your approval, and you can sign it out at any time.
 
-> **Status:** early. Sign-in, browsers, machines, apps and databases work; the skill
-> is still being tested for how reliably it loads. Expect small changes before 1.0.
+> Checked end to end against a running LiveLLM: signing in, creating an app, a
+> database, a browser and a machine, reaching each one, and cleaning up afterwards.
 
 ## Skills
 

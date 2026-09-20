@@ -5,6 +5,14 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.0.0
+
+- Checked end to end against a running LiveLLM: an agent signs in with the
+  approval link, creates an app, a database, a browser and a machine, reaches
+  each of them, and deletes what it created. The app's address refuses a
+  request without its password, a real Playwright client drives the browser and
+  is refused without a token, and the machine answers on its SSH port.
+
 ## 0.2.0
 
 - First release you can install.
