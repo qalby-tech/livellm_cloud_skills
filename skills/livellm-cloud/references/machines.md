@@ -40,7 +40,8 @@ boot takes a few minutes; `wait` covers it.
 **Log in with a key, not a password.** Generate a keypair, put the public half
 in `credentials.sshKeys`, keep the private half where you run — never on the
 machine, never in a file the user might commit. The keys the workspace's owner
-added are installed too, so they can get in without asking you.
+added are installed alongside yours, so they can get in without asking you, and
+neither set removes the other.
 
 **`stopAfter` stops the machine when you are done with it**: `"4h"`, `"90m"`,
 up to 30 days, or `"off"` for a machine meant to keep running. Stopping keeps
@@ -94,11 +95,15 @@ line, and the user's own eyes on the console page for the rest.
   timeout, then report what the status said.
 - **SSH refuses the password.** It is the one set at creation. If the user lost
   it, they can change it in the console; it can't be read back.
-- **A key the user just added doesn't work.** Workspace keys reach a running
-  machine within a few seconds, but only on machines the platform knows the
-  login of — a machine made before that was recorded needs its owner to save
-  the login once, in the console. The platform owns that file: a key added by
-  hand inside the machine is removed again.
+- **A key the user just added doesn't work.** A workspace key reaches a running
+  machine within seconds — but only one that started with at least one key of
+  its own or of the workspace's. A machine that booted with none takes its
+  first key after a restart, and one whose login the platform never recorded
+  needs its owner to save that once in the console. The console's Keys page
+  names both after a change. This is also why the machines you create should
+  carry a key from the start.
+- **A key vanished from a machine.** The platform owns that file: anything
+  added by hand inside the machine is removed on the next change.
 - **The machine stopped by itself.** It had a stop time. Say so, and start it
   from the console or give it `"stopAfter": "off"` on a save.
 - **The plan is full (402).** Stop and show usage. Suggest what could be removed

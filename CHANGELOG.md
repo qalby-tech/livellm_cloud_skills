@@ -9,7 +9,9 @@ Claude Code users get the update only when the version changes.
 
 - SSH keys: a machine can be created with its own public keys
   (`credentials.sshKeys`), and `ssh-keys` reads the workspace keys its owner
-  set — those are installed on every Ubuntu machine, including running ones.
+  set. Both sets are installed together on every Ubuntu machine, including ones
+  already running; neither removes the other. A machine that booted with no
+  keys at all takes its first one after a restart.
 - A machine can be given a stop time (`stopAfter`), so one made for a single
   job doesn't run forever. `connect` shows when it stops; stopping keeps the
   disk.
