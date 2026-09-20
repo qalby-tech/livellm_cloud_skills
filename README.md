@@ -92,6 +92,9 @@ the console. For a self-hosted LiveLLM, set `LIVELLM_API_URL` to its address.
 - Run `python3 tools/validate.py` before pushing. CI runs it too.
 - Trigger tests live in `tests/<skill>/`.
 - To release, follow the steps at the top of [CHANGELOG.md](CHANGELOG.md).
+- We don't publish to OpenClaw's ClawHub registry: it republishes skills under
+  MIT-0 and rejects other licence terms. OpenClaw installs from this repository
+  instead, with the command above.
 
 ## License
 
