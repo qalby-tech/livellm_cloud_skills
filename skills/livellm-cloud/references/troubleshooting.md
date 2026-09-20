@@ -48,6 +48,10 @@ repository and run `build <id>`. If the new build is worse than the old one,
 **A public address answers 404 or 502.** The app may still be starting, or the
 port in its settings doesn't match what the program listens on.
 
+**Something runs but misbehaves.** `logs <id>` prints the last log lines and
+each container's state, restarts and resource use. Read it before guessing, and
+quote the line that explains it rather than summarising vaguely.
+
 **A password doesn't work.** Database, machine and port passwords are set once
 and can't be read back. The user can set a new one; every app using it then
 needs the new value.

@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.1.2
+  version: 1.2.0
   documentation: https://docs.live-llm.com
 ---
 
@@ -27,7 +27,8 @@ Everything goes through `scripts/llc.py`, which talks to the API and prints JSON
 5. Never open a port to the internet without a password or an allowed-address
    list, unless the user asked for a public site.
 6. Hand login codes, CAPTCHAs, payments and confirmations to the user through
-   the live view link. Never try to solve or get around them.
+   the live view link. Never try to solve or get around them, and never ask the
+   user to send you a code: send the link instead, so they type it themselves.
 7. Generate strong passwords for databases and ports, pass them to the app that
    needs them, and show the user once. They can't be read back later. For a
    machine you create, log in with an SSH key of your own rather than the

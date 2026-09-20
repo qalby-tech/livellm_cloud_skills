@@ -100,6 +100,11 @@ belong in a database, not in an app's disk: see `references/databases.md`.
   repository, then `build web`. Don't change unrelated settings to force it.
 - **The address answers 404 or 502.** The app may still be starting: `wait web`.
   Check the port number matches what the program listens on.
+- **It built and started but doesn't work.** `logs web` prints the last log
+  lines with each container's state, restarts, processor and memory use. Read
+  it before guessing; quote the line that explains it when you report back.
+- **It keeps restarting.** `logs web` shows the restart count — usually a crash
+  on boot, and the reason is in the last lines before each restart.
 - **A value was refused (422).** The message names the field. Fix that one.
 - **The app needs a password you generated.** Show it to the user once; it can't
   be read back.

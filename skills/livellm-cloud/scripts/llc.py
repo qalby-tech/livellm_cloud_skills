@@ -5,7 +5,7 @@ Only the Python standard library. Every command prints JSON on stdout. Errors
 print JSON on stderr with a "next" field saying what to do, and set an exit
 code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
 
-    llc.py login | logout | whoami | ssh-keys
+    llc.py login | logout | whoami | ssh-keys | logs <id>
     llc.py ls [--type TYPE]
     llc.py create TYPE --json FILE --yes
     llc.py wait ID [--timeout 600]
@@ -266,6 +266,27 @@ def wait(args):
     raise Problem(f"{args.id} is still not ready", "tell the user what the events say; do not guess", EXIT_NOT_READY)
 
 
+def logs(args):
+    """Recent log lines from a resource, with how its containers are doing."""
+    info = request("GET", f"/v1/workloads/{urllib.parse.quote(args.id)}/observe?tailLines={int(args.lines)}", token=token())
+    out({
+        "id": args.id,
+        "pods": [{
+            "name": p.get("name"),
+            "phase": p.get("phase"),
+            "ready": p.get("ready"),
+            "containers": [{
+                "name": c.get("name"),
+                "state": c.get("state"),
+                "restarts": c.get("restartCount"),
+                "cpu": c.get("cpu"),
+                "memory": c.get("memory"),
+                "logs": [f"{l.get('ts','')} {l.get('body','')}".strip() for l in (c.get("recentLogs") or [])],
+            } for c in (p.get("containers") or [])],
+        } for p in (info.get("pods") or [])],
+    })
+
+
 def ssh_keys(_args):
     """The workspace's SSH keys. Only the user can change them, in the console."""
     out(request("GET", "/v1/ssh-keys", token=token()))
@@ -317,6 +338,11 @@ def main():
     login_p.set_defaults(fn=login)
     sub.add_parser("logout", help="end this sign-in").set_defaults(fn=logout)
     sub.add_parser("whoami", help="workspace, access and usage").set_defaults(fn=whoami)
+
+    logs_p = sub.add_parser("logs", help="recent log lines and how the containers are doing")
+    logs_p.add_argument("id")
+    logs_p.add_argument("--lines", type=int, default=100)
+    logs_p.set_defaults(fn=logs)
 
     sub.add_parser("ssh-keys", help="the workspace's SSH keys (read-only)").set_defaults(fn=ssh_keys)
 

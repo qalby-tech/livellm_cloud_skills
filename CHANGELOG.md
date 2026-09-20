@@ -5,6 +5,15 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.2.0
+
+- `logs <id>`: the last log lines of a resource with each container's state,
+  restarts and resource use — what to read when something runs but misbehaves.
+- Never ask the user to send a login code: send them the live view link so they
+  type it themselves. Two independent judges scored the hand-over against a
+  version of this task without the skill; both preferred the skill's answer, and
+  both named the same failure without it — tearing down the user's own browser.
+
 ## 1.1.2
 
 - Says that stopping a machine clears its stop time.
