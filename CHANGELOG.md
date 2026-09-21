@@ -16,6 +16,15 @@ Claude Code users get the update only when the version changes.
 - `livellm`: sign in, list, status, logs, connect, keys, create, rm, restart,
   build, builds, deploy. One binary, no dependencies, five platforms.
 
+## 1.4.0
+
+- Apps that work together: a `stack` whose apps reach each other by plain name
+  (`db:5432`), `internal` ports with no public address, and `dependsOn` for what
+  an app needs first.
+- `compose <file>`: a compose file becomes a stack. It plans first — the apps,
+  notes on what was chosen or left out, the variables it needs — and creates
+  every app at once with `--yes`, all or nothing.
+
 ## 1.3.0
 
 - Desktops can be worked on, not only watched: `connect <id> --tool computer`

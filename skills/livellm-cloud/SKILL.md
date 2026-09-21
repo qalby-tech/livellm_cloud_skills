@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.3.0
+  version: 1.4.0
   documentation: https://docs.live-llm.com
 ---
 
@@ -58,6 +58,7 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 | Commands run, code built or tested, a server | Linux machine | `references/machines.md` |
 | A desktop worked on or watched, Windows, anything with a screen | Desktop machine | `references/machines.md` |
 | A service or site online | App | `references/apps.md` |
+| Several apps that work together, or a `compose.yaml` to run | Stack of apps | `references/apps.md` |
 | A database or a cache | Postgres or Redis | `references/databases.md` |
 | Cost, limits, what is running, alerts, signed-in agents | Workspace | `references/workspace.md` |
 
