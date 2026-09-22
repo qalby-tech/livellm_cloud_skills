@@ -16,6 +16,11 @@ Claude Code users get the update only when the version changes.
 - `livellm`: sign in, list, status, logs, connect, keys, create, rm, restart,
   build, builds, deploy. One binary, no dependencies, five platforms.
 
+## The command line moved
+
+`livellm` now lives at [qalby-tech/livellm_cloud_cli](https://github.com/qalby-tech/livellm_cloud_cli)
+(from its 0.1.3). The `cli-v*` tags here stay as they were.
+
 ## 1.5.1
 
 - `create apps --json stack.json`: several apps at once, all or nothing.
