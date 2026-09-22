@@ -61,8 +61,7 @@ why. The app keeps its recent builds; they count against the plan's disk.
 ## Apps that work together
 
 Most real software is several apps: a site, a worker, a database, a cache. Put
-them in one **stack** and they find each other by plain name, the way a compose
-file writes it:
+them in one **stack** and they find each other by plain name:
 
 ```json
 { "id": "shop-db",  "stack": "shop", "hostname": "db",  "image": "postgres:17",
@@ -84,30 +83,9 @@ file writes it:
   port accepts a connection, and none of them can be deleted while it is listed
   (delete the dependent app first). Apps that wait for each other in a loop are
   refused.
-
-### From a compose file
-
-If the user has a `compose.yaml`, don't translate it by hand:
-
-```
-python3 scripts/llc.py compose compose.yaml --stack shop          # plans, creates nothing
-python3 scripts/llc.py compose compose.yaml --stack shop --yes    # creates every app at once
-```
-
-The plan lists the apps (named `<stack>-<service>`), `notes` on anything chosen
-for you or left out, `variables` the file needs values for (`--var NAME=value`)
-and `problems` that block it. Show the user the apps and the notes before
-`--yes`. Things worth knowing:
-
-- A published port (`"8080:80"`) becomes a public HTTPS address on the
-  container's port; `expose` becomes an internal port; a published database port
-  stays internal.
-- A service built from source (`build:`) needs `--repo URL [--ref main]` — the
-  repository the compose file lives in. A private one reads its token from the
-  `LIVELLM_GIT_TOKEN` environment variable.
-- A service keeps one volume (5Gi unless you create the apps yourself); files
-  mounted from the user's machine are left out — say so.
-- It is all or nothing: if one app is refused, none is created.
+- To create several at once, all or nothing, POST them together:
+  `POST /v1/workloads` with `{"apps": [<create body>, …]}` — the same bodies
+  `create pod` takes. (`create` makes one at a time.)
 
 For a database the user cares about, prefer a managed one
 (`references/databases.md`) over a `postgres` image in a stack: it has backups.

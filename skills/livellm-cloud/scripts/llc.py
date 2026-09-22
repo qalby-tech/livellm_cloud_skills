@@ -325,35 +325,6 @@ def simple(method, path, ok):
     return run
 
 
-def compose(args):
-    """A compose file becomes a stack of apps. Without --yes it only plans."""
-    body = {"compose": Path(args.file).read_text()}
-    if args.stack:
-        body["stack"] = args.stack
-    if args.repo:
-        body["git"] = {"url": args.repo, **({"ref": args.ref} if args.ref else {})}
-    variables = dict(v.split("=", 1) for v in (args.var or []) if "=" in v)
-    if variables:
-        body["variables"] = variables
-    tok = token()
-    plan = request("POST", "/v1/workloads/compose", {**body, "dryRun": True}, token=tok)
-    if plan.get("problems") or plan.get("variables"):
-        plan["next"] = ("fix what `problems` says (a service built from source needs --repo URL), and give every name in "
-                        "`variables` a value with --var NAME=value; ask the user for values you don't have")
-        out(plan)
-        sys.exit(EXIT_USER)
-    if not args.yes:
-        plan["next"] = "show the user the apps and the notes; when they agree, run the same command with --yes"
-        out(plan)
-        return
-    if os.environ.get("LIVELLM_GIT_TOKEN"):
-        body["gitAuth"] = {"token": os.environ["LIVELLM_GIT_TOKEN"]}
-    made = request("POST", "/v1/workloads/compose", body, token=tok)
-    ids = made.get("created", [])
-    out({"stack": made.get("stack"), "created": ids, "notes": made.get("notes", []),
-         "next": "llc.py wait " + (ids[-1] if ids else "<id>") + ", then llc.py connect the app with a public port"})
-
-
 def rm(args):
     request("DELETE", f"/v1/workloads/{urllib.parse.quote(args.id)}", token=token())
     out({"deleted": args.id})
@@ -396,15 +367,6 @@ def main():
     connect_p.add_argument("--tool", choices=["cdp", "view", "api", "computer"])
     connect_p.add_argument("--env", action="store_true", help="print shell exports instead of JSON")
     connect_p.set_defaults(fn=connect)
-
-    compose_p = sub.add_parser("compose", help="a compose file becomes a stack of apps (plans unless --yes)")
-    compose_p.add_argument("file")
-    compose_p.add_argument("--stack", help="the stack's name; defaults to the file's top-level name")
-    compose_p.add_argument("--repo", help="the repository the file lives in, for services built from source")
-    compose_p.add_argument("--ref", help="branch, tag or commit of --repo")
-    compose_p.add_argument("--var", action="append", metavar="NAME=value", help="a value for ${NAME} in the file")
-    compose_p.add_argument("--yes", action="store_true", help="the user agreed to create these apps")
-    compose_p.set_defaults(fn=compose)
 
     build_p = sub.add_parser("build", help="build an app from its repository now")
     build_p.add_argument("id")

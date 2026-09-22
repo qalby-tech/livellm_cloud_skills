@@ -16,6 +16,11 @@ Claude Code users get the update only when the version changes.
 - `livellm`: sign in, list, status, logs, connect, keys, create, rm, restart,
   build, builds, deploy. One binary, no dependencies, five platforms.
 
+## 1.5.0
+
+- The `compose` command is gone for now, with the platform's compose file
+  import. Several apps are still created together with `POST /v1/workloads`.
+
 ## 1.4.0
 
 - Apps that work together: a `stack` whose apps reach each other by plain name
