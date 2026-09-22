@@ -10,7 +10,7 @@ This repo holds two things: the **skill** an AI assistant loads, and
 public API.
 
 ```sh
-go install github.com/qalby-tech/livellm_cloud_cli@latest
+go install github.com/qalby-tech/livellm_cloud_cli/cmd/livellm@latest
 livellm login
 ```
 
