@@ -16,6 +16,14 @@ Claude Code users get the update only when the version changes.
 - `livellm`: sign in, list, status, logs, connect, keys, create, rm, restart,
   build, builds, deploy. One binary, no dependencies, five platforms.
 
+## 1.5.1
+
+- `create apps --json stack.json`: several apps at once, all or nothing.
+
+## livellm 0.1.2 (the command line)
+
+- `create apps -f stack.json`: several apps at once, all or nothing.
+
 ## 1.5.0
 
 - The `compose` command is gone for now, with the platform's compose file

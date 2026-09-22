@@ -244,6 +244,15 @@ def ls(args):
 
 def create(args):
     body = json.loads(Path(args.json).read_text())
+    if args.type == "apps":
+        # several apps at once, all or nothing: a list of app settings
+        apps = body if isinstance(body, list) else body.get("apps") or []
+        if not apps:
+            raise Problem("the file should hold a list of apps, or {\"apps\": [...]}", "fix the file", EXIT_OTHER)
+        made = request("POST", "/v1/workloads", {"apps": apps}, token=token())
+        ids = made.get("created", [])
+        out({"created": ids, "next": f"llc.py wait {ids[-1] if ids else '<id>'} then llc.py connect the app with a public port"})
+        return
     request("POST", f"/v1/workloads/{urllib.parse.quote(args.type)}", body, token=token())
     out({"created": body.get("id"), "type": args.type,
          "next": f"llc.py wait {body.get('id')} then llc.py connect {body.get('id')}"})
@@ -351,7 +360,7 @@ def main():
     ls_p.add_argument("--type")
     ls_p.set_defaults(fn=ls)
 
-    create_p = sub.add_parser("create", help="create a resource from a JSON file")
+    create_p = sub.add_parser("create", help="create a resource from a JSON file (type apps: several at once)")
     create_p.add_argument("type")
     create_p.add_argument("--json", required=True)
     create_p.add_argument("--yes", action="store_true", required=True, help="the user asked for this resource")

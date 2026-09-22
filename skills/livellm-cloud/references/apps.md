@@ -83,9 +83,9 @@ them in one **stack** and they find each other by plain name:
   port accepts a connection, and none of them can be deleted while it is listed
   (delete the dependent app first). Apps that wait for each other in a loop are
   refused.
-- To create several at once, all or nothing, POST them together:
-  `POST /v1/workloads` with `{"apps": [<create body>, …]}` — the same bodies
-  `create pod` takes. (`create` makes one at a time.)
+- To create several at once, all or nothing, put their settings in one JSON
+  list and run `python3 scripts/llc.py create apps --json stack.json --yes` —
+  the same bodies `create pod` takes, one per service.
 
 For a database the user cares about, prefer a managed one
 (`references/databases.md`) over a `postgres` image in a stack: it has backups.
