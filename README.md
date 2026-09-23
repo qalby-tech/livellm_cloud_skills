@@ -5,13 +5,15 @@ browser and log into sites while you watch, run jobs on Linux machines, work in 
 or Windows desktops, deploy apps and create databases. You stay in charge: every agent
 signs in with your approval, and you can sign it out at any time.
 
-This repo holds two things: the **skill** an AI assistant loads, and
-**`livellm`**, the command line for a person at a keyboard. Both drive the same
-public API.
+This repo holds the **skill** an AI assistant loads. The command line for a
+person at a keyboard, **`livellm`**, lives at
+[qalby-tech/livellm_cloud_cli](https://github.com/qalby-tech/livellm_cloud_cli).
+Both drive the same public API.
 
-```sh
-go install github.com/qalby-tech/livellm_cloud_cli/cmd/livellm@latest
-livellm login
+Or paste this into your agent and let it set everything up:
+
+```
+Read https://docs.live-llm.com/SKILL.md and set up LiveLLM for me
 ```
 
 > Checked end to end against a running LiveLLM: signing in, creating an app, a
