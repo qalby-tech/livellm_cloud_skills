@@ -27,7 +27,7 @@ Stopped machines still use their disk. Kept builds count too.
 
 ## SSH keys
 
-The workspace's own SSH keys are installed on every Ubuntu machine, including
+The workspace's own SSH keys are installed on every Linux machine, including
 ones already running. Only the user can add or remove one — a workspace key
 opens every machine they have, so an agent is refused. You can read the list:
 

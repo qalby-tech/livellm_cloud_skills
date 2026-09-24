@@ -1,7 +1,9 @@
 # Browsers
 
 A browser is a real Chrome the user owns. It keeps its profile, so logins
-survive between tasks, and a person can watch it or take over at any time.
+survive between tasks, and a person can watch it or take over at any time. In
+the console, browsers are made under New resource → Apps → Browser and listed
+under Apps.
 
 ## Reuse before you create
 

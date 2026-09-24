@@ -1,7 +1,9 @@
 # Apps
 
 An app runs a container and gets a public HTTPS address. It comes either from an
-image you name, or from a Git repository the platform builds for you.
+image you name, or from a Git repository the platform builds for you. In the
+console this is a **Composable App** (New resource → Apps): one service or
+several. Each service is one `pod` body here.
 
 ## From an image
 
@@ -60,8 +62,9 @@ why. The app keeps its recent builds; they count against the plan's disk.
 
 ## Apps that work together
 
-Most real software is several apps: a site, a worker, a database, a cache. Put
-them in one **stack** and they find each other by plain name:
+Most real software is several services: a site, a worker, a database, a cache.
+Put them in one **stack** — the services of one Composable App — and they find
+each other by plain name:
 
 ```json
 { "id": "shop-db",  "stack": "shop", "hostname": "db",  "image": "postgres:17",

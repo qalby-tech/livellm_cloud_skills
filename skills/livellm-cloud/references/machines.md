@@ -1,14 +1,17 @@
 # Machines and desktops
 
-A machine is a whole computer: Ubuntu for jobs and servers, Ubuntu desktop or
-Windows when something needs a screen. A Desktop App is lighter: a set of Linux
-desktops that start in seconds.
+A machine is a whole computer: an Ubuntu, Debian or Fedora server for jobs and
+services, an Ubuntu desktop or Windows 11 when something needs a screen, and
+Windows Server Core for Windows services. A Desktop App is lighter: a set of
+Linux desktops that start in seconds. In the console, machines are under
+Machines (New resource → Linux, Windows 11 or Windows Server) and Desktop Apps
+under Apps.
 
 | Type | Use it for |
 |---|---|
-| `vm-ubuntu` | builds, tests, scripts, anything with a command line |
-| `vm-ubuntu-desktop` | a Linux desktop a person will look at |
-| `vm-windows` | Windows software |
+| `vm-ubuntu` | a Linux server: builds, tests, scripts, anything with a command line |
+| `vm-ubuntu-desktop` | an Ubuntu desktop a person will look at |
+| `vm-windows` | Windows 11 software; with `"windowsEdition": "server"`, a Windows Server |
 | `desktop` | a Desktop App: several quick Linux desktops, one per task |
 
 A `vm-ubuntu` runs Ubuntu 24.04 unless you ask for another system with `"os"`:
@@ -68,8 +71,8 @@ python3 scripts/llc.py exec ci-box "cd app && make test" --session job --timeout
 `exec` runs one bash command as the machine's own login and answers with
 `exitCode`, `stdout`, `stderr`, `durationMs` and `truncated` (each stream is cut
 at 1 MiB). Commands with the same `--session` share a working folder. The
-timeout is in seconds, 60 by default, 600 at most. It works on Ubuntu machines
-and Desktop Apps, not on Windows.
+timeout is in seconds, 60 by default, 600 at most. It works on Linux machines
+(Ubuntu, Debian, Fedora) and Desktop Apps, not on Windows.
 
 It needs the Run commands permission. Without it you get a 403: ask the user to
 turn it on for this agent on the console's Agents page.
@@ -99,7 +102,8 @@ unless they asked you to change it.
 
 ## Desktops
 
-A desktop machine adds a screen, and you can work on it.
+A desktop machine adds a screen, and you can work on it. Windows Server Core's
+screen is a command line with a menu, not a desktop.
 
 ```
 python3 scripts/llc.py connect desk-1 --tool computer
@@ -183,7 +187,8 @@ you make lasts an hour at most, whatever `--for` says; the user can make longer 
 the console. It needs the Use desktops permission. `shares desk-1` lists the
 open links, and `unshare desk-1 SHARE_ID` closes one: whoever has it open loses
 the screen within a minute. Close a control link once the user is done with it.
-Windows machines also offer a remote desktop file in the console.
+In the console, Share screen on the machine's page makes the same links, and
+Windows machines also have Download RDP for Remote Desktop.
 
 ## Stopping and deleting
 
@@ -209,7 +214,7 @@ Windows machines also offer a remote desktop file in the console.
 - **A key vanished from a machine.** The platform owns that file: anything
   added by hand inside the machine is removed on the next change.
 - **The machine stopped by itself.** It had a stop time. Say so, and start it
-  from the console or give it `"stopAfter": "off"` on a save.
+  from the console (Start on its page) or give it `"stopAfter": "off"` on a save.
 - **The screen is black.** It is asleep. Send a `mouse_move` or a `key`, wait a
   moment, then take the screenshot again.
 - **The screen asks for a password.** It is locked, and that is the user's to

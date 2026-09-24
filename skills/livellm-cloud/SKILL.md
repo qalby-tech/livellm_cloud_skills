@@ -1,11 +1,11 @@
 ---
 name: livellm-cloud
-description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP while a person watches the live view, run commands on Linux machines, work on Ubuntu or Windows desktops and Desktop Apps by screenshot and click, share a screen with the user by link, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
+description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP while a person watches the live view, run commands on Linux machines (Ubuntu, Debian or Fedora), work on Ubuntu or Windows desktops and Desktop Apps by screenshot and click, share a screen with the user by link, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
 license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.6.0
+  version: 1.6.1
   documentation: https://docs.live-llm.com
 ---
 
@@ -56,17 +56,20 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 
 ## Pick the tool
 
-| The user wants | Resource | Read |
+| The user wants | Resource (`create` type) | Read |
 |---|---|---|
-| A site automated, logged into, scraped or tested in real Chrome | Browser | `references/browsers.md` |
-| Commands run, code built or tested, a server | Linux machine | `references/machines.md` |
-| A desktop worked on or watched, Windows, anything with a screen | Desktop machine | `references/machines.md` |
-| Several Linux desktops that start in seconds, one per task or agent | Desktop App | `references/machines.md` |
-| The user to watch a screen, or take it over | Screen link | `references/machines.md` |
-| A service or site online | App | `references/apps.md` |
-| Several apps that work together | Stack of apps | `references/apps.md` |
-| A database or a cache | Postgres or Redis | `references/databases.md` |
-| Cost, limits, what is running, alerts, signed-in agents | Workspace | `references/workspace.md` |
+| A server: code built or tested, a job, a service, SSH | Linux server: Ubuntu, Debian or Fedora (`vm-ubuntu`, `"os"`) | `references/machines.md` |
+| Commands run on a machine, output back, no SSH | `exec` on a Linux machine or Desktop App | `references/machines.md` |
+| A Linux desktop a person looks at or you click through | Ubuntu desktop (`vm-ubuntu-desktop`) | `references/machines.md` |
+| Windows software, a Windows desktop | Windows 11 (`vm-windows`) | `references/machines.md` |
+| A Windows server, no desktop | Windows Server Core (`vm-windows`, `"windowsEdition": "server"`) | `references/machines.md` |
+| Several Linux desktops that start in seconds, one per task or agent | Desktop App (`desktop`) | `references/machines.md` |
+| The user to watch a screen, or take it over | Screen link (`share`) | `references/machines.md` |
+| A service or site online, from an image or a Git repo, one service or several | Composable App (`pod`) | `references/apps.md` |
+| A site automated, logged into, scraped or tested in real Chrome | Browser (`browser`) | `references/browsers.md` |
+| A database | PostgreSQL (`storage`, `"engine": "postgres"`) | `references/databases.md` |
+| A cache or a queue | Redis (`storage`, `"engine": "redis"`) | `references/databases.md` |
+| Cost, limits, what is running, alerts, signed-in agents, held machines | Workspace | `references/workspace.md` |
 
 ## The loop
 

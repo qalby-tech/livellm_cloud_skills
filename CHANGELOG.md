@@ -5,6 +5,16 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.6.1
+
+- The routing table names every kind of resource: Linux servers (Ubuntu,
+  Debian, Fedora), the Ubuntu desktop, Windows 11, Windows Server Core,
+  Desktop Apps, Composable Apps, browsers, PostgreSQL and Redis, screen links
+  and running commands.
+- The references use the console's names (Composable App, Desktop App, a
+  Browser under Apps) and say that `exec` and workspace SSH keys work on every
+  Linux machine.
+
 ## 1.6.0
 
 - Machines: Debian 13 and Fedora 44 servers (`"os"`), and Windows Server is
