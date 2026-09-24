@@ -7,6 +7,8 @@ Claude Code users get the update only when the version changes.
 
 ## 1.6.0
 
+- Machines: Debian 13 and Fedora 44 servers (`"os"`), and Windows Server is
+  now Server Core.
 - `exec`: run a command on a Linux machine or a Desktop App and get its output
   and exit code, no SSH needed. It needs the Run commands permission.
 - `share`, `shares`, `unshare`: a link that lets the user watch a screen or

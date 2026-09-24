@@ -11,6 +11,12 @@ desktops that start in seconds.
 | `vm-windows` | Windows software |
 | `desktop` | a Desktop App: several quick Linux desktops, one per task |
 
+A `vm-ubuntu` runs Ubuntu 24.04 unless you ask for another system with `"os"`:
+`"debian"` (Debian 13) or `"fedora"` (Fedora 44). Those two are servers only,
+and the system can't change once the machine exists. A `vm-windows` is Windows
+11 Pro by default; `"windowsEdition": "server"` is Windows Server 2025 Core — a
+command line, no desktop.
+
 ## Create one
 
 `machine.json`:
