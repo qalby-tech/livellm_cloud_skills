@@ -128,7 +128,8 @@ page to open in a tab. To show the user a screen, make a screen link (below).
 
 ## Only one agent per machine
 
-When you work a machine's screen or run commands on it, it is held for you for
+When you work a machine's screen, run commands on it or share its screen, it
+is held for you for
 10 minutes, renewed as you work. Another agent trying it gets a 409 naming you
 and until when; the user is never held back. Let it go when you are done:
 
