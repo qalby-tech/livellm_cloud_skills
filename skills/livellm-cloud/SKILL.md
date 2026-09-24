@@ -1,11 +1,11 @@
 ---
 name: livellm-cloud
-description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP while a person watches the live view, run commands on Linux machines over SSH, work on Ubuntu or Windows desktops by screenshot and click, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
+description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP while a person watches the live view, run commands on Linux machines, work on Ubuntu or Windows desktops and Desktop Apps by screenshot and click, share a screen with the user by link, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
 license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.5.2
+  version: 1.6.0
   documentation: https://docs.live-llm.com
 ---
 
@@ -35,6 +35,8 @@ Everything goes through `scripts/llc.py`, which talks to the API and prints JSON
    password, and give it a stop time when the work has an end.
 8. Use only `scripts/llc.py`, plain SSH, and a browser library such as
    Playwright. Nothing else needs to run.
+9. When you are done with a machine you ran commands on or worked the screen
+   of, `release` it so other agents can use it.
 
 ## Signing in
 
@@ -46,7 +48,9 @@ python3 scripts/llc.py login
 
 It prints one link with a code. Give the user the link, ask them to click Allow,
 and wait for the command to finish. The sign-in is saved for next time. It asks
-for "create" access: use everything, and manage what this agent creates. For
+for "create" access: use everything, and manage what this agent creates.
+Running commands is a separate permission ("Run commands") the user turns on
+for this agent on the console's Agents page; "full" access includes it. For
 runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 `LIVELLM_API_URL` points at a self-hosted LiveLLM.
 
@@ -57,6 +61,8 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 | A site automated, logged into, scraped or tested in real Chrome | Browser | `references/browsers.md` |
 | Commands run, code built or tested, a server | Linux machine | `references/machines.md` |
 | A desktop worked on or watched, Windows, anything with a screen | Desktop machine | `references/machines.md` |
+| Several Linux desktops that start in seconds, one per task or agent | Desktop App | `references/machines.md` |
+| The user to watch a screen, or take it over | Screen link | `references/machines.md` |
 | A service or site online | App | `references/apps.md` |
 | Several apps that work together | Stack of apps | `references/apps.md` |
 | A database or a cache | Postgres or Redis | `references/databases.md` |
@@ -74,8 +80,9 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
    status said. Never guess.
 5. **Connect.** `connect <id>` prints the address and a token that opens it for
    15 minutes. Pass them straight to your client; reconnecting asks again.
-6. **Work, and hand over when a person is needed.** Send the live view link for
-   login codes, payments, and anything you should not decide alone.
+6. **Work, and hand over when a person is needed.** Send the live view link
+   (a browser) or a screen link (a machine or desktop) for login codes,
+   payments, and anything you should not decide alone.
 7. **Finish.** Say what exists now and give the links. Stop or delete only what
    you created, and say so before you do.
 
@@ -99,12 +106,14 @@ next time.
 ```
 python3 scripts/llc.py create vm-ubuntu --json machine.json --yes
 python3 scripts/llc.py wait ci-box
-python3 scripts/llc.py connect ci-box
+python3 scripts/llc.py exec ci-box "git clone https://github.com/you/app && cd app && make test" --session job --timeout 600
+python3 scripts/llc.py release ci-box
 ```
 
 `machine.json` carries the id, the size and the login to create
-(`references/machines.md`). Connect prints the SSH address. Run the job, collect
-the output, and delete the machine when the user is done with it: you made it.
+(`references/machines.md`). `exec` answers with the exit code and the output;
+SSH works too (`connect` prints the address). Release the machine when the job
+is done, and delete it when the user is done with it: you made it.
 
 ### Ship an app with a database
 
@@ -127,9 +136,9 @@ Every error prints `{"error": ..., "next": ...}`. Do what `next` says.
 |---|---|---|
 | not signed in, 401 | No sign-in, or it ended | `login`, give the user the link |
 | 402 | The plan is full | Stop, show usage, let the user choose |
-| 403 | Beyond this agent's access, or someone else's resource | Tell the user which access it needs |
+| 403 | Beyond this agent's permissions, or someone else's resource | Tell the user which permission it needs; they turn it on on the Agents page |
 | 404 | No such resource here | `ls`; the id is probably wrong |
-| 409 | The resource is mid-change | Wait a few seconds, retry once |
+| 409 | Another agent holds the machine, or the resource is mid-change | Held: wait until the time it names, or use another. Otherwise wait a few seconds, retry once |
 | 422 | A value was refused; the message names it | Fix that value, never retry unchanged |
 | 5xx | Platform trouble | Retry twice with a pause, then tell the user |
 
@@ -138,4 +147,7 @@ More in `references/troubleshooting.md`.
 ## If LiveLLM tools are connected
 
 When the agent already has LiveLLM tools of its own, use them instead of this
-script. The steps and the rules above stay the same.
+script. The steps and the rules above stay the same. The `computer` tool works
+a desktop, and `release_machine` lets a machine go. With only the terminal
+connector connected, the tools are `list_machines`, `run_command` and
+`release_machine`. A tool you lack permission for is not listed at all.

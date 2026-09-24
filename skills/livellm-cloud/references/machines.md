@@ -1,13 +1,15 @@
 # Machines and desktops
 
 A machine is a whole computer: Ubuntu for jobs and servers, Ubuntu desktop or
-Windows when something needs a screen.
+Windows when something needs a screen. A Desktop App is lighter: a set of Linux
+desktops that start in seconds.
 
 | Type | Use it for |
 |---|---|
 | `vm-ubuntu` | builds, tests, scripts, anything with a command line |
 | `vm-ubuntu-desktop` | a Linux desktop a person will look at |
 | `vm-windows` | Windows software |
+| `desktop` | a Desktop App: several quick Linux desktops, one per task |
 
 ## Create one
 
@@ -50,7 +52,26 @@ default for a machine made for one job. `connect` shows when it will stop.
 Stopping a machine, by hand or by its own time, clears the stop time: start it
 again and it keeps running until you give it a new one.
 
-## Reach it
+## Run commands
+
+```
+python3 scripts/llc.py exec ci-box "uname -a"
+python3 scripts/llc.py exec ci-box "cd app && make test" --session job --timeout 600
+```
+
+`exec` runs one bash command as the machine's own login and answers with
+`exitCode`, `stdout`, `stderr`, `durationMs` and `truncated` (each stream is cut
+at 1 MiB). Commands with the same `--session` share a working folder. The
+timeout is in seconds, 60 by default, 600 at most. It works on Ubuntu machines
+and Desktop Apps, not on Windows.
+
+It needs the Run commands permission. Without it you get a 403: ask the user to
+turn it on for this agent on the console's Agents page.
+
+This is the simplest way for you to run commands: no keys, no open port. SSH
+works as well, and is what the user uses.
+
+## Reach it over SSH
 
 ```
 python3 scripts/llc.py connect ci-box
@@ -94,17 +115,68 @@ fields: `screenshot`, `zoom`, `cursor_position`, `mouse_move`, `left_click`,
 `right_click`, `middle_click`, `double_click`, `triple_click`,
 `left_click_drag`, `left_mouse_down`, `left_mouse_up`, `type`, `key`,
 `hold_key`, `scroll`, `wait`. Coordinates are the pixels of the screenshot you
-were given — nothing is scaled — and `"screenshot": false` skips the picture
-when you don't need it.
+were given, and `"screenshot": false` skips the picture when you don't need it.
+To keep screenshots small, connect with `--screen-width 1280` (320 to 3840) and
+`--format jpeg`; clicks are then in the pixels of the smaller picture.
 
 Look before you act: take a screenshot, decide from what is on it, then act,
-then look again. The screen is a person's desktop, not a terminal — prefer SSH
+then look again. The screen is a person's desktop, not a terminal: prefer `exec`
 for anything with a command line, and a browser for web work.
 
-To let the user watch or take over, send them the machine's page in the LiveLLM
-console: the screen opens there, and Windows machines also offer a remote
-desktop file for their own client. `connect desk-1 --tool view` returns a
-screen stream for a VNC client, not a page to open in a tab.
+`connect desk-1 --tool view` returns a screen stream for a VNC client, not a
+page to open in a tab. To show the user a screen, make a screen link (below).
+
+## Only one agent per machine
+
+When you work a machine's screen or run commands on it, it is held for you for
+10 minutes, renewed as you work. Another agent trying it gets a 409 naming you
+and until when; the user is never held back. Let it go when you are done:
+
+```
+python3 scripts/llc.py release desk-1
+```
+
+Desktop Apps and browsers are never held: the user decides which agent uses
+which.
+
+## Desktop Apps
+
+A Desktop App is a set of Linux desktops that start in seconds. `desks.json`:
+
+```json
+{ "id": "desks", "replicas": 3, "cpu": "2", "memory": "4Gi", "resolution": "1280x800" }
+```
+
+```
+python3 scripts/llc.py create desktop --json desks.json --yes
+python3 scripts/llc.py wait desks
+python3 scripts/llc.py connect desks --tool computer --desktop 1
+python3 scripts/llc.py exec desks "ls ~" --desktop 1
+```
+
+`replicas` is how many desktops, 1 to 20; each is reached by its number, from 0,
+with `--desktop N` on `connect`, `exec` and `share`. Every desktop starts clean
+unless `"keepFiles": true` gives each its own home folder that survives restarts
+(`storageSize` sets its size). `keepFiles` is set at creation and can't be
+changed later. Use the desktop the user gave you.
+
+## Screen links
+
+To let the user watch a screen, or take it over, make a link that opens it in
+any browser:
+
+```
+python3 scripts/llc.py share desk-1              # watch only
+python3 scripts/llc.py share desk-1 --control    # watch and use
+python3 scripts/llc.py share desks --desktop 2
+```
+
+The answer holds `url`: give it to the user. It is shown only this once. A link
+you make lasts an hour at most, whatever `--for` says; the user can make longer ones in
+the console. It needs the Use desktops permission. `shares desk-1` lists the
+open links, and `unshare desk-1 SHARE_ID` closes one: whoever has it open loses
+the screen within a minute. Close a control link once the user is done with it.
+Windows machines also offer a remote desktop file in the console.
 
 ## Stopping and deleting
 
@@ -134,6 +206,11 @@ screen stream for a VNC client, not a page to open in a tab.
 - **The screen is black.** It is asleep. Send a `mouse_move` or a `key`, wait a
   moment, then take the screenshot again.
 - **The screen asks for a password.** It is locked, and that is the user's to
-  type. Send them the machine's page in the console rather than guessing.
+  type. Make a control link (`share ID --control`) and let them type it rather
+  than guessing.
+- **409, reserved by another agent.** Wait until the time the message names, or
+  use another machine.
+- **`exec` on Windows is refused.** Windows doesn't take commands this way; use
+  its screen.
 - **The plan is full (402).** Stop and show usage. Suggest what could be removed
   and let the user decide.

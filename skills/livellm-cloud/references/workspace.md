@@ -55,9 +55,13 @@ nobody is paged.
 ## Who is signed in
 
 The console's Agents page lists every agent signed in to the workspace, with its
-access and when it was last used, and signs any of them out in one click. Tell
-the user about it when they wonder what an agent can still do. Signing out takes
-effect immediately, including for this agent.
+permissions and when it was last used, and signs any of them out in one click.
+The permissions are Connect (browsers, apps, databases), Use desktops, Run
+commands, Create, and Manage everything; the user turns each on or off there,
+and it applies on the agent's next call. The page also shows which machines
+agents are holding, and lets the user release them. Tell the user about it when
+they wonder what an agent can still do. Signing out takes effect immediately,
+including for this agent.
 
 ## Ending this agent's own sign-in
 

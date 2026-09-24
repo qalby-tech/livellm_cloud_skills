@@ -9,7 +9,11 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py ls [--type TYPE]
     llc.py create TYPE --json FILE --yes
     llc.py wait ID [--timeout 600]
-    llc.py connect ID [--tool cdp|view|api|computer] [--env]
+    llc.py connect ID [--tool cdp|view|api|computer] [--desktop N]
+                   [--screen-width PX] [--format png|jpeg] [--env]
+    llc.py exec ID "COMMAND" [--session S] [--timeout N] [--desktop N]
+    llc.py share ID [--control] [--for 1h|24h|7d] [--desktop N] | shares ID
+    llc.py unshare ID SHARE_ID | release ID
     llc.py build ID | builds ID | deploy ID BUILD --yes | progress ID
     llc.py restart ID --yes
     llc.py rm ID --yes
@@ -52,7 +56,7 @@ def out(value):
     sys.stdout.write("\n")
 
 
-def request(method, path, body=None, token=None, form=False):
+def request(method, path, body=None, token=None, form=False, timeout=TIMEOUT):
     """One API call. Returns the decoded body, or raises Problem."""
     url = path if path.startswith("http") else API + path
     data, headers = None, {"accept": "application/json"}
@@ -67,7 +71,7 @@ def request(method, path, body=None, token=None, form=False):
         headers["authorization"] = "Bearer " + token
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT, context=ssl.create_default_context()) as r:
+        with urllib.request.urlopen(req, timeout=timeout, context=ssl.create_default_context()) as r:
             text = r.read().decode()
             return json.loads(text) if text.strip() else {}
     except urllib.error.HTTPError as e:
@@ -90,11 +94,12 @@ def http_problem(status, payload):
     if status == 402:
         return Problem(message, "the plan is full: show the user their usage and stop; never delete to make room", EXIT_USER, status)
     if status == 403:
-        return Problem(message, "tell the user which access this needs; they can sign the agent in again with it", EXIT_USER, status)
+        return Problem(message, "tell the user which permission this needs; they can turn it on for this agent on the console's Agents page", EXIT_USER, status)
     if status == 404:
         return Problem(message, "run: llc.py ls, the id is probably wrong", EXIT_OTHER, status)
     if status == 409:
-        return Problem(message, "the resource is mid-change: wait a few seconds and retry once", EXIT_BUSY, status)
+        return Problem(message, "if another agent holds the machine, wait until the time the message names or use another; "
+                       "otherwise the resource is mid-change: wait a few seconds and retry once", EXIT_BUSY, status)
     if status == 422:
         return Problem(message, "fix the field the message names; do not retry unchanged", EXIT_OTHER, status)
     if status >= 500:
@@ -304,6 +309,11 @@ def ssh_keys(_args):
 def connect(args):
     tok = token()
     body = {"tool": args.tool} if args.tool else {}
+    if args.desktop is not None:
+        body["desktop"] = args.desktop
+    screen = {k: v for k, v in (("width", args.screen_width), ("format", args.format)) if v}
+    if screen:
+        body["screen"] = screen
     info = request("POST", f"/v1/workloads/{urllib.parse.quote(args.id)}/connect", body, token=tok)
     if str(info.get("type", "")).startswith("vm-"):
         # A machine is reached over SSH; its address lives in the status.
@@ -325,6 +335,26 @@ def connect(args):
                 print(f"export {key}={json.dumps(value)}")
         return
     out(info)
+
+
+def run_command(args):
+    """One bash command on a Linux machine or a Desktop App's desktop."""
+    body = {"command": args.command, "timeout": args.timeout}
+    if args.session:
+        body["session"] = args.session
+    if args.desktop is not None:
+        body["desktop"] = args.desktop
+    # The answer comes when the command ends, so wait a little longer than it may run.
+    out(request("POST", f"/v1/workloads/{urllib.parse.quote(args.id)}/exec", body,
+                token=token(), timeout=args.timeout + 30))
+
+
+def share(args):
+    """A link that opens the screen in any browser. Its address is shown only now."""
+    body = {"mode": "control" if args.control else "view", "for": args.duration}
+    if args.desktop is not None:
+        body["desktop"] = args.desktop
+    out(request("POST", f"/v1/workloads/{urllib.parse.quote(args.id)}/shares", body, token=token()))
 
 
 def simple(method, path, ok):
@@ -374,8 +404,37 @@ def main():
     connect_p = sub.add_parser("connect", help="how to reach a resource's tool")
     connect_p.add_argument("id")
     connect_p.add_argument("--tool", choices=["cdp", "view", "api", "computer"])
+    connect_p.add_argument("--desktop", type=int, help="for a Desktop App: which desktop, from 0")
+    connect_p.add_argument("--screen-width", type=int, help="computer: shrink screenshots to this many pixels wide (320-3840)")
+    connect_p.add_argument("--format", choices=["png", "jpeg"], help="computer: jpeg makes screenshots much smaller")
     connect_p.add_argument("--env", action="store_true", help="print shell exports instead of JSON")
     connect_p.set_defaults(fn=connect)
+
+    exec_p = sub.add_parser("exec", help="run one command on a Linux machine or a Desktop App")
+    exec_p.add_argument("id")
+    exec_p.add_argument("command")
+    exec_p.add_argument("--session", help="commands in the same session share a working folder")
+    exec_p.add_argument("--timeout", type=int, default=60, help="seconds, up to 600")
+    exec_p.add_argument("--desktop", type=int, help="for a Desktop App: which desktop, from 0")
+    exec_p.set_defaults(fn=run_command)
+
+    share_p = sub.add_parser("share", help="a link to a screen, to watch or to use")
+    share_p.add_argument("id")
+    share_p.add_argument("--control", action="store_true", help="let whoever opens it use the screen, not only watch")
+    share_p.add_argument("--for", dest="duration", choices=["1h", "24h", "7d"], default="1h")
+    share_p.add_argument("--desktop", type=int, help="for a Desktop App: which desktop, from 0")
+    share_p.set_defaults(fn=share)
+    shares_p = sub.add_parser("shares", help="a screen's open links")
+    shares_p.add_argument("id")
+    shares_p.set_defaults(fn=lambda a: out(request("GET", f"/v1/workloads/{urllib.parse.quote(a.id)}/shares", token=token())))
+    unshare_p = sub.add_parser("unshare", help="close a screen link now")
+    unshare_p.add_argument("id")
+    unshare_p.add_argument("share")
+    unshare_p.set_defaults(fn=simple("DELETE", lambda a: f"/v1/workloads/{urllib.parse.quote(a.id)}/shares/{urllib.parse.quote(a.share)}",
+                                     lambda a: {"closed": a.share}))
+    release_p = sub.add_parser("release", help="let a machine you worked on go, for other agents")
+    release_p.add_argument("id")
+    release_p.set_defaults(fn=lambda a: out(request("DELETE", f"/v1/workloads/{urllib.parse.quote(a.id)}/reservation", token=token())))
 
     build_p = sub.add_parser("build", help="build an app from its repository now")
     build_p.add_argument("id")

@@ -14,15 +14,18 @@ link. Never ask for an API key in chat.
 usage from `whoami`, and let the user decide. Deleting something to make room is
 never your call.
 
-**403.** Either the resource belongs to someone else, or the agent's access
-doesn't stretch this far. Say which: "this agent can use and create, but this is
-your resource; allow full access or do it in the console".
+**403.** Either the resource belongs to someone else, or the agent lacks the
+permission. Say which: "this agent can't run commands; turn on Run commands for
+it on the Agents page", or "this is your resource; turn on Manage everything
+for this agent, or do it in the console".
 
 **404.** The id doesn't exist in this workspace. Run `ls`; ids are often close
 but not exact.
 
-**409.** Something else is changing the resource, often a build. Wait a few
-seconds and try once more.
+**409.** Another agent is working on the machine: the message names it and
+until when. Wait until then, or use another machine; never ask the user to
+release it for you unless they want to. Otherwise something else is changing
+the resource, often a build: wait a few seconds and try once more.
 
 **422.** A value was refused, and the message names it. Fix that value. Never
 send the same request again hoping for a different answer.

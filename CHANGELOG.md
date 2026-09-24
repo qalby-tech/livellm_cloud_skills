@@ -5,6 +5,18 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.6.0
+
+- `exec`: run a command on a Linux machine or a Desktop App and get its output
+  and exit code, no SSH needed. It needs the Run commands permission.
+- `share`, `shares`, `unshare`: a link that lets the user watch a screen or
+  take it over, instead of sending them to the console.
+- `release`: let a machine go when you're done, so other agents can use it.
+- `connect --desktop N` for Desktop Apps, and `--screen-width` / `--format`
+  for smaller screenshots.
+- A 409 that names another agent means the machine is held; the skill says to
+  wait or use another.
+
 ## 1.5.2
 
 - The README points at the command line's own repository, and at the one-line
