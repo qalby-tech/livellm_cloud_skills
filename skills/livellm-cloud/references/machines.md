@@ -190,6 +190,26 @@ the screen within a minute. Close a control link once the user is done with it.
 In the console, Share screen on the machine's page makes the same links, and
 Windows machines also have Download RDP for Remote Desktop.
 
+## Backups
+
+A machine's disk can be backed up now or on a schedule, and put back later:
+
+```
+python3 scripts/llc.py backups ci-box                 # what is kept
+python3 scripts/llc.py backup ci-box --name before-upgrade
+python3 scripts/llc.py restore ci-box BACKUP --yes    # stop it first
+```
+
+A backup is taken while the machine runs; `--clean` takes it with the machine
+stopped (stop it first). A restore puts the disk back in place and loses
+everything written since, so do it only when the user asked, with the machine
+stopped. A schedule goes in the machine's settings, keeping the last `keep`
+backups (a count, 1 to 100):
+
+```json
+"vm": { "backup": { "schedule": "@daily", "keep": 7 } }
+```
+
 ## Stopping and deleting
 
 - A machine you created and no longer need: `rm ci-box --yes`. Its disk goes

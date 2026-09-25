@@ -16,6 +16,9 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py unshare ID SHARE_ID | release ID
     llc.py build ID | builds ID | deploy ID BUILD --yes | progress ID
     llc.py restart ID --yes
+    llc.py backups ID | backup ID [--clean] [--name N]
+    llc.py restore ID BACKUP --as NEW [--at TIME] --yes    (a database: into a new one)
+    llc.py restore ID BACKUP --yes                         (a machine: in place, stopped)
     llc.py stop ID --yes | start ID | set ID --json CHANGES --yes
     llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS] --yes
     llc.py browser-api show NAME | add NAME BROWSER | remove NAME BROWSER --yes
@@ -496,6 +499,61 @@ def browser_api(args):
     })
 
 
+def backups_path(wid):
+    return f"{workload_path(wid)}/backups"
+
+
+def take_backup(args):
+    """Back up a machine or a database now. A machine's is live unless --clean
+    (the machine must be stopped); a database's is a full copy."""
+    body = {}
+    if args.clean:
+        body["mode"] = "clean"
+    if args.name:
+        body["name"] = args.name
+    res = request("POST", backups_path(args.id), body, token=token())
+    out(res or {"backingUp": args.id, "next": f"llc.py backups {args.id}"})
+
+
+def restore_body(new_id, at):
+    """What a restore sends: a database needs the new database's id, and a
+    time when it restores to a minute rather than to the backup."""
+    body = {}
+    if new_id:
+        body["id"] = new_id
+    if at:
+        body["at"] = at
+    return body
+
+
+def restore(args):
+    """A database restores into a NEW database and keeps running as it is; a
+    machine goes back in place and has to be stopped first."""
+    tok = token()
+    spec = request("GET", "/v1/workspace", token=tok).get("spec", {})
+    w = next((x for x in spec.get("workloads", []) if x.get("id") == args.id), None)
+    if w is None:
+        raise Problem(f"no resource {args.id}", "run: llc.py ls, the id is probably wrong", EXIT_OTHER)
+    kind = w.get("type", "")
+    if kind == "storage":
+        if not args.as_id:
+            raise Problem(f"a database restores into a new one; {args.id} keeps running as it is",
+                          f"pass --as NEW-ID, e.g. --as {args.id}-restored", EXIT_OTHER)
+    elif kind.startswith("vm-"):
+        if args.as_id or args.at:
+            raise Problem("a machine restores in place", "drop --as and --at", EXIT_OTHER)
+    else:
+        raise Problem(f"{args.id} has no backups", "only machines and databases have backups", EXIT_OTHER)
+    path = f"{backups_path(args.id)}/{urllib.parse.quote(args.backup)}/restore"
+    res = request("POST", path, restore_body(args.as_id, args.at), token=tok)
+    if res:
+        out(res)
+    elif args.as_id:
+        out({"restoring": args.backup, "into": args.as_id, "next": f"llc.py wait {args.as_id}"})
+    else:
+        out({"restoring": args.backup, "to": args.id, "next": f"llc.py start {args.id} once it is done"})
+
+
 def rm(args):
     request("DELETE", f"/v1/workloads/{urllib.parse.quote(args.id)}", token=token())
     out({"deleted": args.id})
@@ -591,6 +649,22 @@ def main():
     restart_p.add_argument("--yes", action="store_true", required=True)
     restart_p.set_defaults(fn=simple("POST", lambda a: f"/v1/workloads/{urllib.parse.quote(a.id)}/restart",
                                      lambda a: {"restarted": a.id}))
+
+    backups_p = sub.add_parser("backups", help="a machine's or a database's backups")
+    backups_p.add_argument("id")
+    backups_p.set_defaults(fn=lambda a: out(request("GET", backups_path(a.id), token=token())))
+    backup_p = sub.add_parser("backup", help="back up a machine or a database now")
+    backup_p.add_argument("id")
+    backup_p.add_argument("--clean", action="store_true", help="a machine: back up with it stopped (stop it first)")
+    backup_p.add_argument("--name", help="a machine: the backup's name")
+    backup_p.set_defaults(fn=take_backup)
+    restore_p = sub.add_parser("restore", help="a database: into a new database; a machine: in place, stopped")
+    restore_p.add_argument("id")
+    restore_p.add_argument("backup")
+    restore_p.add_argument("--as", dest="as_id", help="a database: the id of the new database")
+    restore_p.add_argument("--at", help="a database with continuous backups: the minute to restore to, e.g. 2026-09-25T14:05:00Z")
+    restore_p.add_argument("--yes", action="store_true", required=True, help="the user asked for this restore")
+    restore_p.set_defaults(fn=restore)
 
     stop_p = sub.add_parser("stop", help="stop an app or a machine; its disks are kept")
     stop_p.add_argument("id")

@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.6.3
+  version: 1.6.4
   documentation: https://docs.live-llm.com
 ---
 
@@ -135,6 +135,11 @@ Generate the database password, pass it to the app as a write-only value, and
 show the user once. When a build fails, read `progress`, fix the repository and
 run `build web` again. To go back to what worked: `builds web`, then
 `deploy web <build> --yes`.
+
+Machines and Postgres databases have backups: `backups <id>` lists them,
+`backup <id>` takes one now. A database restores into a new one
+(`restore db <backup> --as db-restored --yes`); a machine is put back in place
+and must be stopped first. Restore only when the user asked for it.
 
 ## When something is refused
 

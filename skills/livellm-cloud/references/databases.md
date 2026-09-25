@@ -1,7 +1,8 @@
 # Databases
 
 Postgres for data an app keeps, Redis for caches and queues. Both are managed:
-backups, restarts and upgrades are the platform's job.
+the platform keeps them running and takes the backups you ask for. You can
+back up now, restore a backup into a new database, and restart one.
 
 ## Create one
 
@@ -31,8 +32,9 @@ Redis is the same with `"engine": "redis"`.
 The id, the engine and the login are required when you create it. The password
 is required too, is stored write-only, and can never
 be read back. Generate it, put it straight into the app that needs it, and show
-the user once. `"instances": 3` runs Postgres with standbys; `1` is enough for
-development.
+the user once. `"instances": 3` runs Postgres with two standby copies that take
+over if the main one fails; `1` is enough for development. Redis runs as one
+instance only.
 
 ## Connecting
 
@@ -44,7 +46,9 @@ user needs to reach the database from outside:
 "network": { "expose": true }
 ```
 
-Public Postgres speaks TLS; connect with `sslmode=require`. Give an app its
+The public address is `<id>-<workspace>.cloud.live-llm.com`: Postgres on port
+5432, Redis on port 6380. Both speak TLS only: `sslmode=require` for Postgres,
+`rediss://` for Redis. `connect db` prints the exact address. Give an app its
 connection string as a write-only setting:
 
 ```json
@@ -53,12 +57,33 @@ connection string as a write-only setting:
 
 ## Backups
 
+Postgres only. Turn them on for anything the user cares about:
+
 ```json
-"backup": { "enabled": true, "schedule": "@daily", "maxBackups": 10 }
+"backup": { "enabled": true, "mode": "daily", "keepDays": 10 }
 ```
 
-Turn backups on for anything the user cares about. Restoring is done in the
-console; say so rather than trying to rebuild data yourself.
+- `daily`: a full copy each night.
+- `continuous`: the nightly copy plus every change in between, so the database
+  can be restored to any minute inside the kept days.
+- `manual`: nothing is scheduled; a backup is taken only when asked.
+
+`keepDays` is how many days backups are kept (1 to 365), not a number of
+backups. On an existing database, change them with `set db --json
+changes.json --yes` and a file like
+`{"storage": {"backup": {"enabled": true, "mode": "continuous", "keepDays": 7}}}`.
+
+```
+python3 scripts/llc.py backups db          # what is kept, and the newest
+python3 scripts/llc.py backup db           # one now, in any mode
+python3 scripts/llc.py restore db BACKUP --as db-restored --yes
+python3 scripts/llc.py restore db BACKUP --as db-restored --at 2026-09-25T14:05:00Z --yes
+```
+
+A restore makes a NEW database (`--as`) from the backup; the original keeps
+running untouched. `--at` picks a minute, with continuous backups. Point the
+app at the new database only when the user says so: it has the same login as
+the backup had. Restore only when the user asked for it.
 
 ## Care
 
@@ -68,7 +93,10 @@ console; say so rather than trying to rebuild data yourself.
   every app that uses it in the same breath.
 - Deleting a database deletes its data. Only ever delete one you created, and
   say so first.
-- A cache is not storage: anything in Redis can vanish on a restart.
+- Redis keeps its keys on disk across restarts, but it has no backups: keep
+  in it only what the app can rebuild.
+- `restart db --yes` restarts a database. Apps lose their connections for a
+  moment, even with three instances; ask first if you didn't create it.
 
 ## When it goes wrong
 

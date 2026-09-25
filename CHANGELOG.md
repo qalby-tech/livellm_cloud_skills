@@ -5,6 +5,24 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.6.4
+
+- Databases: backups are `daily` (a full copy each night), `continuous` (the
+  nightly copy plus every change, restore to any minute) or `manual` (only
+  when asked), kept `keepDays` days. `references/databases.md` no longer says
+  restoring is done in the console: `llc.py restore db BACKUP --as NEW --yes`
+  restores into a new database, `--at TIME` to a minute. It also gives the
+  real public address (`<id>-<workspace>.cloud.live-llm.com`, Postgres 5432,
+  Redis 6380, TLS only), says Redis keeps its keys across restarts (and has
+  no backups), that three instances are Postgres only, and that a database
+  can be restarted.
+- Machines: `references/machines.md` covers backups: take one now (live, or
+  `--clean` with the machine stopped), restore in place with the machine
+  stopped, and a schedule that keeps the last N.
+- `llc.py backups ID`, `backup ID [--clean] [--name N]` and `restore ID BACKUP
+  [--as NEW] [--at TIME] --yes`. Restore refuses a database without `--as`
+  and a machine with it before sending anything.
+
 ## 1.6.3
 
 - Browser API: one address in front of several browsers.
