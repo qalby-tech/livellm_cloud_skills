@@ -5,6 +5,11 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.6.6
+
+- `references/apps.md`: an app's disks are `volumes` only; the single
+  `"storage": {"size", "mountPath"}` form is no longer taken.
+
 ## 1.6.5
 
 - `llc.py build ID --wait`: follows the build it started until the app is

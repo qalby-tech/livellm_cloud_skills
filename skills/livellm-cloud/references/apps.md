@@ -168,8 +168,6 @@ only between apps needs no raw port — use `"internal": true`.
   A save that leaves `volumes` out keeps them all; `"volumes": []` removes
   them all.
 - An app with a volume runs one copy: `replicas` above 1 is refused.
-- The older `"storage": {"size", "mountPath"}` still works and is the volume
-  named `data`; send `storage` or `volumes`, never both.
 
 Databases belong in a database, not in an app's disk: see
 `references/databases.md`.
