@@ -184,6 +184,7 @@ python3 scripts/llc.py wait web
 A stopped app shows the state `Stopped`, is not counted as down, and costs only
 its disks. Stop an app to save money while it isn't needed; delete it (`rm`)
 only when the user wants it and its data gone. The same works for machines.
+Browsers and databases can't be stopped; `stop` refuses them.
 
 ## When it goes wrong
 

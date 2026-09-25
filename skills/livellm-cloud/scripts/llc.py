@@ -378,6 +378,11 @@ def simple(method, path, ok):
     return run
 
 
+# The resource types that honour "stopped": machines, desktops and apps. A
+# browser or a database keeps running whatever the flag says.
+STOPPABLE = {"vm-ubuntu", "vm-ubuntu-desktop", "vm-windows", "desktop", "pod"}
+
+
 def set_stopped(stop):
     """Stop or start a resource as the console does: read it, change only
     "stopped", write the whole of it back. Write-only values are never read,
@@ -388,6 +393,9 @@ def set_stopped(stop):
         w = next((x for x in spec.get("workloads", []) if x.get("id") == args.id), None)
         if w is None:
             raise Problem(f"no resource {args.id}", "run: llc.py ls, the id is probably wrong", EXIT_OTHER)
+        if w.get("type") not in STOPPABLE:
+            raise Problem(f"{args.id} can't be stopped or started: only machines and apps can",
+                          f"llc.py rm {args.id} deletes it", EXIT_OTHER)
         if bool(w.get("stopped")) == stop:
             out({"id": args.id, "already": "stopped" if stop else "running"})
             return

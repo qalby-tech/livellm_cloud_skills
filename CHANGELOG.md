@@ -11,7 +11,8 @@ Claude Code users get the update only when the version changes.
   `host:port`, limited by `allowCIDRs`; several `volumes` per app (grow only,
   removing one deletes its data; `storage` is the one volume `data`).
 - `stop ID --yes` and `start ID`: stop an app or a machine without deleting
-  it; its disks are kept and only they are billed.
+  it; its disks are kept and only they are billed. Browsers and databases
+  can't be stopped, and `stop` refuses them.
 
 ## 1.6.1
 
