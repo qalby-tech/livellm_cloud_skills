@@ -11,7 +11,8 @@ Claude Code users get the update only when the version changes.
   nightly copy plus every change, restore to any minute) or `manual` (only
   when asked), kept `keepDays` days. `references/databases.md` no longer says
   restoring is done in the console: `llc.py restore db BACKUP --as NEW --yes`
-  restores into a new database, `--at TIME` to a minute. It also gives the
+  restores into a new database, `--at TIME` to a minute; the new database
+  keeps the login name and takes a new password from `--password-env VAR`. It also gives the
   real public address (`<id>-<workspace>.cloud.live-llm.com`, Postgres 5432,
   Redis 6380, TLS only), says Redis keeps its keys across restarts (and has
   no backups), that three instances are Postgres only, and that a database
@@ -20,7 +21,7 @@ Claude Code users get the update only when the version changes.
   `--clean` with the machine stopped), restore in place with the machine
   stopped, and a schedule that keeps the last N.
 - `llc.py backups ID`, `backup ID [--clean] [--name N]` and `restore ID BACKUP
-  [--as NEW] [--at TIME] --yes`. Restore refuses a database without `--as`
+  [--as NEW --password-env VAR] [--at TIME] --yes`. Restore refuses a database without `--as`
   and a machine with it before sending anything.
 
 ## 1.6.3

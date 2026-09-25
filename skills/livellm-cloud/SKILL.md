@@ -138,7 +138,7 @@ run `build web` again. To go back to what worked: `builds web`, then
 
 Machines and Postgres databases have backups: `backups <id>` lists them,
 `backup <id>` takes one now. A database restores into a new one
-(`restore db <backup> --as db-restored --yes`); a machine is put back in place
+(`restore db <backup> --as db-restored --password-env VAR --yes`); a machine is put back in place
 and must be stopped first. Restore only when the user asked for it.
 
 ## When something is refused

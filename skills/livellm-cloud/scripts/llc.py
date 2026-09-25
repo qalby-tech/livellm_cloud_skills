@@ -17,7 +17,8 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py build ID | builds ID | deploy ID BUILD --yes | progress ID
     llc.py restart ID --yes
     llc.py backups ID | backup ID [--clean] [--name N]
-    llc.py restore ID BACKUP --as NEW [--at TIME] --yes    (a database: into a new one)
+    llc.py restore ID BACKUP --as NEW --password-env VAR [--at TIME] --yes
+                                                           (a database: into a new one)
     llc.py restore ID BACKUP --yes                         (a machine: in place, stopped)
     llc.py stop ID --yes | start ID | set ID --json CHANGES --yes
     llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS] --yes
@@ -515,14 +516,13 @@ def take_backup(args):
     out(res or {"backingUp": args.id, "next": f"llc.py backups {args.id}"})
 
 
-def restore_body(new_id, at):
-    """What a restore sends: a database needs the new database's id, and a
-    time when it restores to a minute rather than to the backup."""
-    body = {}
-    if new_id:
-        body["id"] = new_id
+def restore_body(new_id, at, password):
+    """What a database's restore sends: the new database's id and password,
+    and a moment when it restores to a minute rather than to the end of the
+    backup."""
+    body = {"id": new_id, "credentials": {"password": password}}
     if at:
-        body["at"] = at
+        body["pointInTime"] = at
     return body
 
 
@@ -535,23 +535,26 @@ def restore(args):
     if w is None:
         raise Problem(f"no resource {args.id}", "run: llc.py ls, the id is probably wrong", EXIT_OTHER)
     kind = w.get("type", "")
-    if kind == "storage":
-        if not args.as_id:
-            raise Problem(f"a database restores into a new one; {args.id} keeps running as it is",
-                          f"pass --as NEW-ID, e.g. --as {args.id}-restored", EXIT_OTHER)
-    elif kind.startswith("vm-"):
-        if args.as_id or args.at:
-            raise Problem("a machine restores in place", "drop --as and --at", EXIT_OTHER)
-    else:
-        raise Problem(f"{args.id} has no backups", "only machines and databases have backups", EXIT_OTHER)
     path = f"{backups_path(args.id)}/{urllib.parse.quote(args.backup)}/restore"
-    res = request("POST", path, restore_body(args.as_id, args.at), token=tok)
-    if res:
-        out(res)
-    elif args.as_id:
-        out({"restoring": args.backup, "into": args.as_id, "next": f"llc.py wait {args.as_id}"})
-    else:
-        out({"restoring": args.backup, "to": args.id, "next": f"llc.py start {args.id} once it is done"})
+    if kind.startswith("vm-"):
+        if args.as_id or args.at or args.password_env:
+            raise Problem("a machine restores in place", "drop --as, --at and --password-env", EXIT_OTHER)
+        res = request("POST", path, token=tok)
+        out(res or {"restoring": args.backup, "to": args.id, "next": f"llc.py start {args.id} once it is done"})
+        return
+    if kind != "storage":
+        raise Problem(f"{args.id} has no backups", "only machines and databases have backups", EXIT_OTHER)
+    if not args.as_id:
+        raise Problem(f"a database restores into a new one; {args.id} keeps running as it is",
+                      f"pass --as NEW-ID, e.g. --as {args.id}-restored", EXIT_OTHER)
+    password = os.environ.get(args.password_env or "", "")
+    if not password:
+        raise Problem("the new database needs a password",
+                      "generate one, put it in an environment variable and pass --password-env VAR", EXIT_OTHER)
+    res = request("POST", path, restore_body(args.as_id, args.at, password), token=tok) or {}
+    res.setdefault("id", args.as_id)
+    res["next"] = f"llc.py wait {args.as_id}"
+    out(res)
 
 
 def rm(args):
@@ -663,6 +666,7 @@ def main():
     restore_p.add_argument("backup")
     restore_p.add_argument("--as", dest="as_id", help="a database: the id of the new database")
     restore_p.add_argument("--at", help="a database with continuous backups: the minute to restore to, e.g. 2026-09-25T14:05:00Z")
+    restore_p.add_argument("--password-env", help="a database: the environment variable holding the new database's password")
     restore_p.add_argument("--yes", action="store_true", required=True, help="the user asked for this restore")
     restore_p.set_defaults(fn=restore)
 

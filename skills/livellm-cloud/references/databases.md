@@ -74,16 +74,24 @@ changes.json --yes` and a file like
 `{"storage": {"backup": {"enabled": true, "mode": "continuous", "keepDays": 7}}}`.
 
 ```
-python3 scripts/llc.py backups db          # what is kept, and the newest
+python3 scripts/llc.py backups db          # how it is backed up, and what is kept
 python3 scripts/llc.py backup db           # one now, in any mode
-python3 scripts/llc.py restore db BACKUP --as db-restored --yes
-python3 scripts/llc.py restore db BACKUP --as db-restored --at 2026-09-25T14:05:00Z --yes
+NEW_DB_PASSWORD=... python3 scripts/llc.py restore db BACKUP --as db-restored --password-env NEW_DB_PASSWORD --yes
+NEW_DB_PASSWORD=... python3 scripts/llc.py restore db BACKUP --as db-restored --password-env NEW_DB_PASSWORD \
+    --at 2026-09-25T14:05:00Z --yes
 ```
 
+`backup db` is refused while one is being taken and when backups are off.
+Backups older than `keepDays` leave the store by themselves; there is nothing
+to delete.
+
 A restore makes a NEW database (`--as`) from the backup; the original keeps
-running untouched. `--at` picks a minute, with continuous backups. Point the
-app at the new database only when the user says so: it has the same login as
-the backup had. Restore only when the user asked for it.
+running untouched. `--at` picks a minute after the backup ended, with
+continuous backups. The new database keeps the original's login name and
+takes the new password you generate (pass it through an environment
+variable, never on the command line). It counts toward the plan like any new
+database. Point the app at it only when the user says so, and restore only
+when the user asked for it.
 
 ## Care
 
