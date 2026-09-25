@@ -5,6 +5,20 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.6.3
+
+- Browser API: one address in front of several browsers.
+  `references/browser-api.md` covers which browser answers (the one with the
+  fewest open tabs, the session's, or the one named by `/browsers/<name>/…`
+  or `X-Browser-Id`), sessions, a workspace key for clients that run longer
+  than a token, and the errors. The routing table points at it.
+- `llc.py browser-api create NAME --browsers a,b --yes` (or `--all`, and
+  `--remote ID=wss://…`), `browser-api show NAME`, and `browser-api add` /
+  `remove NAME BROWSER` to change its browsers one at a time.
+- `llc.py set ID --json CHANGES`: change only the settings the file holds.
+  `stop` and `start` change only whether the resource runs, so a change made
+  meanwhile in the console is kept.
+
 ## 1.6.2
 
 - Apps: raw TCP and UDP ports (`"tcp": true` / `"udp": true`) with a public

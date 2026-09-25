@@ -1,11 +1,11 @@
 ---
 name: livellm-cloud
-description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP while a person watches the live view, run commands on Linux machines (Ubuntu, Debian or Fedora), work on Ubuntu or Windows desktops and Desktop Apps by screenshot and click, share a screen with the user by link, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
+description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP while a person watches the live view, put several browsers behind one Browser API address, run commands on Linux machines (Ubuntu, Debian or Fedora), work on Ubuntu or Windows desktops and Desktop Apps by screenshot and click, share a screen with the user by link, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
 license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.6.2
+  version: 1.6.3
   documentation: https://docs.live-llm.com
 ---
 
@@ -67,6 +67,7 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 | The user to watch a screen, or take it over | Screen link (`share`) | `references/machines.md` |
 | A service or site online, from an image or a Git repo, one service or several; a raw TCP/UDP port (game server, VPN) | Composable App (`pod`) | `references/apps.md` |
 | A site automated, logged into, scraped or tested in real Chrome | Browser (`browser`) | `references/browsers.md` |
+| Many pages fetched or scraped at once through one address; several browsers behind one API | Browser API (`browser-api create`) | `references/browser-api.md` |
 | A database | PostgreSQL (`storage`, `"engine": "postgres"`) | `references/databases.md` |
 | A cache or a queue | Redis (`storage`, `"engine": "redis"`) | `references/databases.md` |
 | Cost, limits, what is running, alerts, signed-in agents, held machines | Workspace | `references/workspace.md` |

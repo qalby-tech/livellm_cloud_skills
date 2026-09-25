@@ -16,7 +16,9 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py unshare ID SHARE_ID | release ID
     llc.py build ID | builds ID | deploy ID BUILD --yes | progress ID
     llc.py restart ID --yes
-    llc.py stop ID --yes | start ID
+    llc.py stop ID --yes | start ID | set ID --json CHANGES
+    llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS] --yes
+    llc.py browser-api show NAME | add NAME BROWSER | remove NAME BROWSER
     llc.py rm ID --yes
 
 Sign-in is stored in ~/.config/livellm/credentials.json, readable only by you.
@@ -383,10 +385,19 @@ def simple(method, path, ok):
 STOPPABLE = {"vm-ubuntu", "vm-ubuntu-desktop", "vm-windows", "desktop", "pod"}
 
 
+def workload_path(wid):
+    return f"/v1/workloads/{urllib.parse.quote(wid)}"
+
+
+def patch_workload(wid, changes, tok):
+    """Change only the fields sent (a JSON merge patch; null removes one)."""
+    return request("PATCH", workload_path(wid), changes, token=tok)
+
+
 def set_stopped(stop):
-    """Stop or start a resource as the console does: read it, change only
-    "stopped", write the whole of it back. Write-only values are never read,
-    and the platform keeps the ones it has."""
+    """Stop or start a resource. It is read only to refuse what can't stop and
+    to skip a change that changes nothing; the write patches "stopped" alone,
+    so a change someone made meanwhile is kept."""
     def run(args):
         tok = token()
         spec = request("GET", "/v1/workspace", token=tok).get("spec", {})
@@ -399,13 +410,87 @@ def set_stopped(stop):
         if bool(w.get("stopped")) == stop:
             out({"id": args.id, "already": "stopped" if stop else "running"})
             return
-        w["stopped"] = stop
-        request("PUT", f"/v1/workloads/{urllib.parse.quote(args.id)}", w, token=tok)
+        patch_workload(args.id, {"stopped": stop}, tok)
         if stop:
             out({"stopping": args.id, "next": f"its disks are kept; llc.py start {args.id} runs it again"})
         else:
             out({"starting": args.id, "next": f"llc.py wait {args.id}"})
     return run
+
+
+def set_settings(args):
+    """Change some settings: the file holds only what changes."""
+    changes = json.loads(Path(args.json).read_text())
+    if not isinstance(changes, dict) or not changes:
+        raise Problem("the file should hold a JSON object with the settings that change", "fix the file", EXIT_OTHER)
+    patch_workload(args.id, changes, token())
+    out({"changed": args.id})
+
+
+# A Browser API is one address over several browsers; its type is "controller".
+BROWSER_API = "controller"
+
+
+def member_path(api, browser):
+    return f"{workload_path(api)}/browsers/{urllib.parse.quote(browser)}"
+
+
+def browser_api_body(name, browsers, every, remotes):
+    names = [b.strip() for b in (browsers or "").split(",") if b.strip()]
+    if every and names:
+        raise Problem("--all already means every browser in the workspace", "leave out --browsers", EXIT_OTHER)
+    ext = []
+    for r in remotes or []:
+        rid, _, ws = r.partition("=")
+        if not rid or not ws.startswith(("ws://", "wss://")):
+            raise Problem(f"--remote takes ID=wss://address, got {r!r}", "fix --remote", EXIT_OTHER)
+        ext.append({"id": rid, "wsUrl": ws})
+    if not every and not names and not ext:
+        raise Problem("a Browser API needs browsers",
+                      "pass --browsers a,b, or --all for every browser in the workspace", EXIT_OTHER)
+    body = {"id": name, "autodiscover": bool(every)}
+    if names:
+        body["browsers"] = names
+    if ext:
+        body["externalBrowsers"] = ext
+    return body
+
+
+def browser_api(args):
+    tok = token()
+    if args.action == "create":
+        if not args.yes:
+            raise Problem("creating needs --yes", "only create a Browser API the user asked for, then pass --yes", EXIT_OTHER)
+        request("POST", f"/v1/workloads/{BROWSER_API}", browser_api_body(args.name, args.browsers, args.all, args.remote), token=tok)
+        out({"created": args.name, "type": BROWSER_API,
+             "next": f"llc.py wait {args.name} then llc.py connect {args.name} --tool api"})
+        return
+    if args.action in ("add", "remove"):
+        if not args.browser:
+            raise Problem("which browser?", f"llc.py browser-api {args.action} {args.name} BROWSER", EXIT_OTHER)
+        if args.action == "add":
+            request("PUT", member_path(args.name, args.browser), {}, token=tok)
+            out({"added": args.browser, "to": args.name})
+        else:
+            request("DELETE", member_path(args.name, args.browser), token=tok)
+            out({"tookOut": args.browser, "of": args.name})
+        return
+    # show: the browsers it drives, and how each is doing
+    spec = request("GET", "/v1/workspace", token=tok).get("spec", {})
+    w = next((x for x in spec.get("workloads", []) if x.get("id") == args.name), None)
+    if w is None or w.get("type") != BROWSER_API:
+        raise Problem(f"no Browser API {args.name}", f"llc.py ls --type {BROWSER_API}", EXIT_OTHER)
+    c = w.get("controller") or {}
+    live = next((x for x in request("GET", "/v1/status", token=tok).get("workloads", []) if x.get("id") == args.name), {})
+    out({
+        "id": args.name,
+        "drives": "every browser in the workspace" if c.get("autodiscover") else "only these",
+        "browsers": c.get("browsers") or [],
+        "remoteBrowsers": [e.get("id") for e in c.get("externalBrowsers") or []],
+        "state": live.get("phase", "unknown"),
+        "ready": live.get("ready", False),
+        "answering": live.get("browsers", []),
+    })
 
 
 def rm(args):
@@ -511,6 +596,21 @@ def main():
     start_p = sub.add_parser("start", help="start a stopped app or machine again")
     start_p.add_argument("id")
     start_p.set_defaults(fn=set_stopped(False))
+
+    set_p = sub.add_parser("set", help="change some of a resource's settings; the file holds only what changes")
+    set_p.add_argument("id")
+    set_p.add_argument("--json", required=True)
+    set_p.set_defaults(fn=set_settings)
+
+    bapi_p = sub.add_parser("browser-api", help="one address over several browsers: create, show, add, remove")
+    bapi_p.add_argument("action", choices=["create", "show", "add", "remove"])
+    bapi_p.add_argument("name")
+    bapi_p.add_argument("browser", nargs="?", help="add/remove: the browser")
+    bapi_p.add_argument("--browsers", help="create: the workspace browsers it drives, comma-separated")
+    bapi_p.add_argument("--all", action="store_true", help="create: every browser in the workspace")
+    bapi_p.add_argument("--remote", action="append", help="create: a browser running elsewhere, ID=wss://address")
+    bapi_p.add_argument("--yes", action="store_true", help="create: the user asked for it")
+    bapi_p.set_defaults(fn=browser_api)
 
     rm_p = sub.add_parser("rm", help="delete a resource")
     rm_p.add_argument("id")

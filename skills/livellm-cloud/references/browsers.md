@@ -50,6 +50,12 @@ working examples for Playwright in Python and Node.
 A session that is already open keeps working after the 15 minutes are up.
 Reconnecting needs a fresh `connect`.
 
+## Several browsers behind one address
+
+To spread many pages over several browsers, or give a service one address that
+keeps working as browsers are added, put them in a Browser API:
+`references/browser-api.md`.
+
 ## Let the user watch or step in
 
 ```
