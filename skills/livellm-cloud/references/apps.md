@@ -1,7 +1,8 @@
 # Apps
 
-An app runs a container and gets a public HTTPS address. It comes either from an
-image you name, or from a Git repository the platform builds for you. In the
+An app runs a container and gets a public HTTPS address (or a raw TCP/UDP
+address, see below). It comes either from an image you name, or from a Git
+repository the platform builds for you. In the
 console this is a **Composable App** (New resource → Apps): one service or
 several. Each service is one `pod` body here.
 
@@ -69,7 +70,7 @@ each other by plain name:
 ```json
 { "id": "shop-db",  "stack": "shop", "hostname": "db",  "image": "postgres:17",
   "ports": [{ "name": "pg", "port": 5432, "internal": true }],
-  "storage": { "size": "10Gi", "mountPath": "/var/lib/postgresql/data" } }
+  "volumes": [{ "name": "pgdata", "size": "10Gi", "mountPath": "/var/lib/postgresql/data" }] }
 { "id": "shop-web", "stack": "shop", "hostname": "web", "image": "ghcr.io/acme/shop:1.4",
   "dependsOn": ["shop-db"],
   "env": [{ "name": "DATABASE_HOST", "value": "db" }],
@@ -123,11 +124,66 @@ site, protect it when you create it:
 Passwords here are write-only too. When you change who may enter, send every
 user's password again; sending some and not others is refused.
 
+## Raw TCP and UDP ports
+
+For anything that isn't HTTP — a game server, a mail server, a VPN, DNS — mark
+the port `"tcp": true` or `"udp": true` (one of them, never with `internal`):
+
+```json
+"ports": [
+  { "name": "game", "port": 25565, "tcp": true,
+    "access": { "allowCIDRs": ["203.0.113.0/24"] } },
+  { "name": "voice", "port": 9987, "udp": true }
+]
+```
+
+Such a port gets a public `host:port` instead of an HTTPS address. `connect`
+lists it with `"raw": true`, its `protocol` and its `address`; `ls` shows it in
+`endpoints` as `{"name": "game", "tcp": true, "addr": "host:port"}` (or
+`"udp": true`). Hand the user that `host:port`. The platform picks
+the outside port number, so it differs from `port`. A raw port takes no
+password (`"auth": "basic"` is refused): `allowCIDRs` is its only protection,
+so set it unless the user wants the port open to everyone. A protocol spoken
+only between apps needs no raw port — use `"internal": true`.
+
 ## Keeping data
 
-`"storage": {"size": "10Gi", "mountPath": "/data"}` gives the app a disk that
-survives restarts. Databases
-belong in a database, not in an app's disk: see `references/databases.md`.
+`volumes` give the app disks that survive restarts, redeploys and stops:
+
+```json
+"volumes": [
+  { "name": "data", "size": "10Gi", "mountPath": "/data" },
+  { "name": "uploads", "size": "20Gi", "mountPath": "/srv/uploads" }
+]
+```
+
+- Up to 8. A name is lowercase letters, digits and hyphens, at most 15
+  characters, and unique. Each `mountPath` is an absolute folder (letters,
+  digits and `. _ @ + -`, no trailing slash), not `/`, not in `/proc`, `/sys` or
+  `/dev`, and not inside another volume's path.
+- A volume can grow (send a bigger `size`) but never shrink. A new name is a
+  new, empty disk.
+- **Removing a volume from the list deletes its data.** Ask the user first.
+  A save that leaves `volumes` out keeps them all; `"volumes": []` removes
+  them all.
+- An app with a volume runs one copy: `replicas` above 1 is refused.
+- The older `"storage": {"size", "mountPath"}` still works and is the volume
+  named `data`; send `storage` or `volumes`, never both.
+
+Databases belong in a database, not in an app's disk: see
+`references/databases.md`.
+
+## Stopping and starting
+
+```
+python3 scripts/llc.py stop web --yes   # runs nothing; volumes are kept
+python3 scripts/llc.py start web        # runs it again
+python3 scripts/llc.py wait web
+```
+
+A stopped app shows the state `Stopped`, is not counted as down, and costs only
+its disks. Stop an app to save money while it isn't needed; delete it (`rm`)
+only when the user wants it and its data gone. The same works for machines.
 
 ## When it goes wrong
 

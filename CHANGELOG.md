@@ -5,6 +5,14 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.6.2
+
+- Apps: raw TCP and UDP ports (`"tcp": true` / `"udp": true`) with a public
+  `host:port`, limited by `allowCIDRs`; several `volumes` per app (grow only,
+  removing one deletes its data; `storage` is the one volume `data`).
+- `stop ID --yes` and `start ID`: stop an app or a machine without deleting
+  it; its disks are kept and only they are billed.
+
 ## 1.6.1
 
 - The routing table names every kind of resource: Linux servers (Ubuntu,

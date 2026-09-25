@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.6.1
+  version: 1.6.2
   documentation: https://docs.live-llm.com
 ---
 
@@ -65,7 +65,7 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 | A Windows server, no desktop | Windows Server Core (`vm-windows`, `"windowsEdition": "server"`) | `references/machines.md` |
 | Several Linux desktops that start in seconds, one per task or agent | Desktop App (`desktop`) | `references/machines.md` |
 | The user to watch a screen, or take it over | Screen link (`share`) | `references/machines.md` |
-| A service or site online, from an image or a Git repo, one service or several | Composable App (`pod`) | `references/apps.md` |
+| A service or site online, from an image or a Git repo, one service or several; a raw TCP/UDP port (game server, VPN) | Composable App (`pod`) | `references/apps.md` |
 | A site automated, logged into, scraped or tested in real Chrome | Browser (`browser`) | `references/browsers.md` |
 | A database | PostgreSQL (`storage`, `"engine": "postgres"`) | `references/databases.md` |
 | A cache or a queue | Redis (`storage`, `"engine": "redis"`) | `references/databases.md` |
@@ -87,7 +87,8 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
    (a browser) or a screen link (a machine or desktop) for login codes,
    payments, and anything you should not decide alone.
 7. **Finish.** Say what exists now and give the links. Stop or delete only what
-   you created, and say so before you do.
+   you created, and say so before you do. `stop <id> --yes` keeps an app's or
+   a machine's disks and bills only them; `start <id>` runs it again.
 
 ## Examples
 

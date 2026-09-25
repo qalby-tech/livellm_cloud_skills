@@ -16,6 +16,7 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py unshare ID SHARE_ID | release ID
     llc.py build ID | builds ID | deploy ID BUILD --yes | progress ID
     llc.py restart ID --yes
+    llc.py stop ID --yes | start ID
     llc.py rm ID --yes
 
 Sign-in is stored in ~/.config/livellm/credentials.json, readable only by you.
@@ -326,6 +327,19 @@ def connect(args):
             if w.get("expiresAt"):
                 info["stopsAt"] = w["expiresAt"]
             break
+    raw = [u for u in info.get("urls") or [] if u.get("raw") and not u.get("address")]
+    if raw:
+        # A raw TCP/UDP port's host:port lives in the status, like a machine's.
+        for w in request("GET", "/v1/status", token=tok).get("workloads", []):
+            if w.get("id") != args.id:
+                continue
+            addrs = {e.get("name"): e for e in w.get("endpoints") or [] if e.get("addr")}
+            for u in raw:
+                e = addrs.get(u.get("port"))
+                if e:
+                    u["address"] = e["addr"]
+                    u["protocol"] = "udp" if e.get("udp") else "tcp"
+            break
     if args.env:
         for key, value in [("LIVELLM_CDP_URL", (info.get("cdp") or {}).get("url")),
                            ("LIVELLM_COMPUTER_URL", (info.get("computer") or {}).get("url")),
@@ -361,6 +375,28 @@ def simple(method, path, ok):
     def run(args):
         request(method, path(args), token=token())
         out(ok(args))
+    return run
+
+
+def set_stopped(stop):
+    """Stop or start a resource as the console does: read it, change only
+    "stopped", write the whole of it back. Write-only values are never read,
+    and the platform keeps the ones it has."""
+    def run(args):
+        tok = token()
+        spec = request("GET", "/v1/workspace", token=tok).get("spec", {})
+        w = next((x for x in spec.get("workloads", []) if x.get("id") == args.id), None)
+        if w is None:
+            raise Problem(f"no resource {args.id}", "run: llc.py ls, the id is probably wrong", EXIT_OTHER)
+        if bool(w.get("stopped")) == stop:
+            out({"id": args.id, "already": "stopped" if stop else "running"})
+            return
+        w["stopped"] = stop
+        request("PUT", f"/v1/workloads/{urllib.parse.quote(args.id)}", w, token=tok)
+        if stop:
+            out({"stopping": args.id, "next": f"its disks are kept; llc.py start {args.id} runs it again"})
+        else:
+            out({"starting": args.id, "next": f"llc.py wait {args.id}"})
     return run
 
 
@@ -459,6 +495,14 @@ def main():
     restart_p.add_argument("--yes", action="store_true", required=True)
     restart_p.set_defaults(fn=simple("POST", lambda a: f"/v1/workloads/{urllib.parse.quote(a.id)}/restart",
                                      lambda a: {"restarted": a.id}))
+
+    stop_p = sub.add_parser("stop", help="stop an app or a machine; its disks are kept")
+    stop_p.add_argument("id")
+    stop_p.add_argument("--yes", action="store_true", required=True, help="the user agreed to stop it")
+    stop_p.set_defaults(fn=set_stopped(True))
+    start_p = sub.add_parser("start", help="start a stopped app or machine again")
+    start_p.add_argument("id")
+    start_p.set_defaults(fn=set_stopped(False))
 
     rm_p = sub.add_parser("rm", help="delete a resource")
     rm_p.add_argument("id")

@@ -194,8 +194,9 @@ Windows machines also have Download RDP for Remote Desktop.
 
 - A machine you created and no longer need: `rm ci-box --yes`. Its disk goes
   with it.
-- A machine that should stay but cost less while idle: tell the user they can
-  stop it in the console; a stopped machine keeps its disk.
+- A machine that should stay but cost less while idle: `stop ci-box --yes`
+  (ask first if you didn't create it); a stopped machine keeps its disk, and
+  `start ci-box` runs it again.
 - Never delete a machine you did not create, even if it looks unused.
 
 ## When it goes wrong
@@ -214,7 +215,8 @@ Windows machines also have Download RDP for Remote Desktop.
 - **A key vanished from a machine.** The platform owns that file: anything
   added by hand inside the machine is removed on the next change.
 - **The machine stopped by itself.** It had a stop time. Say so, and start it
-  from the console (Start on its page) or give it `"stopAfter": "off"` on a save.
+  with `start <id>` (or Start on its page in the console), and give it
+  `"stopAfter": "off"` on a save if it should keep running.
 - **The screen is black.** It is asleep. Send a `mouse_move` or a `key`, wait a
   moment, then take the screenshot again.
 - **The screen asks for a password.** It is locked, and that is the user's to
