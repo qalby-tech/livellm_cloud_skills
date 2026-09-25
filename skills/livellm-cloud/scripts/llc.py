@@ -14,7 +14,7 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py exec ID "COMMAND" [--session S] [--timeout N] [--desktop N]
     llc.py share ID [--control] [--for 1h|24h|7d] [--desktop N] | shares ID
     llc.py unshare ID SHARE_ID | release ID
-    llc.py build ID | builds ID | deploy ID BUILD --yes | progress ID
+    llc.py build ID [--wait] [--timeout 1800] | builds ID | deploy ID BUILD --yes | progress ID
     llc.py restart ID --yes
     llc.py backups ID | backup ID [--clean] [--name N]
     llc.py restore ID BACKUP --as NEW --password-env VAR [--at TIME] --yes
@@ -23,6 +23,10 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py stop ID --yes | start ID | set ID --json CHANGES --yes
     llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS] --yes
     llc.py browser-api show NAME | add NAME BROWSER | remove NAME BROWSER --yes
+    llc.py templates | template show T | template save NAME --from ID
+    llc.py template use T NEW [--json FILE] --yes | template rm T --yes
+    llc.py activity [--actor you|platform|all] [--object ID] [--limit N] [--before EVENT]
+    llc.py monitoring [ID] [--range 15m|1h|6h|24h|7d]
     llc.py rm ID --yes
 
 Sign-in is stored in ~/.config/livellm/credentials.json, readable only by you.
@@ -557,6 +561,123 @@ def restore(args):
     out(res)
 
 
+def build(args):
+    """Build an app from its repository; with --wait, follow that build until
+    it is live or has failed."""
+    tok = token()
+    started = request("POST", f"{workload_path(args.id)}/build", {}, token=tok) or {}
+    if not args.wait:
+        out({"building": args.id, "buildId": started.get("buildId", ""),
+             "next": f"llc.py progress {args.id}, or build {args.id} --wait"})
+        return
+    want, deadline = started.get("buildId", ""), time.time() + args.timeout
+    while True:
+        p = request("GET", f"{workload_path(args.id)}/build-progress", token=tok)
+        ours = not want or not p.get("buildId") or p.get("buildId") == want
+        if ours and p.get("failed"):
+            tail = [l.get("body", "") for l in (p.get("logs") or [])][-20:]
+            raise Problem(f"the build failed: {p.get('message', '')}\n" + "\n".join(tail),
+                          "read the log lines, fix the repository, then build again", EXIT_OTHER, 422)
+        if ours and p.get("done"):
+            out({"id": args.id, "live": True, "buildId": p.get("buildId"), "commit": p.get("commit")})
+            return
+        if ours and p.get("stage") == "none":
+            raise Problem(f"{args.id} isn't built from a repository", "only an app with a Git source builds", EXIT_OTHER)
+        if time.time() > deadline:
+            raise Problem(f"the build isn't live yet ({p.get('stage')}: {p.get('message', '')})",
+                          f"llc.py progress {args.id} later; don't start another build", EXIT_NOT_READY)
+        time.sleep(BUILD_POLL)
+
+
+BUILD_POLL = 10
+
+# Where each resource type keeps its settings on the resource.
+KIND_BLOCK = {"vm-ubuntu": "vm", "vm-ubuntu-desktop": "vm", "vm-windows": "vm", "pod": "pod",
+              "browser": "browser", "desktop": "desktop", "controller": "controller", "storage": "storage"}
+
+
+def find_template(ref, tok):
+    items = request("GET", "/v1/templates", token=tok).get("templates") or []
+    for t in items:
+        if t.get("id") == ref:
+            return t
+    named = [t for t in items if t.get("name") == ref]
+    if len(named) == 1:
+        return named[0]
+    if not named:
+        raise Problem(f"no template {ref}", "llc.py templates lists them", EXIT_OTHER)
+    raise Problem(f"{len(named)} templates are called {ref}", "use the id from llc.py templates", EXIT_OTHER)
+
+
+def template_config(w):
+    """A resource's settings as a template keeps them: never its login, env
+    values or pull credential (the console leaves out the same)."""
+    kind = w.get("type", "")
+    block = KIND_BLOCK.get(kind)
+    if not block or kind == "controller":
+        raise Problem(f"a {kind} can't be saved as a template", "save a machine, an app, a browser, a desktop or a database", EXIT_OTHER)
+    spec = dict(w.get(block) or {})
+    if block in ("vm", "storage"):
+        spec.pop("credentials", None)
+    if block == "pod":
+        for k in ("env", "secretEnv", "imageAuth"):
+            spec.pop(k, None)
+        if isinstance(spec.get("source"), dict):
+            spec["source"] = {"git": spec["source"].get("git")}
+    return kind, {block: spec}
+
+
+def template(args):
+    tok = token()
+    if args.action == "save":
+        if not args.source:
+            raise Problem("save which resource?", f"llc.py template save {args.ref} --from ID", EXIT_OTHER)
+        spec = request("GET", "/v1/workspace", token=tok).get("spec", {})
+        w = next((x for x in spec.get("workloads", []) if x.get("id") == args.source), None)
+        if w is None:
+            raise Problem(f"no resource {args.source}", "run: llc.py ls", EXIT_OTHER)
+        kind, config = template_config(w)
+        out(request("POST", "/v1/templates", {"name": args.ref, "kind": kind, "config": config}, token=tok))
+        return
+    t = find_template(args.ref, tok)
+    if args.action == "show":
+        out(t)
+        return
+    if args.action == "rm":
+        if not args.yes:
+            raise Problem("deleting a template needs --yes", "ask the user first", EXIT_OTHER)
+        request("DELETE", f"/v1/templates/{urllib.parse.quote(t['id'])}", token=tok)
+        out({"deleted": t["id"], "name": t.get("name")})
+        return
+    # use: a new resource from the template, with the file's settings on top
+    if not args.new_id or not args.yes:
+        raise Problem("a new resource needs its id and --yes",
+                      f"llc.py template use {args.ref} NEW-ID [--json FILE] --yes, once the user asked for it", EXIT_OTHER)
+    body = dict((t.get("config") or {}).get(KIND_BLOCK.get(t.get("kind"), ""), {}) or {})
+    if args.json:
+        body.update(json.loads(Path(args.json).read_text()))
+    body["id"] = args.new_id
+    request("POST", f"/v1/workloads/{urllib.parse.quote(t['kind'])}", body, token=tok)
+    out({"created": args.new_id, "type": t["kind"], "template": t.get("name"),
+         "next": f"llc.py wait {args.new_id}"})
+
+
+def activity(args):
+    q = {k: v for k, v in (("actor", args.actor), ("limit", args.limit), ("before", args.before)) if v}
+    if args.object:
+        q["object"] = args.object if ":" in args.object else "workload:" + args.object
+    path = "/v1/activity" + ("?" + urllib.parse.urlencode(q) if q else "")
+    out(request("GET", path, token=token()))
+
+
+def monitoring(args):
+    if not args.id:
+        out(request("GET", "/v1/monitoring", token=token()))
+        return
+    path = f"{workload_path(args.id)}/monitor" + (f"?range={urllib.parse.quote(args.range)}" if args.range else "")
+    out(request("GET", path, token=token()))
+
+
 def rm(args):
     request("DELETE", f"/v1/workloads/{urllib.parse.quote(args.id)}", token=token())
     out({"deleted": args.id})
@@ -631,8 +752,9 @@ def main():
 
     build_p = sub.add_parser("build", help="build an app from its repository now")
     build_p.add_argument("id")
-    build_p.set_defaults(fn=simple("POST", lambda a: f"/v1/workloads/{urllib.parse.quote(a.id)}/build",
-                                   lambda a: {"building": a.id}))
+    build_p.add_argument("--wait", action="store_true", help="follow the build until it is live or has failed")
+    build_p.add_argument("--timeout", type=int, default=1800, help="with --wait: seconds")
+    build_p.set_defaults(fn=build)
     builds_p = sub.add_parser("builds", help="an app's builds")
     builds_p.add_argument("id")
     builds_p.set_defaults(fn=lambda a: out(request("GET", f"/v1/workloads/{urllib.parse.quote(a.id)}/builds", token=token())))
@@ -693,6 +815,29 @@ def main():
     bapi_p.add_argument("--remote", action="append", help="create: a browser running elsewhere, ID=wss://address")
     bapi_p.add_argument("--yes", action="store_true", help="create: the user asked for it; remove: the user agreed")
     bapi_p.set_defaults(fn=browser_api)
+
+    sub.add_parser("templates", help="the workspace's saved templates").set_defaults(
+        fn=lambda a: out(request("GET", "/v1/templates", token=token())))
+    tpl_p = sub.add_parser("template", help="a saved template: show, save one from a resource, use, rm")
+    tpl_p.add_argument("action", choices=["show", "save", "use", "rm"])
+    tpl_p.add_argument("ref", help="the template's id or name (save: the new template's name)")
+    tpl_p.add_argument("new_id", nargs="?", help="use: the new resource's id")
+    tpl_p.add_argument("--from", dest="source", help="save: the resource whose settings to keep")
+    tpl_p.add_argument("--json", help="use: settings to add, such as a machine's credentials")
+    tpl_p.add_argument("--yes", action="store_true", help="use: the user asked for it; rm: the user agreed")
+    tpl_p.set_defaults(fn=template)
+
+    act_p = sub.add_parser("activity", help="what happened in the workspace, newest first")
+    act_p.add_argument("--actor", choices=["you", "platform", "all"])
+    act_p.add_argument("--object", help="one resource: its id, or TYPE:ID")
+    act_p.add_argument("--limit", type=int)
+    act_p.add_argument("--before", type=int, help="the next page: events older than this event id")
+    act_p.set_defaults(fn=activity)
+
+    mon_p = sub.add_parser("monitoring", help="up or down, uptime, use and alerts; with a machine's id, that machine")
+    mon_p.add_argument("id", nargs="?")
+    mon_p.add_argument("--range", choices=["15m", "1h", "6h", "24h", "7d"])
+    mon_p.set_defaults(fn=monitoring)
 
     rm_p = sub.add_parser("rm", help="delete a resource")
     rm_p.add_argument("id")

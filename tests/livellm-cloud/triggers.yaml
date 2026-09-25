@@ -23,6 +23,8 @@ should_trigger:
   - Watch the browser while it fills out this form and take over for the code.
   - Put our three browsers behind one API so the scrapers share them.
   - Restore yesterday's backup of our LiveLLM Postgres into a new database.
+  - What changed in my LiveLLM workspace today, and who did it?
+  - Make two more LiveLLM machines like this one from a template.
 should_not_trigger:
   - Set up LiteLLM as a proxy for OpenAI and Anthropic models.
   - Launch an EC2 instance on AWS.

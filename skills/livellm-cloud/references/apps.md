@@ -54,6 +54,7 @@ A build that works goes live by itself. Later:
 
 ```
 python3 scripts/llc.py build web      # build the current code again
+python3 scripts/llc.py build web --wait   # ...and wait until it is live (or print why it failed)
 python3 scripts/llc.py builds web     # what has been built, with commits
 python3 scripts/llc.py deploy web 0a22de73 --yes   # run an earlier build again
 ```

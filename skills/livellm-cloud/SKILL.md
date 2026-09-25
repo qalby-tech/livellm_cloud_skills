@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.6.4
+  version: 1.6.5
   documentation: https://docs.live-llm.com
 ---
 
@@ -70,7 +70,7 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 | Many pages fetched or scraped at once through one address; several browsers behind one API | Browser API (`browser-api create`) | `references/browser-api.md` |
 | A database | PostgreSQL (`storage`, `"engine": "postgres"`) | `references/databases.md` |
 | A cache or a queue | Redis (`storage`, `"engine": "redis"`) | `references/databases.md` |
-| Cost, limits, what is running, alerts, signed-in agents, held machines | Workspace | `references/workspace.md` |
+| Cost, limits, what is running, alerts, what happened, templates, signed-in agents, held machines | Workspace | `references/workspace.md` |
 
 ## The loop
 
@@ -128,12 +128,12 @@ is done, and delete it when the user is done with it: you made it.
 ```
 python3 scripts/llc.py create storage --json db.json --yes
 python3 scripts/llc.py create pod --json app.json --yes
-python3 scripts/llc.py progress web
+python3 scripts/llc.py build web --wait
 ```
 
 Generate the database password, pass it to the app as a write-only value, and
-show the user once. When a build fails, read `progress`, fix the repository and
-run `build web` again. To go back to what worked: `builds web`, then
+show the user once. `build web --wait` follows the build until the app is live;
+when it fails it prints why: fix the repository and build again. To go back to what worked: `builds web`, then
 `deploy web <build> --yes`.
 
 Machines and Postgres databases have backups: `backups <id>` lists them,

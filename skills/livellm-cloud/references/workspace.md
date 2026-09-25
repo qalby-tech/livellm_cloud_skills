@@ -43,14 +43,43 @@ send them to the console's Keys page.
 ## Is anything wrong
 
 ```
-python3 scripts/llc.py whoami          # plan and usage
+python3 scripts/llc.py monitoring           # every resource up or down, uptime, use, open alerts
+python3 scripts/llc.py monitoring box       # one machine: its system, disks, network, use over time
+python3 scripts/llc.py monitoring box --range 24h
 ```
 
-The console's Monitoring page keeps each resource's up and down history and
-warns when one runs hot on processor, memory or disk for a while. When a user
-asks "is anything down", read the monitoring endpoint through the API and say
-plainly what is up, what is down and since when. There are no notifications;
-nobody is paged.
+The platform keeps each resource's up and down history and raises an alert
+when one goes down or runs hot on processor, memory or disk for a while. When
+a user asks "is anything down", read `monitoring` and say plainly what is up,
+what is down and since when. There are no notifications; nobody is paged.
+
+## What happened
+
+```
+python3 scripts/llc.py activity --limit 20             # newest first
+python3 scripts/llc.py activity --object web           # one resource
+python3 scripts/llc.py activity --actor platform       # what the platform did: builds, alerts
+```
+
+Creates, changes, deletes, builds, alerts and new keys are there, with who did it
+(a person, a key, an agent, or the platform). `--before EVENT` pages back
+from an event's id. Read it when the user asks what changed or who did
+something; don't guess from `ls`.
+
+## Templates
+
+A template keeps a resource's settings for making more like it. It never keeps
+a login, env values or a pull credential.
+
+```
+python3 scripts/llc.py templates
+python3 scripts/llc.py template save small-box --from box      # needs "Manage everything"
+python3 scripts/llc.py template use small-box box-2 --json login.json --yes
+```
+
+`use` makes a new resource from it, with the file adding what is that
+resource's own (a machine's `credentials`, an app's `secretEnv`). It counts
+toward the plan like any other create; make one only when the user asked.
 
 ## Who is signed in
 

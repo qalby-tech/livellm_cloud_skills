@@ -5,6 +5,21 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.6.5
+
+- `llc.py build ID --wait`: follows the build it started until the app is
+  live, or prints why it failed with the end of its log (exit 3 when it is
+  still going after `--timeout`). The app example uses it.
+- `llc.py monitoring [ID] [--range …]`: every resource up or down, its uptime,
+  use and alerts; with a machine's id, that machine in detail.
+  `references/workspace.md` reads it instead of pointing at the console.
+- `llc.py activity [--actor you|platform|all] [--object ID] [--limit N]
+  [--before EVENT]`: what happened in the workspace and who did it.
+- `llc.py templates`, `template show T`, `template save NAME --from ID` and
+  `template use T NEW [--json FILE] --yes`, `template rm T --yes`: a
+  resource's settings kept for making more like it, without logins, env
+  values or pull credentials.
+
 ## 1.6.4
 
 - Databases: backups are `daily` (a full copy each night), `continuous` (the
