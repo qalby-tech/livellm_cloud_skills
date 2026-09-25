@@ -614,11 +614,13 @@ def template_config(w):
     values or pull credential (the console leaves out the same)."""
     kind = w.get("type", "")
     block = KIND_BLOCK.get(kind)
-    if not block or kind == "controller":
-        raise Problem(f"a {kind} can't be saved as a template", "save a machine, an app, a browser, a desktop or a database", EXIT_OTHER)
+    if not block:
+        raise Problem(f"a {kind} can't be saved as a template", "save a machine, an app, a browser, a desktop, a Browser API or a database", EXIT_OTHER)
     spec = dict(w.get(block) or {})
     if block in ("vm", "storage"):
         spec.pop("credentials", None)
+    if block == "storage":
+        spec.pop("restoreFrom", None)  # a restore is this database's own history
     if block == "pod":
         for k in ("env", "secretEnv", "imageAuth"):
             spec.pop(k, None)

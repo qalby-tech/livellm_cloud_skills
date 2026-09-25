@@ -114,4 +114,4 @@ them all: start a new one.
 | 409 | The browser named contradicts the session's browser | Send `X-Session-Id` alone |
 | 400 | The path names one browser and `X-Browser-Id` another | Name it once |
 | 502 | The named browser can't be reached | `wait` for it, or leave the name out |
-| 503 | No browsers, or none can be reached | `browser-api show`; tell the user |
+| 503 | No browsers, or none can be reached | Just made: wait until `GET <url>/browsers` lists them (up to about 2 minutes), then retry. Otherwise `browser-api show`; tell the user |

@@ -19,7 +19,11 @@ Claude Code users get the update only when the version changes.
 - `llc.py templates`, `template show T`, `template save NAME --from ID` and
   `template use T NEW [--json FILE] --yes`, `template rm T --yes`: a
   resource's settings kept for making more like it, without logins, env
-  values or pull credentials.
+  values or pull credentials. A Browser API saves as one too, as the console
+  saves it; a database's leaves out what it was restored from.
+- `references/browser-api.md`: a 503 from a Browser API just made means its
+  browsers are still joining: wait until `GET <url>/browsers` lists them (up
+  to about 2 minutes), then retry.
 
 ## 1.6.4
 
