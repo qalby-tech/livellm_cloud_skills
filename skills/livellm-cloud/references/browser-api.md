@@ -21,26 +21,33 @@ python3 scripts/llc.py wait scrapers
 - `--browsers a,b`: only these browsers.
 - `--all`: every browser in the workspace, including ones made later.
 - `--remote office=wss://…`: a browser running somewhere else, by its CDP
-  address. Repeat it for more.
+  address. Repeat it for more. One that needs a login header can't take it on
+  the command line: use a file (below).
 
 A Browser API always has browsers; create the browsers first. A workspace
 browser belongs to at most one Browser API. When one is already in another,
 the answer is a 422 naming it: ask the user before taking it out there.
 
 `create controller --json FILE --yes` takes the same settings as a file:
-`{"id": "scrapers", "browsers": ["agent-1", "agent-2"]}`.
+`{"id": "scrapers", "browsers": ["agent-1", "agent-2"]}`. A remote browser
+with a login goes in `externalBrowsers`:
+`[{"id": "office", "wsUrl": "wss://…", "authHeader": "Bearer …"}]`.
+`authHeader` is `Name: value`, or a bare value sent as `Authorization`. The
+user gives it; write the file, create, then delete the file. It is never shown
+again (answers carry `"hasAuth": true`).
 
 ## Which browsers it drives
 
 ```
 python3 scripts/llc.py browser-api show scrapers
 python3 scripts/llc.py browser-api add scrapers agent-3
-python3 scripts/llc.py browser-api remove scrapers agent-3
+python3 scripts/llc.py browser-api remove scrapers agent-3 --yes
 ```
 
 `show` lists its browsers and, under `answering`, each one's open tabs. `add`
 and `remove` change one browser and leave the rest as they are. A browser that
-is taken out stops answering, and its sessions end.
+is taken out stops answering, and its sessions end: ask the user before
+`remove`, then pass `--yes`.
 
 ## Call it
 

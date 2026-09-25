@@ -16,9 +16,9 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py unshare ID SHARE_ID | release ID
     llc.py build ID | builds ID | deploy ID BUILD --yes | progress ID
     llc.py restart ID --yes
-    llc.py stop ID --yes | start ID | set ID --json CHANGES
+    llc.py stop ID --yes | start ID | set ID --json CHANGES --yes
     llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS] --yes
-    llc.py browser-api show NAME | add NAME BROWSER | remove NAME BROWSER
+    llc.py browser-api show NAME | add NAME BROWSER | remove NAME BROWSER --yes
     llc.py rm ID --yes
 
 Sign-in is stored in ~/.config/livellm/credentials.json, readable only by you.
@@ -472,6 +472,9 @@ def browser_api(args):
             request("PUT", member_path(args.name, args.browser), {}, token=tok)
             out({"added": args.browser, "to": args.name})
         else:
+            if not args.yes:
+                raise Problem("taking a browser out needs --yes",
+                              "its open sessions end; ask the user first, then pass --yes", EXIT_OTHER)
             request("DELETE", member_path(args.name, args.browser), token=tok)
             out({"tookOut": args.browser, "of": args.name})
         return
@@ -600,6 +603,7 @@ def main():
     set_p = sub.add_parser("set", help="change some of a resource's settings; the file holds only what changes")
     set_p.add_argument("id")
     set_p.add_argument("--json", required=True)
+    set_p.add_argument("--yes", action="store_true", required=True, help="the user agreed to this change")
     set_p.set_defaults(fn=set_settings)
 
     bapi_p = sub.add_parser("browser-api", help="one address over several browsers: create, show, add, remove")
@@ -609,7 +613,7 @@ def main():
     bapi_p.add_argument("--browsers", help="create: the workspace browsers it drives, comma-separated")
     bapi_p.add_argument("--all", action="store_true", help="create: every browser in the workspace")
     bapi_p.add_argument("--remote", action="append", help="create: a browser running elsewhere, ID=wss://address")
-    bapi_p.add_argument("--yes", action="store_true", help="create: the user asked for it")
+    bapi_p.add_argument("--yes", action="store_true", help="create: the user asked for it; remove: the user agreed")
     bapi_p.set_defaults(fn=browser_api)
 
     rm_p = sub.add_parser("rm", help="delete a resource")

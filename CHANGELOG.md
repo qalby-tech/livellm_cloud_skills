@@ -13,9 +13,13 @@ Claude Code users get the update only when the version changes.
   or `X-Browser-Id`), sessions, a workspace key for clients that run longer
   than a token, and the errors. The routing table points at it.
 - `llc.py browser-api create NAME --browsers a,b --yes` (or `--all`, and
-  `--remote ID=wss://…`), `browser-api show NAME`, and `browser-api add` /
-  `remove NAME BROWSER` to change its browsers one at a time.
-- `llc.py set ID --json CHANGES`: change only the settings the file holds.
+  `--remote ID=wss://…`), `browser-api show NAME`, and `browser-api add
+  NAME BROWSER` / `remove NAME BROWSER --yes` to change its browsers one at a
+  time (taking one out ends its sessions, so `remove` needs the user's yes). A
+  remote browser with a login header goes through `create controller --json`.
+- `llc.py set ID --json CHANGES --yes`: change only the settings the file
+  holds, once the user agreed; a list replaces the whole list and `null`
+  removes a setting.
   `stop` and `start` change only whether the resource runs, so a change made
   meanwhile in the console is kept.
 

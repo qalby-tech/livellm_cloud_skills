@@ -90,6 +90,9 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 7. **Finish.** Say what exists now and give the links. Stop or delete only what
    you created, and say so before you do. `stop <id> --yes` keeps an app's or
    a machine's disks and bills only them; `start <id>` runs it again.
+   `set <id> --json changes.json --yes` changes only the settings in the file,
+   and only after the user agreed: a list in it replaces the whole list and
+   `null` removes a setting, so leaving out a volume deletes its data.
 
 ## Examples
 
