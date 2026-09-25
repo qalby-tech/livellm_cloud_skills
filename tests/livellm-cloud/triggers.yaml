@@ -1,5 +1,5 @@
 # Prompts for trigger testing. The skill should load for the first list and
-# stay out of the second. Target: at least 19 of 21, and 0 of 10.
+# stay out of the second. Target: at least 20 of 22, and 0 of 10.
 should_trigger:
   - Log into our supplier portal and download last month's invoices.
   - Open a real browser and check whether our checkout page works.
@@ -22,6 +22,7 @@ should_trigger:
   - Stop the machines you created earlier.
   - Watch the browser while it fills out this form and take over for the code.
   - Put our three browsers behind one API so the scrapers share them.
+  - Restore yesterday's backup of our LiveLLM Postgres into a new database.
 should_not_trigger:
   - Set up LiteLLM as a proxy for OpenAI and Anthropic models.
   - Launch an EC2 instance on AWS.
