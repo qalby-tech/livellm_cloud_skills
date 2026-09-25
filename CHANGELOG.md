@@ -9,7 +9,8 @@ Claude Code users get the update only when the version changes.
 
 - `llc.py build ID --wait`: follows the build it started until the app is
   live, or prints why it failed with the end of its log (exit 3 when it is
-  still going after `--timeout`). The app example uses it.
+  still going after `--timeout`). The app example uses it to build again
+  after a failed build.
 - `llc.py monitoring [ID] [--range …]`: every resource up or down, its uptime,
   use and alerts; with a machine's id, that machine in detail.
   `references/workspace.md` reads it instead of pointing at the console.

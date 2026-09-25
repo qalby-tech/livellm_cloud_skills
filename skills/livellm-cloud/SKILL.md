@@ -128,12 +128,14 @@ is done, and delete it when the user is done with it: you made it.
 ```
 python3 scripts/llc.py create storage --json db.json --yes
 python3 scripts/llc.py create pod --json app.json --yes
-python3 scripts/llc.py build web --wait
+python3 scripts/llc.py progress web
 ```
 
 Generate the database password, pass it to the app as a write-only value, and
-show the user once. `build web --wait` follows the build until the app is live;
-when it fails it prints why: fix the repository and build again. To go back to what worked: `builds web`, then
+show the user once. Creating the app starts its first build; `progress web`
+shows how it is going. When a build fails, read `progress`, fix the
+repository, then `build web --wait`: it builds again and waits until the app
+is live, or prints why not. To go back to what worked: `builds web`, then
 `deploy web <build> --yes`.
 
 Machines and Postgres databases have backups: `backups <id>` lists them,
