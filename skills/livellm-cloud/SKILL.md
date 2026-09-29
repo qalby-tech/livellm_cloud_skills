@@ -71,7 +71,7 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 | A Linux desktop a person looks at or you click through | Ubuntu desktop (`vm-ubuntu-desktop`) | `references/machines.md` |
 | Windows software, a Windows desktop | Windows 11 (`vm-windows`) | `references/machines.md` |
 | A Windows server, no desktop | Windows Server Core (`vm-windows`, `"windowsEdition": "server"`) | `references/machines.md` |
-| Several Linux desktops that start in seconds, one per task or agent | Desktop App (`desktop`) | `references/machines.md` |
+| A Linux desktop that starts in seconds, one for each task or agent | Desktop App (`desktop`) | `references/machines.md` |
 | The user to watch a screen, or take it over | Screen link (`share`) | `references/machines.md` |
 | A service or site online, from an image or a Git repo, one service or several; a raw TCP/UDP port (game server, VPN) | Composable App (`pod`) | `references/apps.md` |
 | A site automated, logged into, scraped or tested in real Chrome | Browser (`browser`) | `references/browsers.md` |
@@ -179,5 +179,5 @@ screen; one still going after its wait answers `done: false` and a run id, and
 `command_output` waits for the rest), `list_machines` shows where commands can
 run, and `release_machine` lets a machine go. To hand the user a screen (rule
 6), `share_screen` with mode control gives a link to a machine or a Desktop
-App desktop and `stop_sharing` closes it; for a browser, `connect_resource`
+App and `stop_sharing` closes it; for a browser, `connect_resource`
 with tool view gives its live view. A tool you lack permission for is not listed at all.

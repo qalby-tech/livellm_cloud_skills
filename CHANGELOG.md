@@ -7,6 +7,10 @@ Claude Code users get the update only when the version changes.
 
 ## Unreleased
 
+- A Desktop App is one desktop (breaking): `machines.md` makes one for each
+  desktop needed; `llc.py connect`, `exec` and `share` no longer take
+  `--desktop`, and a Desktop App's settings have no `replicas` (more than 1
+  is refused). `SKILL.md`'s table and connector notes follow.
 - `machines.md`: Windows 11 gets SSH (and `exec`) from Windows Update, so a
   workspace without internet access never gets it there; use Windows Server,
   the screen or Remote Desktop. A new Windows 11 is retried for up to 15

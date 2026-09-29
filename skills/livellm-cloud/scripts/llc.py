@@ -10,10 +10,10 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py create TYPE --json FILE --yes
     llc.py create apps --json FILE --yes       (several apps and their databases, linked)
     llc.py wait ID [--timeout 600]
-    llc.py connect ID [--tool cdp|view|api|computer] [--desktop N]
+    llc.py connect ID [--tool cdp|view|api|computer]
                    [--screen-width PX] [--format png|jpeg] [--env]
-    llc.py exec ID "COMMAND" [--session S] [--timeout N] [--desktop N]
-    llc.py share ID [--control] [--for 1h|24h|7d] [--desktop N] | shares ID
+    llc.py exec ID "COMMAND" [--session S] [--timeout N]
+    llc.py share ID [--control] [--for 1h|24h|7d] | shares ID
     llc.py unshare ID SHARE_ID | release ID
     llc.py build ID [--wait] [--timeout 1800] | builds ID | deploy ID BUILD --yes | progress ID
     llc.py restart ID --yes
@@ -470,8 +470,6 @@ def ssh_keys(_args):
 def connect(args):
     tok = token()
     body = {"tool": args.tool} if args.tool else {}
-    if args.desktop is not None:
-        body["desktop"] = args.desktop
     screen = {k: v for k, v in (("width", args.screen_width), ("format", args.format)) if v}
     if screen:
         body["screen"] = screen
@@ -516,7 +514,7 @@ EXEC_SLACK = 120  # seconds past a command's time limit exec keeps looking at it
 
 
 def run_command(args):
-    """One command on a machine or a Desktop App's desktop: bash, or PowerShell on Windows.
+    """One command on a machine or a Desktop App: bash, or PowerShell on Windows.
 
     Waits until it ends. A command still going when a call answers keeps going
     on the machine; this looks at its run again, until it ends or its time
@@ -525,8 +523,6 @@ def run_command(args):
     body = {"command": args.command, "timeout": args.timeout, "wait": EXEC_POLL}
     if args.session:
         body["session"] = args.session
-    if args.desktop is not None:
-        body["desktop"] = args.desktop
     # Each call waits up to EXEC_POLL for the command; getting onto the machine comes on top.
     answer = request("POST", base, body, token=token(), timeout=EXEC_POLL + 35)
     deadline = time.monotonic() + args.timeout + EXEC_SLACK
@@ -555,8 +551,6 @@ def look_again(path, tries=3):
 def share(args):
     """A link that opens the screen in any browser. Its address is shown only now."""
     body = {"mode": "control" if args.control else "view", "for": args.duration}
-    if args.desktop is not None:
-        body["desktop"] = args.desktop
     out(request("POST", f"/v1/workloads/{urllib.parse.quote(args.id)}/shares", body, token=token()))
 
 
@@ -1021,7 +1015,6 @@ def main():
     connect_p = sub.add_parser("connect", help="how to reach a resource's tool")
     connect_p.add_argument("id")
     connect_p.add_argument("--tool", choices=["cdp", "view", "api", "computer"])
-    connect_p.add_argument("--desktop", type=int, help="for a Desktop App: which desktop, from 0")
     connect_p.add_argument("--screen-width", type=int, help="computer: shrink screenshots to this many pixels wide (320-3840)")
     connect_p.add_argument("--format", choices=["png", "jpeg"], help="computer: jpeg makes screenshots much smaller")
     connect_p.add_argument("--env", action="store_true", help="print shell exports instead of JSON")
@@ -1032,14 +1025,12 @@ def main():
     exec_p.add_argument("command")
     exec_p.add_argument("--session", help="commands in the same session share a working folder")
     exec_p.add_argument("--timeout", type=int, default=60, help="seconds, up to 600")
-    exec_p.add_argument("--desktop", type=int, help="for a Desktop App: which desktop, from 0")
     exec_p.set_defaults(fn=run_command)
 
     share_p = sub.add_parser("share", help="a link to a screen, to watch or to use")
     share_p.add_argument("id")
     share_p.add_argument("--control", action="store_true", help="let whoever opens it use the screen, not only watch")
     share_p.add_argument("--for", dest="duration", choices=["1h", "24h", "7d"], default="1h")
-    share_p.add_argument("--desktop", type=int, help="for a Desktop App: which desktop, from 0")
     share_p.set_defaults(fn=share)
     shares_p = sub.add_parser("shares", help="a screen's open links")
     shares_p.add_argument("id")

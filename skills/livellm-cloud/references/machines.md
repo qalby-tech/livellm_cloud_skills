@@ -2,8 +2,8 @@
 
 A machine is a whole computer: an Ubuntu, Debian or Fedora server for jobs and
 services, an Ubuntu desktop or Windows 11 when something needs a screen, and
-Windows Server Core for Windows services. A Desktop App is lighter: a set of
-Linux desktops that start in seconds. In the console, machines are under
+Windows Server Core for Windows services. A Desktop App is lighter: one Linux
+desktop that starts in seconds. In the console, machines are under
 Machines (New resource → Linux, Windows 11 or Windows Server) and Desktop Apps
 under Apps.
 
@@ -12,7 +12,7 @@ under Apps.
 | `vm-ubuntu` | a Linux server: builds, tests, scripts, anything with a command line |
 | `vm-ubuntu-desktop` | an Ubuntu desktop a person will look at |
 | `vm-windows` | Windows 11 software; with `"windowsEdition": "server"`, a Windows Server |
-| `desktop` | a Desktop App: several quick Linux desktops, one per task |
+| `desktop` | a Desktop App: a quick Linux desktop, one for each task |
 
 A `vm-ubuntu` runs Ubuntu 24.04 unless you ask for another system with `"os"`:
 `"debian"` (Debian 13) or `"fedora"` (Fedora 44). Those two are servers only,
@@ -167,24 +167,23 @@ which.
 
 ## Desktop Apps
 
-A Desktop App is a set of Linux desktops that start in seconds. `desks.json`:
+A Desktop App is one Linux desktop that starts in seconds; make one for each
+desktop needed. `desk-a.json`:
 
 ```json
-{ "id": "desks", "replicas": 3, "cpu": "2", "memory": "4Gi", "resolution": "1280x800" }
+{ "id": "desk-a", "cpu": "2", "memory": "4Gi", "resolution": "1280x800" }
 ```
 
 ```
-python3 scripts/llc.py create desktop --json desks.json --yes
-python3 scripts/llc.py wait desks
-python3 scripts/llc.py connect desks --tool computer --desktop 1
-python3 scripts/llc.py exec desks "ls ~" --desktop 1
+python3 scripts/llc.py create desktop --json desk-a.json --yes
+python3 scripts/llc.py wait desk-a
+python3 scripts/llc.py connect desk-a --tool computer
+python3 scripts/llc.py exec desk-a "ls ~"
 ```
 
-`replicas` is how many desktops, 1 to 20; each is reached by its number, from 0,
-with `--desktop N` on `connect`, `exec` and `share`. Every desktop starts clean
-unless `"keepFiles": true` gives each its own home folder that survives restarts
-(`storageSize` sets its size). `keepFiles` is set at creation and can't be
-changed later. Use the desktop the user gave you.
+It starts clean every time unless `"keepFiles": true` gives it a home folder
+that survives restarts (`storageSize` sets its size). `keepFiles` is set at
+creation and can't be changed later. Use the Desktop App the user gave you.
 
 ## Screen links
 
@@ -194,7 +193,6 @@ any browser:
 ```
 python3 scripts/llc.py share desk-1              # watch only
 python3 scripts/llc.py share desk-1 --control    # watch and use
-python3 scripts/llc.py share desks --desktop 2
 ```
 
 The answer holds `url`: give it to the user. It is shown only this once. A link
