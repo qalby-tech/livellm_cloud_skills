@@ -9,6 +9,8 @@ Claude Code users get the update only when the version changes.
 
 - `workspace.md` and the README: the workspace's SSH keys reach every
   machine, Linux and Windows, and jobs run on both.
+- `machines.md`: `unshare` closes the links you made; another agent's or the
+  user's is refused (403), unless you may change anything.
 - A Desktop App is one desktop (breaking): `machines.md` makes one for each
   desktop needed; `llc.py connect`, `exec` and `share` no longer take
   `--desktop`, and a Desktop App's settings have no `replicas` (more than 1

@@ -198,8 +198,9 @@ python3 scripts/llc.py share desk-1 --control    # watch and use
 The answer holds `url`: give it to the user. It is shown only this once. A link
 you make lasts an hour at most, whatever `--for` says; the user can make longer ones in
 the console. It needs the Use desktops permission. `shares desk-1` lists the
-open links, and `unshare desk-1 SHARE_ID` closes one: whoever has it open loses
-the screen within a minute. Close a control link once the user is done with it.
+open links, and `unshare desk-1 SHARE_ID` closes one you made: whoever has it
+open loses the screen within a minute. Close a control link once the user is
+done with it.
 In the console, Share screen on the machine's page makes the same links, and
 Windows machines also have Download RDP for Remote Desktop.
 
