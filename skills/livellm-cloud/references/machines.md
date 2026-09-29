@@ -142,8 +142,10 @@ Look before you act: take a screenshot, decide from what is on it, then act,
 then look again. The screen is a person's desktop, not a terminal: prefer `exec`
 for anything with a command line, and a browser for web work.
 
-`connect desk-1 --tool view` returns a screen stream for a VNC client, not a
-page to open in a tab. To show the user a screen, make a screen link (below).
+`connect desk-1 --tool view` returns `liveView.url`: a page the user opens in
+any browser to see and use that screen, for 15 minutes. For a link that lasts
+longer, only lets them watch, or that you can close, make a screen link
+(below).
 
 ## Only one agent per machine
 

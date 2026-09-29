@@ -26,9 +26,12 @@ Everything goes through `scripts/llc.py`, which talks to the API and prints JSON
 4. When the plan is full (a 402), stop and show usage. The user decides.
 5. Never open a port to the internet without a password or an allowed-address
    list, unless the user asked for a public site.
-6. Hand login codes, CAPTCHAs, payments and confirmations to the user through
-   the live view link. Never try to solve or get around them, and never ask the
-   user to send you a code: send the link instead, so they type it themselves.
+6. Hand login codes, CAPTCHAs, passwords, payments and confirmations to the
+   user through a link they use themselves: a browser's live view
+   (`connect ID --tool view`), or a control screen link for a machine or a
+   Desktop App (`share ID --control`). Then wait until they say they are done.
+   Never try to solve or get around them, never ask the user to send you a
+   code, and never tell them to find the screen in the console.
 7. Generate strong passwords for databases and ports, pass them to the app that
    needs them, and show the user once. They can't be read back later. For a
    machine you create, log in with an SSH key of your own rather than the
