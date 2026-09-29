@@ -69,10 +69,12 @@ python3 scripts/llc.py exec ci-box "cd app && make test" --session job --timeout
 ```
 
 `exec` runs one command as the machine's own login — bash on Linux machines
-and Desktop Apps, PowerShell on Windows machines — and answers with
-`exitCode`, `stdout`, `stderr`, `durationMs` and `truncated` (each stream is cut
-at 1 MiB). Commands with the same `--session` share a working folder. The
-timeout is in seconds, 60 by default, 600 at most. It works on every machine
+and Desktop Apps, PowerShell on Windows machines — and answers once it ends
+with `exitCode`, `output` (stdout and stderr together, cut at 1 MiB),
+`truncated` and `durationMs`. A long command keeps going on the machine while
+`exec` waits for it, up to `--timeout` (seconds, 60 by default, 600 at most);
+past it the command is stopped and ends with exit code 124. Commands with the
+same `--session` share a working folder. It works on every machine
 (Ubuntu, Debian, Fedora, Windows 11, Windows Server) and on Desktop Apps. On
 Windows, write PowerShell: `Get-ChildItem`, `$env:COMPUTERNAME`,
 `Get-Service sshd`.

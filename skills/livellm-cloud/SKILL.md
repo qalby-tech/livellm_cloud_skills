@@ -127,8 +127,8 @@ python3 scripts/llc.py release ci-box
 ```
 
 `machine.json` carries the id, the size and the login to create
-(`references/machines.md`). `exec` answers with the exit code and the output;
-SSH works too (`connect` prints the address). Release the machine when the job
+(`references/machines.md`). `exec` waits for the command to end (up to
+`--timeout`) and answers with its exit code and output; SSH works too (`connect` prints the address). Release the machine when the job
 is done, and delete it when the user is done with it: you made it.
 
 ### Ship an app with a database
@@ -172,5 +172,6 @@ More in `references/troubleshooting.md`.
 When the agent already has LiveLLM tools of its own, use them instead of this
 script. The steps and the rules above stay the same. The `computer` tool works
 a desktop, `run_command` runs a shell command (never type commands into a
-screen), `list_machines` shows where commands can run, and `release_machine`
-lets a machine go. A tool you lack permission for is not listed at all.
+screen; one still going after its wait answers `done: false` and a run id, and
+`command_output` waits for the rest), `list_machines` shows where commands can
+run, and `release_machine` lets a machine go. A tool you lack permission for is not listed at all.

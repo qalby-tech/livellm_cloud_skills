@@ -492,16 +492,45 @@ def connect(args):
     out(info)
 
 
+EXEC_POLL = 55  # seconds one exec call waits for its command (the API's most)
+EXEC_SLACK = 120  # seconds past a command's time limit exec keeps looking at it
+
+
 def run_command(args):
-    """One command on a machine or a Desktop App's desktop: bash, or PowerShell on Windows."""
-    body = {"command": args.command, "timeout": args.timeout}
+    """One command on a machine or a Desktop App's desktop: bash, or PowerShell on Windows.
+
+    Waits until it ends. A command still going when a call answers keeps going
+    on the machine; this looks at its run again, until it ends or its time
+    limit (the platform stops it then, exit code 124) has long passed."""
+    base = f"/v1/workloads/{urllib.parse.quote(args.id)}/exec"
+    body = {"command": args.command, "timeout": args.timeout, "wait": EXEC_POLL}
     if args.session:
         body["session"] = args.session
     if args.desktop is not None:
         body["desktop"] = args.desktop
-    # The answer comes when the command ends, so wait a little longer than it may run.
-    out(request("POST", f"/v1/workloads/{urllib.parse.quote(args.id)}/exec", body,
-                token=token(), timeout=args.timeout + 30))
+    # Each call waits up to EXEC_POLL for the command; getting onto the machine comes on top.
+    answer = request("POST", base, body, token=token(), timeout=EXEC_POLL + 35)
+    deadline = time.monotonic() + args.timeout + EXEC_SLACK
+    while answer.get("done") is False:  # an answer without done is from before runs: the end
+        run = answer.get("runId")
+        if not run:
+            raise Problem("LiveLLM answered a command still going without its run id", "run the command again")
+        if time.monotonic() > deadline:
+            out(answer)
+            raise Problem(f"{args.id} is still running after its time limit", "it was left as it is; check the machine", EXIT_BUSY)
+        answer = look_again(f"{base}/{urllib.parse.quote(run)}?wait={EXEC_POLL}")
+    out(answer)
+
+
+def look_again(path, tries=3):
+    """A read that may be repeated: tried again when the network, not LiveLLM, failed it."""
+    for attempt in range(tries):
+        try:
+            return request("GET", path, token=token(), timeout=EXEC_POLL + 35)
+        except Problem as p:
+            if p.status is not None or attempt == tries - 1:
+                raise
+            time.sleep(2 * (attempt + 1) * POLL_UNIT)
 
 
 def share(args):

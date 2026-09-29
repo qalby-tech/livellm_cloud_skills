@@ -7,6 +7,14 @@ Claude Code users get the update only when the version changes.
 
 ## Unreleased
 
+- `llc.py exec` waits for a long command: a command still going when the call
+  answers keeps going on the machine, and `exec` looks at it again until it
+  ends, up to `--timeout` (then the platform stops it, exit code 124) and two
+  minutes more. The answer is `done`, `exitCode`, `output` (stdout and stderr
+  together), `truncated`, `durationMs` and `runId`. `SKILL.md` and
+  `references/machines.md` say so; `SKILL.md` names the connector's
+  `command_output` for a command `run_command` left running.
+- `tests/livellm-cloud/test_llc_exec.py`: exec against a stand-in for the API.
 - Handing over: rule 6 says to give the user a link they use themselves — a
   browser's live view, or a control screen link (`share ID --control`) for a
   machine or a Desktop App — then wait, and never to send them to the
