@@ -125,6 +125,12 @@ site, protect it when you create it:
 Passwords here are write-only too. When you change who may enter, send every
 user's password again; sending some and not others is refused.
 
+The platform's HTTPS proxy connects to the app from the range in the port's
+`proxy.trust` (status `endpoints[]`, connect `urls[]`) and passes the visitor's
+address in `X-Forwarded-For` and `https` in `X-Forwarded-Proto`: have the app
+trust that range for them (Nextcloud `TRUSTED_PROXIES` + `OVERWRITEPROTOCOL=https`,
+Django `SECURE_PROXY_SSL_HEADER`, Express `app.set("trust proxy", range)`).
+
 ## Raw TCP and UDP ports
 
 For anything that isn't HTTP — a game server, a mail server, a VPN, DNS — mark

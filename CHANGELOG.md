@@ -13,6 +13,9 @@ Claude Code users get the update only when the version changes.
   console. `connect ID --tool view` on a machine or a Desktop App now returns
   `liveView.url`, a page to open in any browser for 15 minutes, and
   `references/machines.md` says so.
+- `references/apps.md`: an HTTP port's `proxy.trust` is the range the HTTPS
+  proxy connects from; the app should trust it for `X-Forwarded-For` and
+  `X-Forwarded-Proto` (with the Nextcloud, Django and Express settings).
 - Windows machines take commands and SSH: `exec` (and `run_command`) runs in
   PowerShell on Windows 11 and Windows Server, bash elsewhere; a Windows
   machine answers SSH with PowerShell for its login and takes the workspace's
