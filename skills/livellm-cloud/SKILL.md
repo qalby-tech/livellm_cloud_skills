@@ -46,10 +46,14 @@ Run `python3 scripts/llc.py whoami`. If it says "not signed in":
 python3 scripts/llc.py login
 ```
 
-It prints one link with a code. Give the user the link, ask them to click Allow,
-and wait for the command to finish. The sign-in is saved for next time. It asks
-for "create" access: use everything, and manage what this agent creates.
-Running commands is a separate permission ("Run commands") the user turns on
+It prints one link with a code and returns. Give the user the link and ask them
+to click Allow. Once they say they have, run `login` again: it finishes the same
+sign-in and saves it for next time. If it says it is still waiting (exit 3), ask
+the user whether they pressed Allow, then run it once more; a link that ran out
+or was denied is replaced by a new one to give them.
+
+It asks for "create" access: use everything, and manage what this agent
+creates. Running commands is a separate permission ("Run commands") the user turns on
 for this agent on the console's Agents page; "full" access includes it. For
 runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 `LIVELLM_API_URL` points at a self-hosted LiveLLM.
@@ -74,8 +78,9 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 
 ## The loop
 
-1. **Check the sign-in.** `whoami`. If signed out, `login` and give the user the
-   link. Nothing else works until they click Allow.
+1. **Check the sign-in.** `whoami`. If signed out, `login`, give the user the
+   link, and run `login` again once they click Allow. Nothing else works until
+   they do.
 2. **Look before creating.** `ls` shows every resource, its state and who made
    it. Reuse what the user already has: a browser already logged in to a site is
    worth more than a fresh one.
@@ -149,7 +154,7 @@ Every error prints `{"error": ..., "next": ...}`. Do what `next` says.
 
 | Answer | What it means | What to do |
 |---|---|---|
-| not signed in, 401 | No sign-in, or it ended | `login`, give the user the link |
+| not signed in, 401 | No sign-in, or it ended | `login`, give the user the link, `login` again after Allow |
 | 402 | The plan is full | Stop, show usage, let the user choose |
 | 403 | Beyond this agent's permissions, or someone else's resource | Tell the user which permission it needs; they turn it on on the Agents page |
 | 404 | No such resource here | `ls`; the id is probably wrong |
@@ -163,6 +168,6 @@ More in `references/troubleshooting.md`.
 
 When the agent already has LiveLLM tools of its own, use them instead of this
 script. The steps and the rules above stay the same. The `computer` tool works
-a desktop, and `release_machine` lets a machine go. With only the terminal
-connector connected, the tools are `list_machines`, `run_command` and
-`release_machine`. A tool you lack permission for is not listed at all.
+a desktop, `run_command` runs a shell command (never type commands into a
+screen), `list_machines` shows where commands can run, and `release_machine`
+lets a machine go. A tool you lack permission for is not listed at all.

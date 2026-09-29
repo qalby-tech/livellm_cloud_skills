@@ -83,8 +83,8 @@ npx skills add qalby-tech/livellm_cloud_skills
 ## Signing in
 
 The first time your agent needs LiveLLM, it shows you one link. Open it, check which
-agent is asking and what it may do, and click Allow. The agent signs in by itself after
-that and renews its access quietly. You can see and sign out every agent in the
+agent is asking and what it may do, and click Allow, then tell the agent you did: it
+finishes signing in, and after that it renews its access quietly. You can see and sign out every agent in the
 LiveLLM console.
 
 For CI and other runs with no person present, set `LIVELLM_API_KEY` to an API key from
@@ -100,8 +100,9 @@ the console. For a self-hosted LiveLLM, set `LIVELLM_API_URL` to its address.
 - Keep people's documentation here, not inside a skill folder.
 - Add a new skill to the `skills` list in `.claude-plugin/marketplace.json`, and copy
   that file to `.cursor-plugin/marketplace.json`.
-- Run `python3 tools/validate.py` before pushing. CI runs it too.
-- Trigger tests live in `tests/<skill>/`.
+- Run `python3 tools/validate.py` and `python3 -m unittest discover -s tests/livellm-cloud`
+  before pushing. CI runs both.
+- Trigger tests and the script's tests live in `tests/<skill>/`.
 - To release, follow the steps at the top of [CHANGELOG.md](CHANGELOG.md).
 - We don't publish to OpenClaw's ClawHub registry: it republishes skills under
   MIT-0 and rejects other licence terms. OpenClaw installs from this repository

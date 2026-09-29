@@ -5,7 +5,7 @@ Only the Python standard library. Every command prints JSON on stdout. Errors
 print JSON on stderr with a "next" field saying what to do, and set an exit
 code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
 
-    llc.py login | logout | whoami | ssh-keys | logs <id>
+    llc.py login [--wait] | logout | whoami | ssh-keys | logs <id>
     llc.py ls [--type TYPE]
     llc.py create TYPE --json FILE --yes
     llc.py wait ID [--timeout 600]
@@ -30,6 +30,8 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py rm ID --yes
 
 Sign-in is stored in ~/.config/livellm/credentials.json, readable only by you.
+`login` prints a link and returns; run it again once the user has pressed Allow
+(a sign-in started and not finished waits in credentials.pending.json).
 Set LIVELLM_API_KEY instead for runs with nobody present, and LIVELLM_API_URL
 to point at a self-hosted LiveLLM.
 """
@@ -52,14 +54,17 @@ CREDENTIALS = Path(os.environ.get("LIVELLM_CREDENTIALS", Path.home() / ".config"
 CLIENT_NAME = os.environ.get("LIVELLM_CLIENT_NAME", "").strip()
 DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
 TIMEOUT = 30
+LOGIN_WAIT = 60  # seconds a second `login` waits for Allow before it says it is still waiting
+POLL_UNIT = 1.0  # one second of the server's poll interval
 
 EXIT_USER, EXIT_NOT_READY, EXIT_BUSY, EXIT_OTHER = 2, 3, 4, 1
 
 
 class Problem(Exception):
-    def __init__(self, message, nxt, code=EXIT_OTHER, status=None):
+    def __init__(self, message, nxt, code=EXIT_OTHER, status=None, oauth=None):
         super().__init__(message)
         self.message, self.next, self.code, self.status = message, nxt, code, status
+        self.oauth = oauth  # the OAuth error code of a sign-in endpoint's refusal
 
 
 def out(value):
@@ -99,9 +104,15 @@ def request(method, path, body=None, token=None, form=False, timeout=TIMEOUT):
 
 
 def http_problem(status, payload):
+    p = status_problem(status, payload)
+    p.oauth = payload.get("error")
+    return p
+
+
+def status_problem(status, payload):
     message = payload.get("error_description") or payload.get("error") or f"HTTP {status}"
     if status == 401:
-        return Problem(message, "run: llc.py login, and give the user the link it prints", EXIT_USER, status)
+        return Problem(message, "run: llc.py login, give the user the link it prints, and run login again once they press Allow", EXIT_USER, status)
     if status == 402:
         return Problem(message, "the plan is full: show the user their usage and stop; never delete to make room", EXIT_USER, status)
     if status == 403:
@@ -148,7 +159,7 @@ def token():
         return API_KEY
     creds = read_credentials().get(API, {})
     if not creds:
-        raise Problem("not signed in", "run: llc.py login, and give the user the link it prints", EXIT_USER)
+        raise Problem("not signed in", "run: llc.py login, give the user the link it prints, and run login again once they press Allow", EXIT_USER)
     if creds.get("expires_at", 0) - 60 > time.time():
         return creds["access_token"]
     if not creds.get("refresh_token"):
@@ -157,7 +168,7 @@ def token():
         fresh = request("POST", "/v1/oauth/token",
                         {"grant_type": "refresh_token", "refresh_token": creds["refresh_token"]}, form=True)
     except Problem:
-        raise Problem("sign-in expired or ended", "run: llc.py login, and give the user the link it prints", EXIT_USER) from None
+        raise Problem("sign-in expired or ended", "run: llc.py login, give the user the link it prints, and run login again once they press Allow", EXIT_USER) from None
     return save_tokens(fresh)["access_token"]
 
 
@@ -175,34 +186,154 @@ def save_tokens(payload):
     return entry
 
 
+def pending_path():
+    """Next to the credentials: a sign-in started and not finished yet."""
+    return CREDENTIALS.with_name(CREDENTIALS.stem + ".pending" + CREDENTIALS.suffix)
+
+
+def read_pending():
+    try:
+        entry = json.loads(pending_path().read_text()).get(API)
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return None
+    return entry if isinstance(entry, dict) and entry.get("device_code") else None
+
+
+def write_pending(entry):
+    """Keep entry as this LiveLLM's pending sign-in, or forget it (None)."""
+    path = pending_path()
+    try:
+        data = json.loads(path.read_text())
+        if not isinstance(data, dict):
+            data = {}
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    if entry is None:
+        data.pop(API, None)
+    else:
+        data[API] = entry
+    if not data:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        return
+    # The device code is a credential until it is used.
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.touch(mode=0o600, exist_ok=True)
+    os.chmod(path, 0o600)
+    path.write_text(json.dumps(data, indent=2))
+
+
+def start_login(access):
+    start = request("POST", "/v1/oauth/device/code",
+                    {"client_name": client_name(), "scope": access}, form=True)
+    entry = {
+        "device_code": start["device_code"],
+        "user_code": start["user_code"],
+        "link": start["verification_uri_complete"],
+        "interval": int(start.get("interval", 5)),
+        "expires_at": int(time.time() + int(start.get("expires_in", 600))),
+        "access": access,
+    }
+    write_pending(entry)
+    return entry
+
+
+def link_answer(pending, note=None):
+    answer = {
+        "signedIn": False,
+        "link": pending["link"],
+        "code": pending["user_code"],
+        "expiresAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(pending["expires_at"])),
+        "next": "give the user the link; once they press Allow, run: llc.py login",
+    }
+    if note:
+        answer["note"] = note
+    return answer
+
+
+def poll_login(pending, until):
+    """Ask about the pending sign-in until it is allowed or until runs out.
+
+    Returns (tokens, None) once allowed, (None, reason) when the link can't be
+    finished any more (it expired, was denied or was already used), and
+    (None, None) while it is still waiting.
+    """
+    pending["interval"] = max(int(pending.get("interval") or 5), 1)
+    polled = float(pending.get("polled_at") or 0)
+    # The server asks for a pause between polls, the last run's included.
+    nxt = polled + pending["interval"] * POLL_UNIT if polled else time.time()
+    while True:
+        delay = nxt - time.time()
+        if delay > 0:
+            if time.time() + delay > until:
+                return None, None
+            time.sleep(delay)
+        try:
+            return request("POST", "/v1/oauth/token",
+                           {"grant_type": DEVICE_GRANT, "device_code": pending["device_code"]}, form=True), None
+        except Problem as p:
+            pending["polled_at"] = time.time()
+            if p.oauth == "authorization_pending":
+                pass
+            elif p.oauth == "slow_down" or p.status == 429:
+                pending["interval"] += 5
+            elif p.oauth in ("expired_token", "access_denied", "invalid_grant"):
+                return None, p.message
+            else:
+                raise
+        write_pending(pending)
+        nxt = time.time() + pending["interval"] * POLL_UNIT
+
+
+def finish_login(tokens):
+    entry = save_tokens(tokens)
+    write_pending(None)
+    out({"signedIn": True, "workspace": entry["workspace"], "access": entry["scope"]})
+
+
 def login(args):
+    """Two calls: the first prints the link and returns, the next finishes it."""
     if API_KEY:
         out({"signedIn": True, "with": "LIVELLM_API_KEY"})
         return
-    start = request("POST", "/v1/oauth/device/code",
-                    {"client_name": client_name(), "scope": args.access}, form=True)
-    sys.stderr.write(
-        f"\nAsk the user to open {start['verification_uri_complete']} and click Allow"
-        f" (code {start['user_code']}).\n\n")
-    interval = int(start.get("interval", 5))
-    deadline = time.time() + int(start.get("expires_in", 600))
-    while time.time() < deadline:
-        time.sleep(interval)
-        try:
-            entry = save_tokens(request("POST", "/v1/oauth/token",
-                                        {"grant_type": DEVICE_GRANT, "device_code": start["device_code"]}, form=True))
-            out({"signedIn": True, "workspace": entry["workspace"], "access": entry["scope"],
-                 "link": start["verification_uri_complete"]})
-            return
-        except Problem as p:
-            text = str(p)
-            if "slow_down" in text or p.status == 429:
-                interval += 5
-            elif "authorization_pending" in text or "waiting for the user" in text:
+    pending = read_pending()
+    if pending and (float(pending.get("expires_at") or 0) <= time.time() or pending.get("access") != args.access):
+        pending = None
+    fresh = pending is None
+    if fresh:
+        pending = start_login(args.access)
+
+    if args.wait:
+        while True:
+            sys.stderr.write(f"\nAsk the user to open {pending['link']} and click Allow"
+                             f" (code {pending['user_code']}).\n\n")
+            tokens, gone = poll_login(pending, float(pending["expires_at"]))
+            if tokens:
+                finish_login(tokens)
+                return
+            if gone and not fresh:
+                pending, fresh = start_login(args.access), True
                 continue
-            else:
-                raise Problem(text, "ask the user to open the link again, then run: llc.py login", EXIT_USER) from None
-    raise Problem("the sign-in link expired", "run: llc.py login again and give the user the new link", EXIT_USER)
+            write_pending(None)
+            if gone:
+                raise Problem(gone, "ask the user to open the link again, then run: llc.py login", EXIT_USER)
+            raise Problem("the sign-in link expired", "run: llc.py login again and give the user the new link", EXIT_USER)
+
+    if fresh:
+        out(link_answer(pending))
+        return
+    tokens, gone = poll_login(pending, min(time.time() + LOGIN_WAIT, float(pending["expires_at"])))
+    if tokens:
+        finish_login(tokens)
+        return
+    if gone:
+        out(link_answer(start_login(args.access),
+                        f"the last link can't be used any more ({gone}); give the user this new one"))
+        return
+    raise Problem(f"still waiting: the user hasn't pressed Allow at {pending['link']} yet",
+                  "still waiting — once the user has pressed Allow, run: llc.py login again", EXIT_NOT_READY)
 
 
 def logout(_args):
@@ -689,8 +820,9 @@ def main():
     p = argparse.ArgumentParser(prog="llc.py", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    login_p = sub.add_parser("login", help="sign this agent in; prints a link for the user")
+    login_p = sub.add_parser("login", help="sign this agent in: prints a link for the user; run it again once they allow it")
     login_p.add_argument("--access", choices=["use", "create", "full"], default="create")
+    login_p.add_argument("--wait", action="store_true", help="for a person at a terminal: wait here until the link is allowed")
     login_p.set_defaults(fn=login)
     sub.add_parser("logout", help="end this sign-in").set_defaults(fn=logout)
     sub.add_parser("whoami", help="workspace, access and usage").set_defaults(fn=whoami)

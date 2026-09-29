@@ -19,6 +19,7 @@ jobs:
           python-version: "3.12"
       - run: pip install pyyaml
       - run: python3 tools/validate.py
+      - run: python3 -m unittest discover -s tests/livellm-cloud -v
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

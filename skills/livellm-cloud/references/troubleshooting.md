@@ -7,8 +7,9 @@ to do. The exit code says how bad it is: 2 the user must act, 3 not ready yet,
 ## By answer
 
 **not signed in / 401.** There is no sign-in, or it ended (the user signed the
-agent out, or it went unused for 30 days). Run `login` and give the user the
-link. Never ask for an API key in chat.
+agent out, or it went unused for 30 days). Run `login`, give the user the link,
+and run `login` again once they have pressed Allow. "still waiting" (exit 3)
+means they haven't yet. Never ask for an API key in chat.
 
 **402, the plan is full.** Creating this would go past the plan. Stop, show
 usage from `whoami`, and let the user decide. Deleting something to make room is

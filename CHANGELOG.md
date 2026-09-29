@@ -5,6 +5,21 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## Unreleased
+
+- `llc.py login` signs in in two calls: the first prints the link as JSON
+  (`signedIn: false`, `link`, `code`, `expiresAt`) and returns at once; once
+  the user has pressed Allow, `login` again finishes the same sign-in, waiting
+  up to a minute and then saying it is still waiting (exit 3). A link that ran
+  out or was denied is replaced by a new one. The started sign-in is kept in
+  `credentials.pending.json` next to the credentials. `login --wait` is the
+  one-call form, for a person at a terminal. `SKILL.md` says to run login, give
+  the user the link, and run login again after they allow it.
+- `SKILL.md`: `run_command` and `list_machines` are on the one connector; the
+  terminal connector is gone.
+- `tests/livellm-cloud/test_llc_login.py`: the sign-in, against a stand-in
+  server (`python3 -m unittest discover -s tests/livellm-cloud`).
+
 ## 1.6.6
 
 - `references/apps.md`: an app's disks are `volumes` only; the single
