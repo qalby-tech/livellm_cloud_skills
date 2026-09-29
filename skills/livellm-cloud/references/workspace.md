@@ -68,18 +68,42 @@ something; don't guess from `ls`.
 
 ## Templates
 
-A template keeps a resource's settings for making more like it. It never keeps
-a login, env values or a pull credential.
+A template keeps a resource's settings for making more like it, never a
+password, a secret value or data. An app keeps its plain `env` values and the
+names of its secrets; a machine's login and a database's password are left
+out. Saving an app of a Composable App (one in a stack, or made with
+databases) keeps the whole app: every service, the databases they use
+(engine, version, size, backups) and the links between them.
 
 ```
 python3 scripts/llc.py templates
-python3 scripts/llc.py template save small-box --from box      # needs "Manage everything"
-python3 scripts/llc.py template use small-box box-2 --json login.json --yes
+python3 scripts/llc.py template show nextcloud         # what it holds, and each secret it needs
+python3 scripts/llc.py template save nextcloud --from cloud --description "Nextcloud with its database"
+ADMIN_PW=... python3 scripts/llc.py template use nextcloud files --secret-env NEXTCLOUD_ADMIN_PASSWORD=ADMIN_PW --yes
+python3 scripts/llc.py template use small-box box-2 --secret credentials.username=agent \
+    --secret-env credentials.password=BOX_PW --yes
 ```
 
-`use` makes a new resource from it, with the file adding what is that
-resource's own (a machine's `credentials`, an app's `secretEnv`). It counts
-toward the plan like any other create; make one only when the user asked.
+`save` needs "Manage everything". `use` makes new resources from it:
+
+- A Composable App's template makes each service as `<new>-<service>` in
+  the stack `<new>` (one service that had no stack becomes `<new>`), and its
+  databases as `<new>-<database>` with passwords the platform makes, already
+  linked. Addresses in `env` values that named the old ones name the new ones.
+- The secrets it left out are required. Give each with `--secret-env
+  PATH=VAR` (the value from an environment variable; keeps it off the
+  command line) or `--secret PATH=VALUE`: a bare name is a secret env value
+  (in a Composable App, of every service that has it); otherwise the path is
+  `imagePassword`, `portPasswords.<port>.<user>`, `credentials.username`,
+  `credentials.password`, or `services.<service>.` and one of those.
+  `--json FILE` takes the same as an object (`secretEnv`, `imagePassword`,
+  `gitToken`, `portPasswords`, `credentials`, `services`); nothing else, so
+  change other settings after with `set`.
+- Missing ones are refused (422) with the list of paths, and `next` spells
+  the flags. Generate passwords yourself; ask the user for keys and tokens
+  that belong to them. Never invent one.
+- It counts toward the plan like any other create; make one only when the
+  user asked.
 
 ## Who is signed in
 

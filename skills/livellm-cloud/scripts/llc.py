@@ -8,6 +8,7 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py login [--wait] | logout | whoami | ssh-keys | logs <id>
     llc.py ls [--type TYPE]
     llc.py create TYPE --json FILE --yes
+    llc.py create apps --json FILE --yes       (several apps and their databases, linked)
     llc.py wait ID [--timeout 600]
     llc.py connect ID [--tool cdp|view|api|computer] [--desktop N]
                    [--screen-width PX] [--format png|jpeg] [--env]
@@ -23,11 +24,12 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py stop ID --yes | start ID | set ID --json CHANGES --yes
     llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS] --yes
     llc.py browser-api show NAME | add NAME BROWSER | remove NAME BROWSER --yes
-    llc.py templates | template show T | template save NAME --from ID
-    llc.py template use T NEW [--json FILE] --yes | template rm T --yes
+    llc.py templates | template show T | template save NAME --from ID [--description D]
+    llc.py template use T NEW [--secret PATH=VALUE] [--secret-env PATH=VAR] [--json FILE] --yes
+    llc.py template rm T --yes
     llc.py activity [--actor you|platform|all] [--object ID] [--limit N] [--before EVENT]
     llc.py monitoring [ID] [--range 15m|1h|6h|24h|7d]
-    llc.py rm ID --yes
+    llc.py rm ID [--with-databases] [--force] --yes
 
 Sign-in is stored in ~/.config/livellm/credentials.json, readable only by you.
 `login` prints a link and returns; run it again once the user has pressed Allow
@@ -65,6 +67,7 @@ class Problem(Exception):
         super().__init__(message)
         self.message, self.next, self.code, self.status = message, nxt, code, status
         self.oauth = oauth  # the OAuth error code of a sign-in endpoint's refusal
+        self.missing = []  # a create from a template: the secrets it still needs
 
 
 def out(value):
@@ -91,7 +94,10 @@ def request(method, path, body=None, token=None, form=False, timeout=TIMEOUT):
             text = r.read().decode()
             return json.loads(text) if text.strip() else {}
     except urllib.error.HTTPError as e:
-        text = e.read().decode(errors="replace")
+        try:
+            text = e.read().decode(errors="replace")
+        finally:
+            e.close()
         try:
             payload = json.loads(text)
         except json.JSONDecodeError:
@@ -106,6 +112,8 @@ def request(method, path, body=None, token=None, form=False, timeout=TIMEOUT):
 def http_problem(status, payload):
     p = status_problem(status, payload)
     p.oauth = payload.get("error")
+    missing = payload.get("missing")
+    p.missing = missing if isinstance(missing, list) else []
     return p
 
 
@@ -381,6 +389,12 @@ def resources(tok):
             "createdBy": (w.get("createdBy") or {}).get("name", "a person"),
             "endpoints": live.get("endpoints", []),
             "ssh": live.get("ssh", ""),
+            # an app's database links as its settings hold them, and the apps a database serves
+            **({"databases": (w.get("pod") or {})["databases"]} if (w.get("pod") or {}).get("databases") else {}),
+            **({"usedBy": live["usedBy"]} if live.get("usedBy") else {}),
+            # a database's login name (its password is never shown)
+            **({"username": w["storage"]["credentials"]["username"]}
+               if ((w.get("storage") or {}).get("credentials") or {}).get("username") else {}),
         }
 
 
@@ -392,13 +406,18 @@ def ls(args):
 def create(args):
     body = json.loads(Path(args.json).read_text())
     if args.type == "apps":
-        # several apps at once, all or nothing: a list of app settings
+        # several apps at once, all or nothing: a list of app settings, or
+        # {"apps": [...], "databases": [...]} with the databases to make with them
         apps = body if isinstance(body, list) else body.get("apps") or []
+        dbs = [] if isinstance(body, list) else body.get("databases") or []
         if not apps:
-            raise Problem("the file should hold a list of apps, or {\"apps\": [...]}", "fix the file", EXIT_OTHER)
-        made = request("POST", "/v1/workloads", {"apps": apps}, token=token())
+            raise Problem("the file should hold a list of apps, or {\"apps\": [...], \"databases\": [...]}", "fix the file", EXIT_OTHER)
+        made = request("POST", "/v1/workloads", {"apps": apps, **({"databases": dbs} if dbs else {})}, token=token())
         ids = made.get("created", [])
-        out({"created": ids, "next": f"llc.py wait {ids[-1] if ids else '<id>'} then llc.py connect the app with a public port"})
+        answer = {"created": ids, "next": f"llc.py wait {ids[-1] if ids else '<id>'} then llc.py connect the app with a public port"}
+        if made.get("databases"):
+            answer["databases"] = made["databases"]
+        out(answer)
         return
     request("POST", f"/v1/workloads/{urllib.parse.quote(args.type)}", body, token=token())
     out({"created": body.get("id"), "type": args.type,
@@ -751,10 +770,6 @@ def build(args):
 
 BUILD_POLL = 10
 
-# Where each resource type keeps its settings on the resource.
-KIND_BLOCK = {"vm-ubuntu": "vm", "vm-ubuntu-desktop": "vm", "vm-windows": "vm", "pod": "pod",
-              "browser": "browser", "desktop": "desktop", "controller": "controller", "storage": "storage"}
-
 
 def find_template(ref, tok):
     items = request("GET", "/v1/templates", token=tok).get("templates") or []
@@ -769,24 +784,108 @@ def find_template(ref, tok):
     raise Problem(f"{len(named)} templates are called {ref}", "use the id from llc.py templates", EXIT_OTHER)
 
 
-def template_config(w):
-    """A resource's settings as a template keeps them: never its login, env
-    values or pull credential (the console leaves out the same)."""
-    kind = w.get("type", "")
-    block = KIND_BLOCK.get(kind)
-    if not block:
-        raise Problem(f"a {kind} can't be saved as a template", "save a machine, an app, a browser, a desktop, a Browser API or a database", EXIT_OTHER)
-    spec = dict(w.get(block) or {})
-    if block in ("vm", "storage"):
-        spec.pop("credentials", None)
-    if block == "storage":
-        spec.pop("restoreFrom", None)  # a restore is this database's own history
-    if block == "pod":
-        for k in ("env", "secretEnv", "imageAuth"):
-            spec.pop(k, None)
-        if isinstance(spec.get("source"), dict):
-            spec["source"] = {"git": spec["source"].get("git")}
-    return kind, {block: spec}
+# What a create from a template takes besides the new id: the secrets the
+# template left out. Anything else would be dropped without a word.
+TEMPLATE_BODY_KEYS = {"secretEnv", "imagePassword", "gitToken", "portPasswords", "credentials", "services"}
+
+
+def stack_services(t, with_secret=None):
+    """The names of a Composable App template's services (those with the secret env name)."""
+    names = []
+    for sv in ((t.get("config") or {}).get("stack") or {}).get("services") or []:
+        env = [e.get("name") for e in ((sv.get("pod") or {}).get("secretEnv") or [])]
+        if sv.get("name") and (with_secret is None or with_secret in env):
+            names.append(sv["name"])
+    return names
+
+
+def set_path(body, parts, value, path):
+    m = body
+    for i, k in enumerate(parts):
+        if not k:
+            raise Problem(f"--secret {path}: an empty name in the path", "fix the path", EXIT_OTHER)
+        if i == len(parts) - 1:
+            m[k] = value
+            return
+        if k in m and not isinstance(m[k], dict):
+            raise Problem(f"--secret {path}: {'.'.join(parts[:i + 1])} already holds a value", "fix the path", EXIT_OTHER)
+        m = m.setdefault(k, {})
+
+
+def put_secret(body, t, path, value):
+    """One --secret into the create body. A path is what a refusal lists as
+    missing (secretEnv.API_KEY, imagePassword, credentials.password,
+    portPasswords.http.alice, services.web.secretEnv.API_KEY); a bare name is a
+    secret env value. In a Composable App's template a secret belongs to a
+    service: without services.<name> it goes to each service that has that
+    secret env name, or to the only service there is."""
+    parts = path.split(".")
+    if len(parts) == 1 and path in TEMPLATE_BODY_KEYS and path not in ("imagePassword", "gitToken"):
+        raise Problem(f"--secret {path}: say what in it, e.g. {path}.NAME=…", "fix the path", EXIT_OTHER)
+    if len(parts) == 1 and path not in TEMPLATE_BODY_KEYS:
+        parts = ["secretEnv", path]
+    if t.get("kind") != "stack":
+        if parts[0] == "services":
+            raise Problem(f"--secret {path}: {t.get('name')} isn't a Composable App's template", "leave out services.<name>", EXIT_OTHER)
+        set_path(body, parts, value, path)
+        return
+    if parts[0] == "services":
+        set_path(body, parts, value, path)
+        return
+    if parts[0] == "secretEnv" and len(parts) == 2:
+        svcs = stack_services(t, parts[1])
+        if not svcs:
+            raise Problem(f"--secret {path}: no service of the template {t.get('name')} has a secret {parts[1]}",
+                          f"llc.py template show {t.get('id')} lists what each service needs", EXIT_OTHER)
+    else:
+        svcs = stack_services(t)
+        if len(svcs) != 1:
+            raise Problem(f"--secret {path}: say which service it is for",
+                          f"services.<name>.{path}=…, the services being {', '.join(svcs)}", EXIT_OTHER)
+    for svc in svcs:
+        set_path(body, ["services", svc] + parts, value, path)
+
+
+def secret_flags(missing):
+    """The flags that give the secrets a template still needs, each value from a variable."""
+    flags = []
+    for m in missing:
+        name = m[len("secretEnv."):] if m.startswith("secretEnv.") and m.count(".") == 1 else m
+        flags.append(f"--secret-env {name}=VAR")
+    return " ".join(flags)
+
+
+def template_create_body(t, new_id, secrets, secret_envs, json_file):
+    body = {}
+    if json_file:
+        body = json.loads(Path(json_file).read_text())
+        if not isinstance(body, dict):
+            raise Problem("the file should hold a JSON object with the secrets", "fix the file", EXIT_OTHER)
+        for k in body:
+            if k not in TEMPLATE_BODY_KEYS:
+                raise Problem(f"{json_file}: {k!r} can't be given here — a create from a template takes only the secrets it needs "
+                              "(secretEnv, imagePassword, gitToken, portPasswords, credentials, services)",
+                              f"create it, then change settings with llc.py set {new_id} --json FILE --yes", EXIT_OTHER)
+            if (t.get("kind") == "stack") != (k == "services"):
+                raise Problem(f"{json_file}: {k!r} doesn't fit a template of kind {t.get('kind')}",
+                              "a Composable App's secrets go under services.<name>; any other template's at the top", EXIT_OTHER)
+    given = []
+    for s in secrets or []:
+        path, eq, value = s.partition("=")
+        if not eq or not path:
+            raise Problem(f"--secret takes PATH=VALUE, got {path!r}", "fix the flag", EXIT_OTHER)
+        given.append((path, value))
+    for s in secret_envs or []:
+        path, eq, var = s.partition("=")
+        if not eq or not path or not var:
+            raise Problem(f"--secret-env takes PATH=VAR (the variable holding the value), got {s!r}", "fix the flag", EXIT_OTHER)
+        if not os.environ.get(var):
+            raise Problem(f"--secret-env {path}: the variable {var} is empty or unset", f"set {var} first", EXIT_OTHER)
+        given.append((path, os.environ[var]))
+    for path, value in given:
+        put_secret(body, t, path, value)
+    body["name" if t.get("kind") == "stack" else "id"] = new_id
+    return body
 
 
 def template(args):
@@ -794,12 +893,12 @@ def template(args):
     if args.action == "save":
         if not args.source:
             raise Problem("save which resource?", f"llc.py template save {args.ref} --from ID", EXIT_OTHER)
-        spec = request("GET", "/v1/workspace", token=tok).get("spec", {})
-        w = next((x for x in spec.get("workloads", []) if x.get("id") == args.source), None)
-        if w is None:
-            raise Problem(f"no resource {args.source}", "run: llc.py ls", EXIT_OTHER)
-        kind, config = template_config(w)
-        out(request("POST", "/v1/templates", {"name": args.ref, "kind": kind, "config": config}, token=tok))
+        # LiveLLM reads the resource's settings, never a secret: an app of a
+        # Composable App saves the whole app, with its databases and links
+        body = {"name": args.ref, "from": args.source}
+        if args.description:
+            body["description"] = args.description
+        out(request("POST", "/v1/templates", body, token=tok))
         return
     t = find_template(args.ref, tok)
     if args.action == "show":
@@ -811,17 +910,24 @@ def template(args):
         request("DELETE", f"/v1/templates/{urllib.parse.quote(t['id'])}", token=tok)
         out({"deleted": t["id"], "name": t.get("name")})
         return
-    # use: a new resource from the template, with the file's settings on top
+    # use: a new resource from the template, with the secrets it left out
     if not args.new_id or not args.yes:
         raise Problem("a new resource needs its id and --yes",
-                      f"llc.py template use {args.ref} NEW-ID [--json FILE] --yes, once the user asked for it", EXIT_OTHER)
-    body = dict((t.get("config") or {}).get(KIND_BLOCK.get(t.get("kind"), ""), {}) or {})
-    if args.json:
-        body.update(json.loads(Path(args.json).read_text()))
-    body["id"] = args.new_id
-    request("POST", f"/v1/workloads/{urllib.parse.quote(t['kind'])}", body, token=tok)
-    out({"created": args.new_id, "type": t["kind"], "template": t.get("name"),
-         "next": f"llc.py wait {args.new_id}"})
+                      f"llc.py template use {args.ref} NEW-ID [--secret-env NAME=VAR] --yes, once the user asked for it", EXIT_OTHER)
+    body = template_create_body(t, args.new_id, args.secret, args.secret_env, args.json)
+    try:
+        made = request("POST", f"/v1/templates/{urllib.parse.quote(t['id'])}/create", body, token=tok)
+    except Problem as p:
+        if p.missing:
+            p.next = ("put each value in an environment variable (generate a password, ask the user for a key) and run it "
+                      "again with " + secret_flags(p.missing))
+        raise
+    created = made.get("created") or [args.new_id]
+    answer = {"created": created if t.get("kind") == "stack" else args.new_id, "type": t["kind"], "template": t.get("name"),
+              "next": f"llc.py wait {created[0]}"}
+    if made.get("databases"):
+        answer["databases"] = made["databases"]
+    out(answer)
 
 
 def activity(args):
@@ -841,8 +947,13 @@ def monitoring(args):
 
 
 def rm(args):
-    request("DELETE", f"/v1/workloads/{urllib.parse.quote(args.id)}", token=token())
-    out({"deleted": args.id})
+    q = {k: "true" for k, on in (("force", args.force), ("withDatabases", args.with_databases)) if on}
+    path = workload_path(args.id) + ("?" + urllib.parse.urlencode(q) if q else "")
+    gone = request("DELETE", path, token=token())
+    answer = {"deleted": args.id}
+    if isinstance(gone, dict) and gone.get("databases"):
+        answer["databases"] = gone["databases"]  # {deleted, kept}
+    out(answer)
 
 
 def main():
@@ -867,7 +978,7 @@ def main():
     ls_p.add_argument("--type")
     ls_p.set_defaults(fn=ls)
 
-    create_p = sub.add_parser("create", help="create a resource from a JSON file (type apps: several at once)")
+    create_p = sub.add_parser("create", help="create a resource from a JSON file (type apps: several at once, with their databases)")
     create_p.add_argument("type")
     create_p.add_argument("--json", required=True)
     create_p.add_argument("--yes", action="store_true", required=True, help="the user asked for this resource")
@@ -984,9 +1095,12 @@ def main():
     tpl_p = sub.add_parser("template", help="a saved template: show, save one from a resource, use, rm")
     tpl_p.add_argument("action", choices=["show", "save", "use", "rm"])
     tpl_p.add_argument("ref", help="the template's id or name (save: the new template's name)")
-    tpl_p.add_argument("new_id", nargs="?", help="use: the new resource's id")
-    tpl_p.add_argument("--from", dest="source", help="save: the resource whose settings to keep")
-    tpl_p.add_argument("--json", help="use: settings to add, such as a machine's credentials")
+    tpl_p.add_argument("new_id", nargs="?", help="use: the new resource's id (a Composable App: its name)")
+    tpl_p.add_argument("--from", dest="source", help="save: the resource whose settings to keep (an app of a Composable App: the whole app)")
+    tpl_p.add_argument("--description", help="save: a line about what it is for")
+    tpl_p.add_argument("--secret", action="append", help="use: a secret it needs, PATH=VALUE (API_KEY=…, credentials.password=…)")
+    tpl_p.add_argument("--secret-env", action="append", help="use: the same, the value read from an environment variable: PATH=VAR")
+    tpl_p.add_argument("--json", help="use: a file with the secrets: secretEnv, imagePassword, gitToken, portPasswords, credentials, services")
     tpl_p.add_argument("--yes", action="store_true", help="use: the user asked for it; rm: the user agreed")
     tpl_p.set_defaults(fn=template)
 
@@ -1004,6 +1118,8 @@ def main():
 
     rm_p = sub.add_parser("rm", help="delete a resource")
     rm_p.add_argument("id")
+    rm_p.add_argument("--with-databases", action="store_true", help="an app: also delete the databases made with it that no other app uses")
+    rm_p.add_argument("--force", action="store_true", help="delete even though another app's settings name it")
     rm_p.add_argument("--yes", action="store_true", required=True, help="the user agreed to this deletion")
     rm_p.set_defaults(fn=rm)
 

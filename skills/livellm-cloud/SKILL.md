@@ -33,7 +33,8 @@ Everything goes through `scripts/llc.py`, which talks to the API and prints JSON
    Never try to solve or get around them, never ask the user to send you a
    code, and never tell them to find the screen in the console.
 7. Generate strong passwords for databases and ports, pass them to the app that
-   needs them, and show the user once. They can't be read back later. For a
+   needs them, and show the user once. They can't be read back later. A
+   database made with its app and linked to it needs none from you. For a
    machine you create, log in with an SSH key of your own rather than the
    password, and give it a stop time when the work has an end.
 8. Use only `scripts/llc.py`, plain SSH, and a browser library such as
@@ -134,14 +135,16 @@ is done, and delete it when the user is done with it: you made it.
 ### Ship an app with a database
 
 ```
-python3 scripts/llc.py create storage --json db.json --yes
-python3 scripts/llc.py create pod --json app.json --yes
+python3 scripts/llc.py create apps --json shop.json --yes
 python3 scripts/llc.py progress web
 ```
 
-Generate the database password, pass it to the app as a write-only value, and
-show the user once. Creating the app starts its first build; `progress web`
-shows how it is going. When a build fails, read `progress`, fix the
+`shop.json` holds `{"apps": [...], "databases": [...]}`: the app, and the
+database made with it in the same step. The app links it
+(`"databases": [{"id": "shop-db", "env": {"DATABASE_URL": "url"}}]`), so the
+platform makes the password and hands it to the app; no password passes
+through you (`references/apps.md`, "An app with its databases"). Creating the
+app starts its first build; `progress web` shows how it is going. When a build fails, read `progress`, fix the
 repository, then `build web --wait`: it builds again and waits until the app
 is live, or prints why not. To go back to what worked: `builds web`, then
 `deploy web <build> --yes`.

@@ -4,6 +4,11 @@ Postgres for data an app keeps, Redis for caches and queues. Both are managed:
 the platform keeps them running and takes the backups you ask for. You can
 back up now, restore a backup into a new database, and restart one.
 
+A database for an app you are making is best made WITH the app, in one step,
+and linked to it: the platform makes the password and hands it to the app, so
+no password passes through you (`references/apps.md`, "An app with its
+databases"). Make one on its own when the user wants a database by itself.
+
 ## Create one
 
 `db.json`:
@@ -36,11 +41,54 @@ the user once. `"instances": 3` runs Postgres with two standby copies that take
 over if the main one fails; `1` is enough for development. Redis runs as one
 instance only.
 
+## Link it to an app
+
+An app names the databases it uses in its settings, and which of each one's
+connection details go into which environment variables:
+
+```json
+"databases": [
+  { "id": "db",    "env": { "DATABASE_URL": "url" } },
+  { "id": "cache", "env": { "REDIS_HOST": "host", "REDIS_PORT": "port", "REDIS_PASSWORD": "password" } }
+]
+```
+
+| Detail | PostgreSQL | Redis |
+|---|---|---|
+| `host` | its private address | its private address |
+| `port` | `5432` | `6379` |
+| `database` | `app` | — |
+| `username` | the login's name | — |
+| `password` | the password | the password |
+| `url` | `postgres://user:password@host:5432/app` | `redis://:password@host:6379` |
+
+- The password and the URL are read from the database's stored login when
+  the app starts. They are never in the app's settings, in an answer, or
+  anywhere you can read them: don't copy a password into `env` or
+  `secretEnv` when a link gives it.
+- At most 8 databases per app and 12 variables per database. A variable name
+  is letters, digits and `_`, not starting with a digit, and is used once in
+  the app, across `env`, `secretEnv` and every link.
+- The app starts once its databases accept connections; no `dependsOn`
+  needed for them.
+- `ls` shows each app's links as its settings hold them, and on a database,
+  `usedBy`: the apps that link it or wait for it.
+- A linked database can't be deleted (409 names the app): take the link out,
+  or delete the app, first.
+- On an app that exists, `set web --json links.json --yes` with
+  `{"pod": {"databases": [...]}}`. The list you send replaces the whole
+  list, so copy the links `ls` shows and add the new one.
+- **"set a new password for db once to link its URL"** (422): the database's
+  password was set before links existed, so it can't give `url` yet. Link its
+  other details instead (`host`, `port`, `password`, and on PostgreSQL
+  `database` and `username`), or, if the user agrees, set a new password once
+  (see Care).
+
 ## Connecting
 
 `connect db` prints the addresses. Apps in the same workspace use the private
-one, which never leaves the platform. Ask for the public address only when the
-user needs to reach the database from outside:
+one, which never leaves the platform; a link gives it to them. Ask for the
+public address only when the user needs to reach the database from outside:
 
 ```json
 "network": { "expose": true }
@@ -48,12 +96,9 @@ user needs to reach the database from outside:
 
 The public address is `<id>-<workspace>.cloud.live-llm.com`: Postgres on port
 5432, Redis on port 6380. Both speak TLS only: `sslmode=require` for Postgres,
-`rediss://` for Redis. `connect db` prints the exact address. Give an app its
-connection string as a write-only setting:
-
-```json
-"secretEnv": [{ "name": "DATABASE_URL", "value": "postgres://app:PASSWORD@HOST:5432/app?sslmode=require" }]
-```
+`rediss://` for Redis. `connect db` prints the exact address. A password the
+platform made is shown to no one: to use the database from outside, agree a
+new one with the user (see Care). Apps inside the workspace use a link.
 
 ## Backups
 
@@ -97,8 +142,12 @@ when the user asked for it.
 
 - Never put a password in `env`, a repository, a log line or a chat message that
   isn't the one-time handover.
-- Changing the password: send a new one; the old one stops working, so update
-  every app that uses it in the same breath.
+- Changing the password: send a new one with the username `ls` shows
+  (`set db --json` with
+  `{"storage": {"credentials": {"username": "app", "password": "..."}}}`).
+  The old one stops working. Linked apps read the new one
+  when they restart: `restart` each app in `usedBy`. An app given the
+  password by hand needs the new value too.
 - Deleting a database deletes its data. Only ever delete one you created, and
   say so first.
 - Redis keeps its keys on disk across restarts, but it has no backups: keep
@@ -110,8 +159,9 @@ when the user asked for it.
 
 - **It stays `starting`.** Postgres takes a minute to come up. `wait db`, then
   report what the status said.
-- **The app can't connect.** Check the address you used: apps in the workspace
-  need the private one. From outside, the database must be exposed and the
-  connection must use TLS.
+- **The app can't connect.** Check its links in `ls`, and that the app reads
+  the variable names you gave them. An address typed by hand must be the
+  private one. From outside, the database must be exposed and the connection
+  must use TLS.
 - **Password refused.** It was set at creation and can't be read back. The user
   can set a new one; every app then needs the new value.

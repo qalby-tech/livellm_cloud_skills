@@ -92,19 +92,86 @@ each other by plain name:
   list and run `python3 scripts/llc.py create apps --json stack.json --yes` —
   the same bodies `create pod` takes, one per service.
 
-For a database the user cares about, prefer a managed one
-(`references/databases.md`) over a `postgres` image in a stack: it has backups.
+For a database the user cares about, prefer a managed one over a `postgres`
+image in a stack: it has backups. Make it with the app, as below.
+
+## An app with its databases
+
+Most software needs a database, often a cache too. Make the app and its
+managed databases in one step, all of it or none, with the app linked to them
+(`references/databases.md`, "Link it to an app"). Leave the databases'
+passwords out: the platform makes them and gives them to the app through the
+links, so no password passes through you.
+
+A Nextcloud, for example. `cloud.json`:
+
+```json
+{
+  "apps": [{
+    "id": "cloud",
+    "image": "nextcloud:stable-apache",
+    "cpu": "1", "memory": "2Gi",
+    "ports": [{ "name": "http", "port": 80 }],
+    "volumes": [{ "name": "html", "size": "20Gi", "mountPath": "/var/www/html" }],
+    "env": [
+      { "name": "NEXTCLOUD_ADMIN_USER", "value": "admin" },
+      { "name": "NEXTCLOUD_TRUSTED_DOMAINS", "value": "cloud-http-WORKSPACE.cloud.live-llm.com" },
+      { "name": "OVERWRITEPROTOCOL", "value": "https" },
+      { "name": "TRUSTED_PROXIES", "value": "10.0.0.0/8" }
+    ],
+    "secretEnv": [{ "name": "NEXTCLOUD_ADMIN_PASSWORD", "value": "GENERATE-ONE" }],
+    "databases": [
+      { "id": "cloud-db", "env": { "POSTGRES_HOST": "host", "POSTGRES_DB": "database",
+                                   "POSTGRES_USER": "username", "POSTGRES_PASSWORD": "password" } },
+      { "id": "cloud-cache", "env": { "REDIS_HOST": "host", "REDIS_HOST_PORT": "port",
+                                      "REDIS_HOST_PASSWORD": "password" } }
+    ]
+  }],
+  "databases": [
+    { "id": "cloud-db", "engine": "postgres", "version": "17", "storageSize": "10Gi",
+      "backup": { "enabled": true, "mode": "daily", "keepDays": 7 } },
+    { "id": "cloud-cache", "engine": "redis", "storageSize": "1Gi", "cpu": "250m", "memory": "256Mi" }
+  ]
+}
+```
+
+```
+python3 scripts/llc.py create apps --json cloud.json --yes
+python3 scripts/llc.py wait cloud
+python3 scripts/llc.py connect cloud
+```
+
+- Each database is what `create storage` takes; `credentials` may be left
+  out here (not with `"adminConsole": true`, which signs in with a password
+  you send). The databases remember the app they were made with.
+- The app waits for its databases, then starts. Hand the user the address
+  and the admin password you generated, once.
+- An HTTP port's address is `<id>-<port name>-<workspace>.cloud.live-llm.com`
+  (`whoami` names the workspace); Nextcloud trusts only the domains it was
+  installed with, so put that address in before the first start. `connect`
+  shows the address, and the port's `proxy.trust` range for
+  `TRUSTED_PROXIES` (see "Who can reach it"; change it with `set` if it
+  differs, Nextcloud reads it on every request).
+- Several services work the same way: each one in `apps` with its `stack`
+  and `hostname`, each linking the databases it uses.
+- `rm cloud --with-databases --yes` deletes the app and the databases made
+  with it that no other app uses, with their data; it prints which went and
+  which stayed. Without the flag the databases stay. Ask first.
+- Save the whole thing for next time: `template save nextcloud --from cloud`
+  keeps every service, its databases and the links, never a password or a
+  secret value (`references/workspace.md`, "Templates").
 
 ## Settings the app reads
 
 ```json
 "env": [{ "name": "LOG_LEVEL", "value": "info" }],
-"secretEnv": [{ "name": "DATABASE_URL", "value": "postgres://..." }]
+"secretEnv": [{ "name": "STRIPE_KEY", "value": "sk_live_..." }]
 ```
 
 `env` is plain and visible. `secretEnv` is write-only: the value is kept out of
-sight and can't be read back, so put passwords and connection strings there.
-Send a new value to change it; leave the value out to keep the stored one.
+sight and can't be read back, so put passwords, keys and tokens there. Send a
+new value to change it; leave the value out to keep the stored one. A managed
+database's details come from a link (`"databases"`, above), not from either.
 
 ## Who can reach it
 

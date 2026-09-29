@@ -10,6 +10,34 @@ Claude Code users get the update only when the version changes.
 - `SKILL.md` names the connector's screen tools for handing over:
   `share_screen` (mode control) and `stop_sharing` for a machine or a Desktop
   App, `connect_resource` with tool view for a browser's live view.
+- Apps and their databases: `llc.py create apps --json FILE` takes
+  `{"apps": [...], "databases": [...]}` and makes all of it in one step, a
+  database's password left to the platform; each app links its databases in
+  `databases: [{id, env: {VAR: detail}}]`. The answer lists the `databases`
+  made. `ls` shows an app's links as its settings hold them, a database's
+  `usedBy` and its login's `username`. `rm ID --with-databases` deletes an app
+  with the databases made with it that no other app uses (and says which went
+  and which stayed); `--force` deletes what another app's settings name.
+- Templates: `template save NAME --from ID [--description D]` has LiveLLM read
+  the resource: an app keeps its plain env values and its secrets' names; an
+  app of a Composable App saves the whole app, its databases and links.
+  `template use T NEW` creates through the template (a Composable App with its
+  databases, already linked, under the name NEW) and takes the secrets it left
+  out from `--secret-env PATH=VAR`, `--secret PATH=VALUE` or `--json FILE`
+  (`secretEnv`, `imagePassword`, `gitToken`, `portPasswords`, `credentials`,
+  `services`; a file with other settings is refused). A refusal for missing
+  secrets names them, and `next` spells the flags.
+- `references/databases.md`: "Link it to an app" (what PostgreSQL and Redis
+  give, the password and URL never shown, the app waiting for them, a linked
+  database refused a delete, linking on an existing app, the 422 for a URL
+  from a password set before links); a platform-made password; changing a
+  password reaches linked apps on restart. `references/apps.md`: "An app with
+  its databases", a Nextcloud with PostgreSQL and Redis in one step.
+  `references/workspace.md`: templates of a whole Composable App, and `use`
+  with its secrets. `SKILL.md`: the app-with-a-database example makes both in
+  one step.
+- `tests/livellm-cloud/test_llc_databases.py`: apps with databases, links in
+  `ls`, deletes, template save and use against a stand-in for the API.
 - `llc.py exec` waits for a long command: a command still going when the call
   answers keeps going on the machine, and `exec` looks at it again until it
   ends, up to `--timeout` (then the platform stops it, exit code 124) and two
