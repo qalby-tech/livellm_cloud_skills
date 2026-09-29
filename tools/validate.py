@@ -119,9 +119,11 @@ def check_shared_scripts(folders: list[Path]) -> None:
     # Skills must be self-contained, so a shared script is copied into each
     # skill. The copies must stay identical.
     copies: dict[str, dict[str, bytes]] = {}
+    # Only files: a __pycache__ left by importing a script is no copy.
     for folder in folders:
         for script in (folder / "scripts").glob("*") if (folder / "scripts").is_dir() else []:
-            copies.setdefault(script.name, {})[folder.name] = script.read_bytes()
+            if script.is_file():
+                copies.setdefault(script.name, {})[folder.name] = script.read_bytes()
     for script, by_skill in copies.items():
         if len(set(by_skill.values())) > 1:
             problem(f"scripts/{script}", "copies differ between skills: " + ", ".join(sorted(by_skill)))
