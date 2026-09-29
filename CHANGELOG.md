@@ -7,6 +7,8 @@ Claude Code users get the update only when the version changes.
 
 ## Unreleased
 
+- `workspace.md` and the README: the workspace's SSH keys reach every
+  machine, Linux and Windows, and jobs run on both.
 - A Desktop App is one desktop (breaking): `machines.md` makes one for each
   desktop needed; `llc.py connect`, `exec` and `share` no longer take
   `--desktop`, and a Desktop App's settings have no `replicas` (more than 1

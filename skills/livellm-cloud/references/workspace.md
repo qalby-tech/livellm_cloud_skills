@@ -27,9 +27,10 @@ Stopped machines still use their disk. Kept builds count too.
 
 ## SSH keys
 
-The workspace's own SSH keys are installed on every Linux machine, including
-ones already running. Only the user can add or remove one — a workspace key
-opens every machine they have, so an agent is refused. You can read the list:
+The workspace's own SSH keys are installed on every machine, Linux and
+Windows, including ones already running. Only the user can add or remove one
+— a workspace key opens every machine they have, so an agent is refused. You
+can read the list:
 
 ```
 python3 scripts/llc.py ssh-keys
