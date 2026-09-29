@@ -7,6 +7,13 @@ Claude Code users get the update only when the version changes.
 
 ## Unreleased
 
+- Windows machines take commands and SSH: `exec` (and `run_command`) runs in
+  PowerShell on Windows 11 and Windows Server, bash elsewhere; a Windows
+  machine answers SSH with PowerShell for its login and takes the workspace's
+  keys and its own `credentials.sshKeys`. `references/machines.md` says so,
+  with what to do when a command fails with "is not recognized" and when a
+  new Windows 11 machine's SSH isn't up yet; the `exec` help says which shell
+  runs where.
 - `llc.py login` signs in in two calls: the first prints the link as JSON
   (`signedIn: false`, `link`, `code`, `expiresAt`) and returns at once; once
   the user has pressed Allow, `login` again finishes the same sign-in, waiting

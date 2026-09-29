@@ -493,7 +493,7 @@ def connect(args):
 
 
 def run_command(args):
-    """One bash command on a Linux machine or a Desktop App's desktop."""
+    """One command on a machine or a Desktop App's desktop: bash, or PowerShell on Windows."""
     body = {"command": args.command, "timeout": args.timeout}
     if args.session:
         body["session"] = args.session
@@ -858,7 +858,7 @@ def main():
     connect_p.add_argument("--env", action="store_true", help="print shell exports instead of JSON")
     connect_p.set_defaults(fn=connect)
 
-    exec_p = sub.add_parser("exec", help="run one command on a Linux machine or a Desktop App")
+    exec_p = sub.add_parser("exec", help="run one command on a machine (PowerShell on Windows) or a Desktop App")
     exec_p.add_argument("id")
     exec_p.add_argument("command")
     exec_p.add_argument("--session", help="commands in the same session share a working folder")

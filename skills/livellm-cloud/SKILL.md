@@ -1,6 +1,6 @@
 ---
 name: livellm-cloud
-description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP while a person watches the live view, put several browsers behind one Browser API address, run commands on Linux machines (Ubuntu, Debian or Fedora), work on Ubuntu or Windows desktops and Desktop Apps by screenshot and click, share a screen with the user by link, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
+description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP while a person watches the live view, put several browsers behind one Browser API address, run commands on Linux (Ubuntu, Debian or Fedora) and Windows machines, work on Ubuntu or Windows desktops and Desktop Apps by screenshot and click, share a screen with the user by link, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
 license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
@@ -63,7 +63,7 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 | The user wants | Resource (`create` type) | Read |
 |---|---|---|
 | A server: code built or tested, a job, a service, SSH | Linux server: Ubuntu, Debian or Fedora (`vm-ubuntu`, `"os"`) | `references/machines.md` |
-| Commands run on a machine, output back, no SSH | `exec` on a Linux machine or Desktop App | `references/machines.md` |
+| Commands run on a machine, output back, no SSH | `exec` on a machine (PowerShell on Windows) or a Desktop App | `references/machines.md` |
 | A Linux desktop a person looks at or you click through | Ubuntu desktop (`vm-ubuntu-desktop`) | `references/machines.md` |
 | Windows software, a Windows desktop | Windows 11 (`vm-windows`) | `references/machines.md` |
 | A Windows server, no desktop | Windows Server Core (`vm-windows`, `"windowsEdition": "server"`) | `references/machines.md` |

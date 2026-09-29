@@ -68,11 +68,14 @@ python3 scripts/llc.py exec ci-box "uname -a"
 python3 scripts/llc.py exec ci-box "cd app && make test" --session job --timeout 600
 ```
 
-`exec` runs one bash command as the machine's own login and answers with
+`exec` runs one command as the machine's own login — bash on Linux machines
+and Desktop Apps, PowerShell on Windows machines — and answers with
 `exitCode`, `stdout`, `stderr`, `durationMs` and `truncated` (each stream is cut
 at 1 MiB). Commands with the same `--session` share a working folder. The
-timeout is in seconds, 60 by default, 600 at most. It works on Linux machines
-(Ubuntu, Debian, Fedora) and Desktop Apps, not on Windows.
+timeout is in seconds, 60 by default, 600 at most. It works on every machine
+(Ubuntu, Debian, Fedora, Windows 11, Windows Server) and on Desktop Apps. On
+Windows, write PowerShell: `Get-ChildItem`, `$env:COMPUTERNAME`,
+`Get-Service sshd`.
 
 It needs the Run commands permission. Without it you get a 403: ask the user to
 turn it on for this agent on the console's Agents page.
@@ -95,6 +98,12 @@ ssh -i ./id_ed25519 -p PORT agent@HOST
 
 The SSH port opens a little after the machine reports ready — retry for a
 minute before calling it broken.
+
+A Windows machine answers SSH the same way, with PowerShell as its shell, for
+its login (an administrator), and takes the same keys: the workspace's and the
+ones in its `credentials.sshKeys`. Windows Server has SSH as soon as it has
+installed itself; Windows 11 fetches it from Windows Update after its first
+start, so give it a few more minutes.
 
 Then work as usual: copy files with `scp`, run the job, read the output. Keep
 what you run in the user's own directory, and leave the machine as you found it
@@ -244,7 +253,11 @@ backups (a count, 1 to 100):
   than guessing.
 - **409, reserved by another agent.** Wait until the time the message names, or
   use another machine.
-- **`exec` on Windows is refused.** Windows doesn't take commands this way; use
-  its screen.
+- **A command on Windows fails with "is not recognized".** It ran in
+  PowerShell, not bash: write it in PowerShell (`Get-Content`, not `cat -n`;
+  `$env:PATH`, not `$PATH`).
+- **A new Windows 11 machine refuses SSH, and `exec` with it.** Its SSH comes
+  from Windows Update after the first start and takes a few minutes more than
+  the machine; `exec` goes through the same SSH. Retry for a few minutes.
 - **The plan is full (402).** Stop and show usage. Suggest what could be removed
   and let the user decide.
