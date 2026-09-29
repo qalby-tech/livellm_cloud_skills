@@ -105,7 +105,9 @@ A Windows machine answers SSH the same way, with PowerShell as its shell, for
 its login (an administrator), and takes the same keys: the workspace's and the
 ones in its `credentials.sshKeys`. Windows Server has SSH as soon as it has
 installed itself; Windows 11 fetches it from Windows Update after its first
-start, so give it a few more minutes.
+start, so give it a few more minutes. That needs the internet: in a workspace
+without internet access Windows 11 never gets SSH (nor `exec`), so pick Windows
+Server there, or use the screen or Remote Desktop.
 
 Then work as usual: copy files with `scp`, run the job, read the output. Keep
 what you run in the user's own directory, and leave the machine as you found it
@@ -262,6 +264,8 @@ backups (a count, 1 to 100):
   `$env:PATH`, not `$PATH`).
 - **A new Windows 11 machine refuses SSH, and `exec` with it.** Its SSH comes
   from Windows Update after the first start and takes a few minutes more than
-  the machine; `exec` goes through the same SSH. Retry for a few minutes.
+  the machine; `exec` goes through the same SSH. Retry for up to 15 minutes.
+  In a workspace without internet access it never comes: use Windows Server,
+  the screen or Remote Desktop instead.
 - **The plan is full (402).** Stop and show usage. Suggest what could be removed
   and let the user decide.

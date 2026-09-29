@@ -7,6 +7,10 @@ Claude Code users get the update only when the version changes.
 
 ## Unreleased
 
+- `machines.md`: Windows 11 gets SSH (and `exec`) from Windows Update, so a
+  workspace without internet access never gets it there; use Windows Server,
+  the screen or Remote Desktop. A new Windows 11 is retried for up to 15
+  minutes, not open-ended.
 - `SKILL.md` names the connector's screen tools for handing over:
   `share_screen` (mode control) and `stop_sharing` for a machine or a Desktop
   App, `connect_resource` with tool view for a browser's live view.
