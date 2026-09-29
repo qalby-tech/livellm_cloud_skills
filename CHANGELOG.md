@@ -17,7 +17,9 @@ Claude Code users get the update only when the version changes.
   made. `ls` shows an app's links as its settings hold them, a database's
   `usedBy` and its login's `username`. `rm ID --with-databases` deletes an app
   with the databases made with it that no other app uses (and says which went
-  and which stayed); `--force` deletes what another app's settings name.
+  and which stayed); `--force` deletes what another app's settings name. `rm`
+  waits up to three minutes for the answer, and when it is lost on the way it
+  looks at the workspace: gone is deleted.
 - Templates: `template save NAME --from ID [--description D]` has LiveLLM read
   the resource: an app keeps its plain env values and its secrets' names; an
   app of a Composable App saves the whole app, its databases and links.

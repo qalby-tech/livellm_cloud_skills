@@ -946,10 +946,39 @@ def monitoring(args):
     out(request("GET", path, token=token()))
 
 
+# A delete clears away what belonged to the resource before it answers, which
+# can take a while; hanging up early could leave some of it behind.
+RM_TIMEOUT = 180
+
+
+def workspace_workloads(tok):
+    return request("GET", "/v1/workspace", token=tok).get("spec", {}).get("workloads", [])
+
+
 def rm(args):
+    tok = token()
     q = {k: "true" for k, on in (("force", args.force), ("withDatabases", args.with_databases)) if on}
     path = workload_path(args.id) + ("?" + urllib.parse.urlencode(q) if q else "")
-    gone = request("DELETE", path, token=token())
+    # the databases made with the app, to say which went should the answer be lost
+    made_with = []
+    if args.with_databases:
+        made_with = [w["id"] for w in workspace_workloads(tok)
+                     if args.id in ((w.get("storage") or {}).get("createdWith") or [])]
+    try:
+        gone = request("DELETE", path, token=tok, timeout=RM_TIMEOUT)
+    except Problem as p:
+        if p.status is not None:
+            raise  # refused: nothing was deleted
+        # no answer came back; LiveLLM may have done it all the same: look
+        left = {w["id"] for w in workspace_workloads(tok)}
+        if args.id in left:
+            raise
+        answer = {"deleted": args.id, "note": "LiveLLM's answer was lost on the way; the workspace shows it deleted"}
+        if args.with_databases:
+            answer["databases"] = {"deleted": [d for d in made_with if d not in left],
+                                   "kept": [d for d in made_with if d in left]}
+        out(answer)
+        return
     answer = {"deleted": args.id}
     if isinstance(gone, dict) and gone.get("databases"):
         answer["databases"] = gone["databases"]  # {deleted, kept}

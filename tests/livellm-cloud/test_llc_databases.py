@@ -145,6 +145,30 @@ class DatabasesAndTemplatesTest(unittest.TestCase):
         self.assertNotIn("usedBy", by["web"])
         self.assertEqual(by["db"]["username"], "shop")
 
+    def test_rm_when_the_answer_is_lost(self):
+        before = {"spec": {"workloads": [{"id": "web", "type": "pod"},
+                                         {"id": "db", "type": "storage", "storage": {"createdWith": ["web"]}},
+                                         {"id": "cache", "type": "storage", "storage": {"createdWith": ["web"]}}]}}
+        after = {"spec": {"workloads": [{"id": "cache", "type": "storage", "storage": {"createdWith": ["web"]}}]}}
+        fake = self.use({"GET /v1/workspace": (200, before)})
+        real, done = llc.request, {"it": True}
+
+        def lost(method, path, body=None, token=None, form=False, timeout=llc.TIMEOUT):
+            if method == "DELETE":
+                self.assertGreaterEqual(timeout, 120)  # never hang up on a delete in progress
+                if done["it"]:
+                    fake.routes["GET /v1/workspace"] = (200, after)
+                raise llc.Problem("cannot reach LiveLLM: timed out", "check the network")
+            return real(method, path, body, token, form, timeout)
+        llc.request = lost
+        self.addCleanup(setattr, llc, "request", real)
+        out, problem = self.run_llc(llc.rm, id="web", with_databases=True, force=False, yes=True)
+        self.assertIsNone(problem)
+        self.assertEqual((out["deleted"], out["databases"]), ("web", {"deleted": ["db"], "kept": ["cache"]}))
+        fake.routes["GET /v1/workspace"], done["it"] = (200, before), False
+        _, problem = self.run_llc(llc.rm, id="web", with_databases=False, force=False, yes=True)
+        self.assertIsNotNone(problem, "still there after a lost answer: the error stands")
+
     def test_rm_with_databases(self):
         fake = self.use({"DELETE /v1/workloads/web?withDatabases=true": (202, {"databases": {"deleted": ["db"], "kept": []}})})
         out, _ = self.run_llc(llc.rm, id="web", with_databases=True, force=False, yes=True)
