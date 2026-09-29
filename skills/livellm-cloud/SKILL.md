@@ -174,4 +174,7 @@ script. The steps and the rules above stay the same. The `computer` tool works
 a desktop, `run_command` runs a shell command (never type commands into a
 screen; one still going after its wait answers `done: false` and a run id, and
 `command_output` waits for the rest), `list_machines` shows where commands can
-run, and `release_machine` lets a machine go. A tool you lack permission for is not listed at all.
+run, and `release_machine` lets a machine go. To hand the user a screen (rule
+6), `share_screen` with mode control gives a link to a machine or a Desktop
+App desktop and `stop_sharing` closes it; for a browser, `connect_resource`
+with tool view gives its live view. A tool you lack permission for is not listed at all.

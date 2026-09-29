@@ -7,6 +7,9 @@ Claude Code users get the update only when the version changes.
 
 ## Unreleased
 
+- `SKILL.md` names the connector's screen tools for handing over:
+  `share_screen` (mode control) and `stop_sharing` for a machine or a Desktop
+  App, `connect_resource` with tool view for a browser's live view.
 - `llc.py exec` waits for a long command: a command still going when the call
   answers keeps going on the machine, and `exec` looks at it again until it
   ends, up to `--timeout` (then the platform stops it, exit code 124) and two
