@@ -41,6 +41,13 @@ Claude Code users get the update only when the version changes.
   (`secretEnv`, `imagePassword`, `gitToken`, `portPasswords`, `credentials`,
   `services`; a file with other settings is refused). A refusal for missing
   secrets names them, and `next` spells the flags.
+- Older versions: 1.6.6 and before build the resource from a template's
+  settings themselves. A template saved now keeps its secrets as names only
+  (and a Composable App's as kind `stack`), so `template use` there is
+  refused (`value required`, or an unknown kind). Update to use one;
+  templates saved before still work there.
+- `references/workspace.md`: an app's template makes one app on its own,
+  never one in a Composable App.
 - `references/databases.md`: "Link it to an app" (what PostgreSQL and Redis
   give, the password and URL never shown, the app waiting for them, a linked
   database refused a delete, linking on an existing app, the 422 for a URL

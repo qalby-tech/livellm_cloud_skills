@@ -91,6 +91,8 @@ python3 scripts/llc.py template use small-box box-2 --secret credentials.usernam
   the stack `<new>` (one service that had no stack becomes `<new>`), and its
   databases as `<new>-<database>` with passwords the platform makes, already
   linked. Addresses in `env` values that named the old ones name the new ones.
+- An app's template (kind `pod`) makes one app on its own, never one in a
+  Composable App.
 - The secrets it left out are required. Give each with `--secret-env
   PATH=VAR` (the value from an environment variable; keeps it off the
   command line) or `--secret PATH=VALUE`: a bare name is a secret env value
