@@ -811,6 +811,18 @@ def set_path(body, parts, value, path):
         m = m.setdefault(k, {})
 
 
+def secret_path(path):
+    """A --secret path split at its dots, a port password's username kept
+    whole: a username may hold dots (alice.smith, a@b.com); service, port and
+    secret env names never do."""
+    parts = path.split(".")
+    if parts[0] == "portPasswords":
+        return path.split(".", 2)
+    if parts[0] == "services" and len(parts) > 2 and parts[2] == "portPasswords":
+        return path.split(".", 4)
+    return parts
+
+
 def put_secret(body, t, path, value):
     """One --secret into the create body. A path is what a refusal lists as
     missing (secretEnv.API_KEY, imagePassword, credentials.password,
@@ -818,7 +830,7 @@ def put_secret(body, t, path, value):
     secret env value. In a Composable App's template a secret belongs to a
     service: without services.<name> it goes to each service that has that
     secret env name, or to the only service there is."""
-    parts = path.split(".")
+    parts = secret_path(path)
     if len(parts) == 1 and path in TEMPLATE_BODY_KEYS and path not in ("imagePassword", "gitToken"):
         raise Problem(f"--secret {path}: say what in it, e.g. {path}.NAME=…", "fix the path", EXIT_OTHER)
     if len(parts) == 1 and path not in TEMPLATE_BODY_KEYS:

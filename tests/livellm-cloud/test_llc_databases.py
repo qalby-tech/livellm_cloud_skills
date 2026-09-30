@@ -245,5 +245,17 @@ class DatabasesAndTemplatesTest(unittest.TestCase):
         self.assertEqual(fake.writes(), [])
 
 
+    def test_a_username_with_dots_stays_whole(self):
+        pod, solo = TEMPLATES["templates"][1], TEMPLATES["templates"][3]
+        for t, path, want in [
+            (pod, "portPasswords.http.alice.smith", {"portPasswords": {"http": {"alice.smith": "pw"}}}),
+            (solo, "services.solo.portPasswords.http.a@b.com", {"services": {"solo": {"portPasswords": {"http": {"a@b.com": "pw"}}}}}),
+            (solo, "portPasswords.http.alice.smith", {"services": {"solo": {"portPasswords": {"http": {"alice.smith": "pw"}}}}}),
+        ]:
+            body = {}
+            llc.put_secret(body, t, path, "pw")
+            self.assertEqual(body, want, path)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -78,7 +78,7 @@ connection details go into which environment variables:
 - On an app that exists, `set web --json links.json --yes` with
   `{"pod": {"databases": [...]}}`. The list you send replaces the whole
   list, so copy the links `ls` shows and add the new one.
-- **"set a new password for db once to link its URL"** (422): the database's
+- **"set a new password for db to link its URL"** (422): the database's
   password was set before links existed, so it can't give `url` yet. Link its
   other details instead (`host`, `port`, `password`, and on PostgreSQL
   `database` and `username`), or, if the user agrees, set a new password once

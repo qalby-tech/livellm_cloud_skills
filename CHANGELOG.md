@@ -7,6 +7,9 @@ Claude Code users get the update only when the version changes.
 
 ## Unreleased
 
+- `llc.py template use --secret portPasswords.<port>.<user>=…` keeps a
+  username with dots (`alice.smith`, `a@b.com`) whole. `databases.md` quotes
+  the URL refusal as it reads now.
 - `workspace.md` and the README: the workspace's SSH keys reach every
   machine, Linux and Windows, and jobs run on both.
 - `machines.md`: `unshare` closes the links you made; another agent's or the
