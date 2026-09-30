@@ -91,7 +91,7 @@ class LoginTest(unittest.TestCase):
         llc.POLL_UNIT, llc.LOGIN_WAIT = 0.01, 1
         return fake
 
-    def login(self, access="create", wait=False):
+    def login(self, access=None, wait=False):
         """Runs login; answers what it printed on stdout, and the Problem it raised."""
         buf = io.StringIO()
         problem = None
@@ -130,6 +130,18 @@ class LoginTest(unittest.TestCase):
         self.assertEqual(fake.started, 1)
         self.assertEqual(llc.read_credentials()[llc.API]["access_token"], "llt_a")
         self.assertFalse(llc.pending_path().exists())
+
+    def test_login_again_keeps_the_pending_access(self):
+        # Started with other access than the default, a plain login again
+        # (the printed next step) finishes it rather than replacing it.
+        allowed = threading.Event()
+        fake = self.use(lambda code, _: "allow" if allowed.is_set() and code == "dev-1" else "pending")
+        self.login(access="use")
+        allowed.set()
+        printed, problem = self.login()
+        self.assertIsNone(problem)
+        self.assertEqual(printed["signedIn"], True)
+        self.assertEqual(fake.started, 1)
 
     def test_login_again_before_allow_says_still_waiting(self):
         fake = self.use(lambda *_: "pending")

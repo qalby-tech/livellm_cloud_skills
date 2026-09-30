@@ -307,6 +307,11 @@ def login(args):
         out({"signedIn": True, "with": "LIVELLM_API_KEY"})
         return
     pending = read_pending()
+    # Without --access, login again finishes the pending sign-in whatever
+    # access it asked for (the CLI shares this file); only an explicit,
+    # different --access starts over.
+    if args.access is None:
+        args.access = (pending or {}).get("access") or "create"
     if pending and (float(pending.get("expires_at") or 0) <= time.time() or pending.get("access") != args.access):
         pending = None
     fresh = pending is None
@@ -984,7 +989,8 @@ def main():
     sub = p.add_subparsers(dest="cmd", required=True)
 
     login_p = sub.add_parser("login", help="sign this agent in: prints a link for the user; run it again once they allow it")
-    login_p.add_argument("--access", choices=["use", "create", "full"], default="create")
+    login_p.add_argument("--access", choices=["use", "create", "full"], default=None,
+                         help="use, create or full (default: create, or the pending sign-in's)")
     login_p.add_argument("--wait", action="store_true", help="for a person at a terminal: wait here until the link is allowed")
     login_p.set_defaults(fn=login)
     sub.add_parser("logout", help="end this sign-in").set_defaults(fn=logout)

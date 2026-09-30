@@ -90,7 +90,10 @@ Claude Code users get the update only when the version changes.
   out or was denied is replaced by a new one. The started sign-in is kept in
   `credentials.pending.json` next to the credentials. `login --wait` is the
   one-call form, for a person at a terminal. `SKILL.md` says to run login, give
-  the user the link, and run login again after they allow it.
+  the user the link, and run login again after they allow it. Without
+  `--access`, login again finishes the pending sign-in with the access it
+  asked for (also one the CLI started); only a different `--access` starts
+  over.
 - `SKILL.md`: `run_command` and `list_machines` are on the one connector; the
   terminal connector is gone.
 - `tests/livellm-cloud/test_llc_login.py`: the sign-in, against a stand-in
