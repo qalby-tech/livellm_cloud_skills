@@ -5,7 +5,7 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
-## Unreleased
+## 1.7.0
 
 - `llc.py template use --secret portPasswords.<port>.<user>=…` keeps a
   username with dots (`alice.smith`, `a@b.com`) whole. `databases.md` quotes
