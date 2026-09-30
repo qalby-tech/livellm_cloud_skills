@@ -5,7 +5,7 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
-## Unreleased
+## 1.8.0
 
 - `workspace.md`: the owner is emailed when an alert opens and when it is
   over (the switch is theirs, on the Monitoring page); how to read open and
