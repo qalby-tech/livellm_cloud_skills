@@ -131,6 +131,17 @@ class DatabasesAndTemplatesTest(unittest.TestCase):
         self.assertEqual(fake.writes(), [("POST", "/v1/workloads", {"apps": [{"id": "a"}, {"id": "b"}]})])
         self.assertNotIn("databases", out)
 
+    def test_create_apps_onto_an_existing_app(self):
+        fake = self.use({"POST /v1/workloads": (202, {"created": ["nextcloud-cache"]})})
+        app = {"id": "nextcloud-cache", "hostname": "cache", "image": "redis:7"}
+        out, problem = self.run_llc(llc.create, type="apps", json=self.file([app]), join="nextcloud", yes=True)
+        self.assertIsNone(problem)
+        self.assertEqual(fake.writes(), [("POST", "/v1/workloads", {"apps": [app], "join": "nextcloud"})])
+        # or named in the file
+        fake = self.use({"POST /v1/workloads": (202, {"created": ["nextcloud-cache"]})})
+        self.run_llc(llc.create, type="apps", json=self.file({"apps": [app], "join": "nextcloud"}), yes=True)
+        self.assertEqual(fake.writes(), [("POST", "/v1/workloads", {"apps": [app], "join": "nextcloud"})])
+
     def test_ls_shows_links(self):
         self.use({
             "GET /v1/workspace": (200, {"spec": {"workloads": [

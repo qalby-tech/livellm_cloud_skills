@@ -91,6 +91,10 @@ each other by plain name:
 - To create several at once, all or nothing, put their settings in one JSON
   list and run `python3 scripts/llc.py create apps --json stack.json --yes` —
   the same bodies `create pod` takes, one per service.
+- To add a service to an app that is already there, add `--join <app>`: the
+  new services take its stack, and an app on its own gets a stack named after
+  itself (its name inside stays its id, and it restarts once as it joins —
+  tell the user first).
 
 For a database the user cares about, prefer a managed one over a `postgres`
 image in a stack: it has backups. Make it with the app, as below.

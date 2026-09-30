@@ -5,6 +5,13 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## Unreleased
+
+- `llc.py create apps --json FILE --join APP` (or `"join"` in the file) adds
+  services to an app that is already there, in one step: they take its stack,
+  and an app on its own gets a stack named after itself (it restarts once).
+  `apps.md` says how.
+
 ## 1.7.0
 
 - `llc.py template use --secret portPasswords.<port>.<user>=…` keeps a

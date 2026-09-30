@@ -9,6 +9,7 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py ls [--type TYPE]
     llc.py create TYPE --json FILE --yes
     llc.py create apps --json FILE --yes       (several apps and their databases, linked)
+    llc.py create apps --json FILE --join APP --yes   (add services to an existing app)
     llc.py wait ID [--timeout 600]
     llc.py connect ID [--tool cdp|view|api|computer]
                    [--screen-width PX] [--format png|jpeg] [--env]
@@ -415,9 +416,13 @@ def create(args):
         # {"apps": [...], "databases": [...]} with the databases to make with them
         apps = body if isinstance(body, list) else body.get("apps") or []
         dbs = [] if isinstance(body, list) else body.get("databases") or []
+        # --join (or "join" in the file): add them to an app already there;
+        # they take its stack, and an app on its own gets one named after itself
+        join = getattr(args, "join", None) or (None if isinstance(body, list) else body.get("join"))
         if not apps:
             raise Problem("the file should hold a list of apps, or {\"apps\": [...], \"databases\": [...]}", "fix the file", EXIT_OTHER)
-        made = request("POST", "/v1/workloads", {"apps": apps, **({"databases": dbs} if dbs else {})}, token=token())
+        made = request("POST", "/v1/workloads", {"apps": apps, **({"databases": dbs} if dbs else {}), **({"join": join} if join else {})},
+                       token=token())
         ids = made.get("created", [])
         answer = {"created": ids, "next": f"llc.py wait {ids[-1] if ids else '<id>'} then llc.py connect the app with a public port"}
         if made.get("databases"):
@@ -1022,6 +1027,7 @@ def main():
     create_p = sub.add_parser("create", help="create a resource from a JSON file (type apps: several at once, with their databases)")
     create_p.add_argument("type")
     create_p.add_argument("--json", required=True)
+    create_p.add_argument("--join", help="type apps: add them to this existing app (or stack) in the same step")
     create_p.add_argument("--yes", action="store_true", required=True, help="the user asked for this resource")
     create_p.set_defaults(fn=create)
 
