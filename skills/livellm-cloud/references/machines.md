@@ -72,7 +72,7 @@ python3 scripts/llc.py exec ci-box "cd app && make test" --session job --timeout
 and Desktop Apps, PowerShell on Windows machines — and answers once it ends
 with `exitCode`, `output` (stdout and stderr together, cut at 1 MiB),
 `truncated` and `durationMs`. A long command keeps going on the machine while
-`exec` waits for it, up to `--timeout` (seconds, 60 by default, 600 at most);
+`exec` waits for it, up to `--timeout` (seconds, 300 by default, 600 at most);
 past it the command is stopped and ends with exit code 124. Commands with the
 same `--session` share a working folder. It works on every machine
 (Ubuntu, Debian, Fedora, Windows 11, Windows Server) and on Desktop Apps. On

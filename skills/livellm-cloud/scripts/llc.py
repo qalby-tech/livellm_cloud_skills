@@ -1048,7 +1048,7 @@ def main():
     exec_p.add_argument("id")
     exec_p.add_argument("command")
     exec_p.add_argument("--session", help="commands in the same session share a working folder")
-    exec_p.add_argument("--timeout", type=int, default=60, help="seconds, up to 600")
+    exec_p.add_argument("--timeout", type=int, default=300, help="seconds it may run before it is stopped, up to 600")
     exec_p.set_defaults(fn=run_command)
 
     share_p = sub.add_parser("share", help="a link to a screen, to watch or to use")

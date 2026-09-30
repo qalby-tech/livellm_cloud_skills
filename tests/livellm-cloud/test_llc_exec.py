@@ -67,7 +67,7 @@ class ExecTest(unittest.TestCase):
         llc.API, llc.API_KEY, llc.POLL_UNIT = fake.url, "llc_test", 0.01
         return fake
 
-    def run_exec(self, command="make", timeout=60, session=None):
+    def run_exec(self, command="make", timeout=300, session=None):
         buf = io.StringIO()
         problem = None
         with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(io.StringIO()):
@@ -103,7 +103,7 @@ class ExecTest(unittest.TestCase):
         self.assertIsNone(problem)
         self.assertEqual(printed["output"], "hi\n")
         self.assertEqual(len(fake.calls), 1)
-        self.assertEqual(fake.bodies[0], {"command": "echo hi", "timeout": 60, "wait": 55})
+        self.assertEqual(fake.bodies[0], {"command": "echo hi", "timeout": 300, "wait": 55})
 
     def test_an_answer_from_before_runs_is_the_end(self):
         fake = self.use([(200, {"exitCode": 0, "stdout": "hi\n", "stderr": ""})])
