@@ -7,6 +7,9 @@ Claude Code users get the update only when the version changes.
 
 ## Unreleased
 
+- `workspace.md`: the owner is emailed when an alert opens and when it is
+  over (the switch is theirs, on the Monitoring page); how to read open and
+  resolved alerts; a machine's memory is its own system's figure.
 - `llc.py exec` gives a command 300 seconds by default (was 60), as the
   platform now does; `--timeout` still takes up to 600.
 - `llc.py create apps --json FILE --join APP` (or `"join"` in the file) adds

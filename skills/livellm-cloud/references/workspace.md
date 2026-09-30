@@ -52,7 +52,17 @@ python3 scripts/llc.py monitoring box --range 24h
 The platform keeps each resource's up and down history and raises an alert
 when one goes down or runs hot on processor, memory or disk for a while. When
 a user asks "is anything down", read `monitoring` and say plainly what is up,
-what is down and since when. There are no notifications; nobody is paged.
+what is down and since when. An alert with no `resolvedAt` is open (still a
+problem); the others are the last 7 days' history. A machine's memory is what
+its own system has in use (cache counts as free); a machine that doesn't
+report it shows no memory and gets no memory alert. Install discs and
+read-only mounts are not watched.
+
+The workspace owner gets an email when an alert opens and another when it is
+over (at most one per resource and kind of alert every 30 minutes).
+`emailAlerts` in `monitoring` says whether that is on. Only the user turns it
+off or on, on the console's Monitoring page (`PUT /v1/monitoring/settings`
+refuses an agent sign-in); if they ask, point them there.
 
 ## What happened
 
