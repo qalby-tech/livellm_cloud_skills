@@ -233,6 +233,14 @@ backups (a count, 1 to 100):
   `start ci-box` runs it again.
 - Never delete a machine you did not create, even if it looks unused.
 
+## Where it runs
+
+Leave `placement` out and LiveLLM picks the host. To choose, put
+`"placement": {"strategy": "region", "region": "<r>"}` or
+`{"strategy": "host", "host": "<id>"}` in the file; `llc.py hosts` lists ids and regions.
+Changing it (`set` with `{"vm": {"placement": …}}`, a Desktop App `{"desktop": …}`,
+`null` for automatic) restarts it there; one pinned to a host waits while that host is down.
+
 ## When it goes wrong
 
 - **Still `starting`.** Big disks and Windows take longer. `wait` with a longer

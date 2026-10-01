@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.8.0
+  version: 1.9.0
   documentation: https://docs.live-llm.com
 ---
 
@@ -89,6 +89,8 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
    it. Reuse what the user already has: a browser already logged in to a site is
    worth more than a fresh one.
 3. **Create only what was asked for.** `create <type> --json body.json --yes`.
+   Leave `placement` out unless the user wants a region or a host (`hosts`
+   lists them).
 4. **Wait.** `wait <id>` until it is ready. On a timeout, tell the user what the
    status said. Never guess.
 5. **Connect.** `connect <id>` prints the address and a token that opens it for

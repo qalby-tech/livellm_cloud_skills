@@ -81,6 +81,14 @@ try to answer a CAPTCHA yourself.
   upload them somewhere the user can reach.
 - The browser has its own screen password in its settings; you never need it.
 
+## Where it runs
+
+Leave `placement` out and LiveLLM picks the host. To choose, put
+`"placement": {"strategy": "region", "region": "<r>"}` or
+`{"strategy": "host", "host": "<id>"}` in the file; `llc.py hosts` lists ids and regions.
+Changing it (`set` with `{"browser": {"placement": …}}`, `null` for automatic) restarts
+the browser there; one pinned to a host waits while that host is down.
+
 ## When it goes wrong
 
 - **The address refuses you (401).** The token ran out: run `connect` again.

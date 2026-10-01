@@ -155,6 +155,15 @@ when the user asked for it.
 - `restart db --yes` restarts a database. Apps lose their connections for a
   moment, even with three instances; ask first if you didn't create it.
 
+## Where it runs
+
+Leave `placement` out and LiveLLM picks the host. To choose, put
+`"placement": {"strategy": "region", "region": "<r>"}` or
+`{"strategy": "host", "host": "<id>"}` in the file; `llc.py hosts` lists ids and regions.
+Changing it (`set` with `{"storage": {"placement": …}}`, `null` for automatic) restarts
+the database there; pinned to a host, all its copies run on that host and wait while it is down.
+A restore runs where `--host` or `--region` says, automatic without them (never the original's).
+
 ## When it goes wrong
 
 - **It stays `starting`.** Postgres takes a minute to come up. `wait db`, then

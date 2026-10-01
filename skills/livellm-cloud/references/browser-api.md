@@ -105,6 +105,13 @@ To start the session on a chosen browser, add `X-Browser-Id` to
 `start_session`. End sessions you started. A restart of the Browser API ends
 them all: start a new one.
 
+## Where it runs
+
+Leave it out and LiveLLM picks the host. `browser-api create … --host <id>` pins it,
+`--region <r>` runs it on any host there; `llc.py hosts` lists ids and regions.
+Changing it (`set` with `{"controller": {"placement": {"strategy": "region", "region": "<r>"}}}`,
+`null` for automatic) restarts it there; one pinned to a host waits while that host is down.
+
 ## When it goes wrong
 
 | Answer | Means | Do |

@@ -262,6 +262,15 @@ its disks. Stop an app to save money while it isn't needed; delete it (`rm`)
 only when the user wants it and its data gone. The same works for machines.
 Browsers and databases can't be stopped; `stop` refuses them.
 
+## Where it runs
+
+Leave `placement` out and LiveLLM picks the host. To choose, put
+`"placement": {"strategy": "region", "region": "<r>"}` or
+`{"strategy": "host", "host": "<id>"}` in the file (each service has its own); `llc.py hosts`
+lists ids and regions. Changing it (`set` with `{"pod": {"placement": …}}`, `null` for
+automatic) restarts the app there; an app with volumes and a location goes briefly offline
+on each change, and one pinned to a host waits while that host is down.
+
 ## When it goes wrong
 
 - **The build failed.** `progress web` shows the stage and the error. Fix the

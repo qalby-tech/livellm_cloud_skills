@@ -5,6 +5,20 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.9.0
+
+- Where it runs: any resource may carry `placement`, a region
+  (`{"strategy": "region", "region": "<r>"}`) or a pinned host
+  (`{"strategy": "host", "host": "<id>"}`); left out, LiveLLM picks the host.
+  `machines.md`, `apps.md`, `databases.md`, `browsers.md` and `browser-api.md`
+  say how to set it, change it (it restarts the resource there) and go back to
+  automatic with `null`; one pinned to a host waits while that host is down.
+- `llc.py hosts` lists where resources can run: each host's id, region, zone,
+  free processor and memory, GPUs and whether it is ready.
+- `llc.py restore` (a database) and `llc.py browser-api create` take `--host`
+  or `--region`. A restored database is automatic unless you say otherwise;
+  it never takes the original's location.
+
 ## 1.8.0
 
 - `workspace.md`: the owner is emailed when an alert opens and when it is
