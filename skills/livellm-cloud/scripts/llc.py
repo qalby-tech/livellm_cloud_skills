@@ -7,6 +7,7 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
 
     llc.py login [--wait] | logout | whoami | ssh-keys | logs <id>
     llc.py ls [--type TYPE]
+    llc.py hosts                               (where resources can run: ids, regions, free room)
     llc.py create TYPE --json FILE --yes
     llc.py create apps --json FILE --yes       (several apps and their databases, linked)
     llc.py create apps --json FILE --join APP --yes   (add services to an existing app)
@@ -19,11 +20,12 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py build ID [--wait] [--timeout 1800] | builds ID | deploy ID BUILD --yes | progress ID
     llc.py restart ID --yes
     llc.py backups ID | backup ID [--clean] [--name N]
-    llc.py restore ID BACKUP --as NEW --password-env VAR [--at TIME] --yes
-                                                           (a database: into a new one)
+    llc.py restore ID BACKUP --as NEW --password-env VAR [--at TIME]
+                   [--host H | --region R] --yes           (a database: into a new one)
     llc.py restore ID BACKUP --yes                         (a machine: in place, stopped)
     llc.py stop ID --yes | start ID | set ID --json CHANGES --yes
-    llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS] --yes
+    llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS]
+                   [--host H | --region R] --yes
     llc.py browser-api show NAME | add NAME BROWSER | remove NAME BROWSER --yes
     llc.py templates | template show T | template save NAME --from ID [--description D]
     llc.py template use T NEW [--secret PATH=VALUE] [--secret-env PATH=VAR] [--json FILE] --yes
@@ -477,6 +479,35 @@ def ssh_keys(_args):
     out(request("GET", "/v1/ssh-keys", token=token()))
 
 
+# What `hosts` keeps of each host: where it is and how much room it has.
+HOST_FIELDS = ("id", "region", "zone", "cpuFree", "memFreeGi", "gpuType", "gpuFree", "ready")
+
+
+def hosts_view(answer):
+    """The host list trimmed to what choosing a location needs; a field the
+    platform leaves out stays out."""
+    return {"hosts": [{k: h[k] for k in HOST_FIELDS if k in h}
+                      for h in (answer or {}).get("hosts") or [] if isinstance(h, dict)]}
+
+
+def hosts(_args):
+    """Where resources can run: each host's id, region and free room."""
+    out(hosts_view(request("GET", "/v1/fleet/hosts", token=token())))
+
+
+def placement(host, region):
+    """Where a new resource runs: pinned to a host, any host of a region, or
+    None for automatic (LiveLLM picks the host)."""
+    if host and region:
+        raise Problem("--host and --region are one or the other",
+                      "pass --host to pin one host, or --region for any host in it", EXIT_OTHER)
+    if host:
+        return {"strategy": "host", "host": host}
+    if region:
+        return {"strategy": "region", "region": region}
+    return None
+
+
 def connect(args):
     tok = token()
     body = {"tool": args.tool} if args.tool else {}
@@ -626,7 +657,7 @@ def member_path(api, browser):
     return f"{workload_path(api)}/browsers/{urllib.parse.quote(browser)}"
 
 
-def browser_api_body(name, browsers, every, remotes):
+def browser_api_body(name, browsers, every, remotes, place=None):
     names = [b.strip() for b in (browsers or "").split(",") if b.strip()]
     if every and names:
         raise Problem("--all already means every browser in the workspace", "leave out --browsers", EXIT_OTHER)
@@ -644,15 +675,22 @@ def browser_api_body(name, browsers, every, remotes):
         body["browsers"] = names
     if ext:
         body["externalBrowsers"] = ext
+    if place:
+        body["placement"] = place
     return body
 
 
 def browser_api(args):
+    host, region = getattr(args, "host", None), getattr(args, "region", None)
+    if args.action != "create" and (host or region):
+        raise Problem("--host and --region are for create",
+                      f"to move it: llc.py set {args.name} --json with {{\"controller\": {{\"placement\": ...}}}}", EXIT_OTHER)
     tok = token()
     if args.action == "create":
         if not args.yes:
             raise Problem("creating needs --yes", "only create a Browser API the user asked for, then pass --yes", EXIT_OTHER)
-        request("POST", f"/v1/workloads/{BROWSER_API}", browser_api_body(args.name, args.browsers, args.all, args.remote), token=tok)
+        body = browser_api_body(args.name, args.browsers, args.all, args.remote, placement(host, region))
+        request("POST", f"/v1/workloads/{BROWSER_API}", body, token=tok)
         out({"created": args.name, "type": BROWSER_API,
              "next": f"llc.py wait {args.name} then llc.py connect {args.name} --tool api"})
         return
@@ -703,19 +741,24 @@ def take_backup(args):
     out(res or {"backingUp": args.id, "next": f"llc.py backups {args.id}"})
 
 
-def restore_body(new_id, at, password):
+def restore_body(new_id, at, password, place=None):
     """What a database's restore sends: the new database's id and password,
-    and a moment when it restores to a minute rather than to the end of the
-    backup."""
+    a moment when it restores to a minute rather than to the end of the
+    backup, and where the new database runs (automatic when left out, never
+    copied from the original)."""
     body = {"id": new_id, "credentials": {"password": password}}
     if at:
         body["pointInTime"] = at
+    if place:
+        body["placement"] = place
     return body
 
 
 def restore(args):
     """A database restores into a NEW database and keeps running as it is; a
     machine goes back in place and has to be stopped first."""
+    host, region = getattr(args, "host", None), getattr(args, "region", None)
+    place = placement(host, region)  # refuses both before anything is sent
     tok = token()
     spec = request("GET", "/v1/workspace", token=tok).get("spec", {})
     w = next((x for x in spec.get("workloads", []) if x.get("id") == args.id), None)
@@ -724,8 +767,8 @@ def restore(args):
     kind = w.get("type", "")
     path = f"{backups_path(args.id)}/{urllib.parse.quote(args.backup)}/restore"
     if kind.startswith("vm-"):
-        if args.as_id or args.at or args.password_env:
-            raise Problem("a machine restores in place", "drop --as, --at and --password-env", EXIT_OTHER)
+        if args.as_id or args.at or args.password_env or place:
+            raise Problem("a machine restores in place", "drop --as, --at, --password-env, --host and --region", EXIT_OTHER)
         res = request("POST", path, token=tok)
         out(res or {"restoring": args.backup, "to": args.id, "next": f"llc.py start {args.id} once it is done"})
         return
@@ -738,7 +781,7 @@ def restore(args):
     if not password:
         raise Problem("the new database needs a password",
                       "generate one, put it in an environment variable and pass --password-env VAR", EXIT_OTHER)
-    res = request("POST", path, restore_body(args.as_id, args.at, password), token=tok) or {}
+    res = request("POST", path, restore_body(args.as_id, args.at, password, place), token=tok) or {}
     res.setdefault("id", args.as_id)
     res["next"] = f"llc.py wait {args.as_id}"
     out(res)
@@ -1024,6 +1067,8 @@ def main():
     ls_p.add_argument("--type")
     ls_p.set_defaults(fn=ls)
 
+    sub.add_parser("hosts", help="where resources can run: each host's id, region and free room").set_defaults(fn=hosts)
+
     create_p = sub.add_parser("create", help="create a resource from a JSON file (type apps: several at once, with their databases)")
     create_p.add_argument("type")
     create_p.add_argument("--json", required=True)
@@ -1107,6 +1152,8 @@ def main():
     restore_p.add_argument("--as", dest="as_id", help="a database: the id of the new database")
     restore_p.add_argument("--at", help="a database with continuous backups: the minute to restore to, e.g. 2026-09-25T14:05:00Z")
     restore_p.add_argument("--password-env", help="a database: the environment variable holding the new database's password")
+    restore_p.add_argument("--host", help="a database: pin the new one to this host (ids from llc.py hosts)")
+    restore_p.add_argument("--region", help="a database: run the new one on any host in this region; neither: automatic")
     restore_p.add_argument("--yes", action="store_true", required=True, help="the user asked for this restore")
     restore_p.set_defaults(fn=restore)
 
@@ -1131,6 +1178,8 @@ def main():
     bapi_p.add_argument("--browsers", help="create: the workspace browsers it drives, comma-separated")
     bapi_p.add_argument("--all", action="store_true", help="create: every browser in the workspace")
     bapi_p.add_argument("--remote", action="append", help="create: a browser running elsewhere, ID=wss://address")
+    bapi_p.add_argument("--host", help="create: pin it to this host (ids from llc.py hosts)")
+    bapi_p.add_argument("--region", help="create: run it on any host in this region; neither: automatic")
     bapi_p.add_argument("--yes", action="store_true", help="create: the user asked for it; remove: the user agreed")
     bapi_p.set_defaults(fn=browser_api)
 
