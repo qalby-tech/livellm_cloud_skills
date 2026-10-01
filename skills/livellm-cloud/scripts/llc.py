@@ -684,7 +684,7 @@ def browser_api(args):
     host, region = getattr(args, "host", None), getattr(args, "region", None)
     if args.action != "create" and (host or region):
         raise Problem("--host and --region are for create",
-                      f"to move it: llc.py set {args.name} --json with {{\"controller\": {{\"placement\": ...}}}}", EXIT_OTHER)
+                      f"to move it: llc.py set {args.name} --json FILE --yes, the file holding {{\"controller\": {{\"placement\": ...}}}}", EXIT_OTHER)
     tok = token()
     if args.action == "create":
         if not args.yes:
