@@ -28,7 +28,8 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
                    [--host H | --region R] --yes
     llc.py browser-api show NAME | add NAME BROWSER | remove NAME BROWSER --yes
     llc.py templates | template show T | template save NAME --from ID [--description D]
-    llc.py template use T NEW [--secret PATH=VALUE] [--secret-env PATH=VAR] [--json FILE] --yes
+    llc.py template use T NEW [--secret PATH=VALUE] [--secret-env PATH=VAR] [--json FILE]
+                   [--host H | --region R | --automatic] --yes
     llc.py template rm T --yes
     llc.py activity [--actor you|platform|all] [--object ID] [--limit N] [--before EVENT]
     llc.py monitoring [ID] [--range 15m|1h|6h|24h|7d]
@@ -483,14 +484,17 @@ def ssh_keys(_args):
     out(request("GET", "/v1/ssh-keys", token=token()))
 
 
-# What `hosts` keeps of each host: where it is and how much room it has.
-HOST_FIELDS = ("id", "region", "zone", "cpuFree", "memFreeGi", "gpuType", "gpuFree", "ready")
+# What `hosts` keeps of each host: where it is, how much room it has, and
+# whether it takes new resources (a location is accepted only on a host that
+# is ready and schedulable, in one of the workspace's host groups).
+HOST_FIELDS = ("id", "region", "zone", "nodeGroup", "cpuFree", "memFreeGi", "gpuType", "gpuFree",
+               "ready", "schedulable")
 
 
 def hosts_view(answer):
     """The host list trimmed to what choosing a location needs; a field the
-    platform leaves out stays out."""
-    return {"hosts": [{k: h[k] for k in HOST_FIELDS if k in h}
+    platform leaves out stays out, and so does an empty host group (general)."""
+    return {"hosts": [{k: h[k] for k in HOST_FIELDS if k in h and not (k == "nodeGroup" and not h[k])}
                       for h in (answer or {}).get("hosts") or [] if isinstance(h, dict)]}
 
 
@@ -501,10 +505,15 @@ def hosts(_args):
 
 def placement(host, region):
     """Where a new resource runs: pinned to a host, any host of a region, or
-    None for automatic (LiveLLM picks the host)."""
-    if host and region:
+    None for automatic (LiveLLM picks the host). A flag given with no value is
+    refused rather than quietly meaning automatic."""
+    if host is not None and region is not None:
         raise Problem("--host and --region are one or the other",
                       "pass --host to pin one host, or --region for any host in it", EXIT_OTHER)
+    for flag, value in (("--host", host), ("--region", region)):
+        if value is not None and not value.strip():
+            raise Problem(f"{flag} needs a value", "llc.py hosts lists ids and regions; leave it out for automatic", EXIT_OTHER)
+    host, region = (host or "").strip(), (region or "").strip()
     if host:
         return {"strategy": "host", "host": host}
     if region:
@@ -686,7 +695,7 @@ def browser_api_body(name, browsers, every, remotes, place=None):
 
 def browser_api(args):
     host, region = getattr(args, "host", None), getattr(args, "region", None)
-    if args.action != "create" and (host or region):
+    if args.action != "create" and (host is not None or region is not None):
         raise Problem("--host and --region are for create",
                       f"to move it: llc.py set {args.name} --json FILE --yes, the file holding {{\"controller\": {{\"placement\": ...}}}}", EXIT_OTHER)
     tok = token()
@@ -836,8 +845,9 @@ def find_template(ref, tok):
 
 
 # What a create from a template takes besides the new id: the secrets the
-# template left out. Anything else would be dropped without a word.
-TEMPLATE_BODY_KEYS = {"secretEnv", "imagePassword", "gitToken", "portPasswords", "credentials", "services"}
+# template left out, and where everything it makes runs. Anything else would
+# be dropped without a word.
+TEMPLATE_BODY_KEYS = {"secretEnv", "imagePassword", "gitToken", "portPasswords", "credentials", "services", "placement"}
 
 
 def stack_services(t, with_secret=None):
@@ -918,7 +928,11 @@ def secret_flags(missing):
     return " ".join(flags)
 
 
-def template_create_body(t, new_id, secrets, secret_envs, json_file):
+def template_create_body(t, new_id, secrets, secret_envs, json_file, place=None):
+    """What a create from a template sends: the new id, the secrets it left
+    out, and `place` (where everything it makes runs) when given. Without a
+    location the template's own is kept; {"strategy": "auto"} makes them
+    automatic."""
     body = {}
     if json_file:
         body = json.loads(Path(json_file).read_text())
@@ -927,8 +941,16 @@ def template_create_body(t, new_id, secrets, secret_envs, json_file):
         for k in body:
             if k not in TEMPLATE_BODY_KEYS:
                 raise Problem(f"{json_file}: {k!r} can't be given here — a create from a template takes only the secrets it needs "
-                              "(secretEnv, imagePassword, gitToken, portPasswords, credentials, services)",
+                              "(secretEnv, imagePassword, gitToken, portPasswords, credentials, services) and where it runs (placement)",
                               f"create it, then change settings with llc.py set {new_id} --json FILE --yes", EXIT_OTHER)
+            if k == "placement":
+                if not isinstance(body[k], dict) or not body[k].get("strategy"):
+                    raise Problem(f"{json_file}: placement states its strategy here",
+                                  'use {"strategy": "region", "region": R}, {"strategy": "host", "host": H} '
+                                  'or {"strategy": "auto"}', EXIT_OTHER)
+                if place:
+                    raise Problem(f"{json_file}: placement is in the file", "leave out --host, --region and --automatic", EXIT_OTHER)
+                continue
             if (t.get("kind") == "stack") != (k == "services"):
                 raise Problem(f"{json_file}: {k!r} doesn't fit a template of kind {t.get('kind')}",
                               "a Composable App's secrets go under services.<name>; any other template's at the top", EXIT_OTHER)
@@ -947,11 +969,30 @@ def template_create_body(t, new_id, secrets, secret_envs, json_file):
         given.append((path, os.environ[var]))
     for path, value in given:
         put_secret(body, t, path, value)
+    if place:
+        body["placement"] = place
     body["name" if t.get("kind") == "stack" else "id"] = new_id
     return body
 
 
+def template_placement(args):
+    """Where a create from a template puts what it makes: --host, --region,
+    --automatic ({"strategy": "auto"}: it must be sent, or the template's own
+    location is kept), or None to keep the template's."""
+    place = placement(getattr(args, "host", None), getattr(args, "region", None))
+    if getattr(args, "automatic", False):
+        if place:
+            raise Problem("--automatic, --host or --region: one of them", "pick one", EXIT_OTHER)
+        return {"strategy": "auto"}
+    return place
+
+
 def template(args):
+    # a location is for use only, and refused before anything is sent
+    if args.action != "use" and (getattr(args, "host", None) is not None or getattr(args, "region", None) is not None
+                                 or getattr(args, "automatic", False)):
+        raise Problem("--host, --region and --automatic are for use", f"llc.py template use {args.ref} NEW-ID --region R --yes", EXIT_OTHER)
+    place = template_placement(args) if args.action == "use" else None
     tok = token()
     if args.action == "save":
         if not args.source:
@@ -977,7 +1018,7 @@ def template(args):
     if not args.new_id or not args.yes:
         raise Problem("a new resource needs its id and --yes",
                       f"llc.py template use {args.ref} NEW-ID [--secret-env NAME=VAR] --yes, once the user asked for it", EXIT_OTHER)
-    body = template_create_body(t, args.new_id, args.secret, args.secret_env, args.json)
+    body = template_create_body(t, args.new_id, args.secret, args.secret_env, args.json, place)
     try:
         made = request("POST", f"/v1/templates/{urllib.parse.quote(t['id'])}/create", body, token=tok)
     except Problem as p:
@@ -1197,7 +1238,10 @@ def main():
     tpl_p.add_argument("--description", help="save: a line about what it is for")
     tpl_p.add_argument("--secret", action="append", help="use: a secret it needs, PATH=VALUE (API_KEY=…, credentials.password=…)")
     tpl_p.add_argument("--secret-env", action="append", help="use: the same, the value read from an environment variable: PATH=VAR")
-    tpl_p.add_argument("--json", help="use: a file with the secrets: secretEnv, imagePassword, gitToken, portPasswords, credentials, services")
+    tpl_p.add_argument("--json", help="use: a file with the secrets (secretEnv, imagePassword, gitToken, portPasswords, credentials, services) and placement")
+    tpl_p.add_argument("--host", help="use: put everything it makes on this host (ids from llc.py hosts)")
+    tpl_p.add_argument("--region", help="use: put everything it makes on any host in this region")
+    tpl_p.add_argument("--automatic", action="store_true", help="use: everything it makes is automatic, whatever the template says")
     tpl_p.add_argument("--yes", action="store_true", help="use: the user asked for it; rm: the user agreed")
     tpl_p.set_defaults(fn=template)
 

@@ -1,5 +1,5 @@
 """Where resources run with scripts/llc.py: the host list, and the location a
-restore or a new Browser API sends, against a stand-in for LiveLLM's API that
+restore, a new Browser API or a create from a template sends, against a stand-in for LiveLLM's API that
 records every call.
 
 Run from the repository root:  python3 -m unittest discover -s tests/livellm-cloud
@@ -12,6 +12,7 @@ import io
 import json
 import os
 import sys
+import tempfile
 import threading
 import types
 import unittest
@@ -28,9 +29,14 @@ spec.loader.exec_module(llc)
 HOSTS = {"hosts": [
     {"id": "h1", "ip": "10.0.0.1", "region": "eu-west", "zone": "eu-west-a", "nodeGroup": "",
      "cpuTotal": 32, "cpuFree": 10.5, "memTotalGi": 125.4, "memFreeGi": 31.2,
-     "gpuTotal": 0, "gpuFree": 0, "utilization": 0.22, "ready": True},
-    {"id": "h2", "region": "eu-west", "zone": "eu-west-b", "cpuFree": 4, "memFreeGi": 8,
-     "gpuType": "L4", "gpuTotal": 2, "gpuFree": 1, "ready": False},
+     "gpuTotal": 0, "gpuFree": 0, "utilization": 0.22, "ready": True, "schedulable": True},
+    {"id": "h2", "region": "eu-west", "zone": "eu-west-b", "nodeGroup": "gpu", "cpuFree": 4, "memFreeGi": 8,
+     "gpuType": "L4", "gpuTotal": 2, "gpuFree": 1, "ready": True, "schedulable": False},
+]}
+TEMPLATES = {"templates": [
+    {"id": "tpl_api", "name": "api", "kind": "pod", "config": {"pod": {"image": "api"}}},
+    {"id": "tpl_shop", "name": "shop", "kind": "stack", "config": {"stack": {"name": "shop", "services": [
+        {"name": "web", "id": "shop-web", "pod": {"secretEnv": [{"name": "API_KEY", "required": True}]}}]}}},
 ]}
 WORKSPACE = {"spec": {"workloads": [
     {"id": "db", "type": "storage", "storage": {"engine": "postgres"}},
@@ -40,7 +46,8 @@ WORKSPACE = {"spec": {"workloads": [
 
 class FakeAPI:
     """Answers GET /v1/fleet/hosts with HOSTS, GET /v1/workspace with
-    WORKSPACE, anything else 202 {}; records every call."""
+    WORKSPACE, GET /v1/templates with TEMPLATES, anything else 202 {}; records
+    every call."""
 
     def __init__(self):
         self.calls = []
@@ -52,7 +59,8 @@ class FakeAPI:
 
             def answer(self, body=None):
                 fake.calls.append((self.command, self.path, body))
-                payload = {"GET /v1/fleet/hosts": HOSTS, "GET /v1/workspace": WORKSPACE}.get(
+                payload = {"GET /v1/fleet/hosts": HOSTS, "GET /v1/workspace": WORKSPACE,
+                           "GET /v1/templates": TEMPLATES}.get(
                     f"{self.command} {self.path}", {})
                 raw = json.dumps(payload).encode()
                 self.send_response(200 if self.command == "GET" else 202)
@@ -78,6 +86,7 @@ class FakeAPI:
 class PlacementTest(unittest.TestCase):
     def setUp(self):
         self.fake = FakeAPI()
+        self.addCleanup(self.fake.server.server_close)  # runs after shutdown
         self.addCleanup(self.fake.server.shutdown)
         saved = {k: getattr(llc, k) for k in ("API", "API_KEY")}
         self.addCleanup(lambda: [setattr(llc, k, v) for k, v in saved.items()])
@@ -104,13 +113,14 @@ class PlacementTest(unittest.TestCase):
         self.assertEqual(self.fake.calls, [("GET", "/v1/fleet/hosts", None)])
         self.assertEqual(res, {"hosts": [
             {"id": "h1", "region": "eu-west", "zone": "eu-west-a", "cpuFree": 10.5, "memFreeGi": 31.2,
-             "gpuFree": 0, "ready": True},
-            {"id": "h2", "region": "eu-west", "zone": "eu-west-b", "cpuFree": 4, "memFreeGi": 8,
-             "gpuType": "L4", "gpuFree": 1, "ready": False},
+             "gpuFree": 0, "ready": True, "schedulable": True},
+            {"id": "h2", "region": "eu-west", "zone": "eu-west-b", "nodeGroup": "gpu", "cpuFree": 4, "memFreeGi": 8,
+             "gpuType": "L4", "gpuFree": 1, "ready": True, "schedulable": False},
         ]})
         for h in res["hosts"]:
-            for gone in ("ip", "cpuTotal", "memTotalGi", "utilization", "nodeGroup", "gpuTotal"):
+            for gone in ("ip", "cpuTotal", "memTotalGi", "utilization", "gpuTotal"):
                 self.assertNotIn(gone, h)
+        self.assertNotIn("nodeGroup", res["hosts"][0])  # empty: a general host
 
     def test_hosts_view_of_an_empty_answer(self):
         self.assertEqual(llc.hosts_view({}), {"hosts": []})
@@ -120,11 +130,11 @@ class PlacementTest(unittest.TestCase):
 
     def test_placement(self):
         self.assertIsNone(llc.placement(None, None))
-        self.assertIsNone(llc.placement("", ""))
         self.assertEqual(llc.placement("h1", None), {"strategy": "host", "host": "h1"})
         self.assertEqual(llc.placement(None, "eu-west"), {"strategy": "region", "region": "eu-west"})
-        with self.assertRaises(llc.Problem):
-            llc.placement("h1", "eu-west")
+        for host, region in (("h1", "eu-west"), ("", None), (None, " "), ("", "")):
+            with self.assertRaises(llc.Problem, msg=(host, region)):
+                llc.placement(host, region)
 
     # --- restore ---
 
@@ -213,6 +223,70 @@ class PlacementTest(unittest.TestCase):
         _, problem = self.browser_api(action="add", browser="agent-3", host="h1")
         self.assertIsNotNone(problem)
         self.assertEqual(self.fake.calls, [])
+
+    # --- a create from a template ---
+
+    def use_template(self, ref="api", **kw):
+        args = {"action": "use", "ref": ref, "new_id": "api2" if ref == "api" else "shop2", "secret": None,
+                "secret_env": None, "json": None, "host": None, "region": None, "automatic": False,
+                "yes": True, "source": None, "description": None}
+        args.update(kw)
+        return self.run_llc(llc.template, **args)
+
+    def template_sent(self, path="/v1/templates/tpl_api/create"):
+        (method, got, body), = self.fake.writes()
+        self.assertEqual((method, got), ("POST", path))
+        return body
+
+    def file(self, value):
+        f = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
+        json.dump(value, f)
+        f.close()
+        self.addCleanup(os.unlink, f.name)
+        return f.name
+
+    def test_template_without_a_location_keeps_the_templates(self):
+        _, problem = self.use_template()
+        self.assertIsNone(problem)
+        self.assertEqual(self.template_sent(), {"id": "api2"})
+
+    def test_template_onto_a_host_or_into_a_region(self):
+        _, problem = self.use_template(host="h1")
+        self.assertIsNone(problem)
+        self.assertEqual(self.template_sent()["placement"], {"strategy": "host", "host": "h1"})
+        self.fake.calls.clear()
+        _, problem = self.use_template(ref="shop", region="eu-west", secret=["API_KEY=k"])
+        self.assertIsNone(problem)
+        self.assertEqual(self.template_sent("/v1/templates/tpl_shop/create"),
+                         {"name": "shop2", "services": {"web": {"secretEnv": {"API_KEY": "k"}}},
+                          "placement": {"strategy": "region", "region": "eu-west"}})
+
+    def test_template_automatic_says_so(self):
+        # left out, the template's own location is kept: automatic must be sent
+        _, problem = self.use_template(automatic=True)
+        self.assertIsNone(problem)
+        self.assertEqual(self.template_sent()["placement"], {"strategy": "auto"})
+
+    def test_template_placement_in_the_file(self):
+        place = {"strategy": "region", "region": "eu-west"}
+        _, problem = self.use_template(ref="shop", json=self.file({"placement": place}), secret=["API_KEY=k"])
+        self.assertIsNone(problem)
+        self.assertEqual(self.template_sent("/v1/templates/tpl_shop/create")["placement"], place)
+
+    def test_template_locations_refused_before_anything_is_sent(self):
+        cases = {
+            "--automatic with --host": dict(automatic=True, host="h1"),
+            "--host and --region": dict(host="h1", region="eu-west"),
+            "an empty --region": dict(region=""),
+            "placement without a strategy": dict(json=self.file({"placement": {"region": "eu-west"}})),
+            "placement in the file and a flag": dict(json=self.file({"placement": {"strategy": "auto"}}), host="h1"),
+            "a location on save": dict(action="save", source="web", host="h1"),
+            "a location on show": dict(action="show", automatic=True),
+        }
+        for name, kw in cases.items():
+            _, problem = self.use_template(**kw)
+            self.assertIsNotNone(problem, name)
+        self.assertEqual(self.fake.writes(), [])
 
     def test_a_database_still_starting_is_not_retried(self):
         msg = ('workloads[0]: database "db" is still starting, so its location can\'t change yet '

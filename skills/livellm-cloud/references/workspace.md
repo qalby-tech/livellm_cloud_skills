@@ -110,8 +110,12 @@ python3 scripts/llc.py template use small-box box-2 --secret credentials.usernam
   `imagePassword`, `portPasswords.<port>.<user>`, `credentials.username`,
   `credentials.password`, or `services.<service>.` and one of those.
   `--json FILE` takes the same as an object (`secretEnv`, `imagePassword`,
-  `gitToken`, `portPasswords`, `credentials`, `services`); nothing else, so
-  change other settings after with `set`.
+  `gitToken`, `portPasswords`, `credentials`, `services`) and `placement`;
+  nothing else, so change other settings after with `set`.
+- A template keeps where its resources ran. `--host H` or `--region R` puts
+  everything it makes there instead, and `--automatic` lets LiveLLM pick
+  (left out, the template's own location stays). A `placement` in the file
+  must say its `strategy` (`"auto"`, `"host"` or `"region"`).
 - Missing ones are refused (422) with the list of paths, and `next` spells
   the flags. Generate passwords yourself; ask the user for keys and tokens
   that belong to them. Never invent one.
