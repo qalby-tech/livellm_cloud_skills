@@ -26,7 +26,10 @@ but not exact.
 **409.** Another agent is working on the machine: the message names it and
 until when. Wait until then, or use another machine; never ask the user to
 release it for you unless they want to. Otherwise something else is changing
-the resource, often a build: wait a few seconds and try once more.
+the resource, often a build: wait a few seconds and try once more. A
+database "still starting, so its location can't change" is different: its
+first start never finished, and retrying won't help. Ask the user before
+deleting it and creating it again.
 
 **422.** A value was refused, and the message names it. Fix that value. Never
 send the same request again hoping for a different answer.
@@ -40,6 +43,14 @@ were doing.
 **A resource stays `starting`.** Machines take minutes on first boot, Windows
 longer. Use `wait` with a longer timeout. If it times out, tell the user what
 the status said instead of guessing.
+
+**A resource with a location stays `starting`.** The status says why.
+"Waiting for room on host H (memory)" or "in region R": that host or region
+has no room for it, and it still counts toward the plan while it waits.
+"Its host H isn't available; choose another location": the host it is pinned
+to is down or gone. Tell the user and let them choose: another place (`hosts`
+shows the free room), automatic (`set` with the block's `"placement": null`),
+or a smaller size.
 
 **A browser address refuses a connection.** The connect token lives 15 minutes.
 Run `connect` again and use the fresh address. A session that is already open

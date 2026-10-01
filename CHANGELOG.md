@@ -14,12 +14,20 @@ Claude Code users get the update only when the version changes.
   say how to set it, change it (it restarts the resource there) and go back to
   automatic with `null`; one pinned to a host waits while that host is down.
 - `llc.py hosts` lists where resources can run: each host's id, region, zone,
-  free processor and memory, GPUs and whether it is ready.
+  host group, free processor and memory, GPUs, and whether it is ready and
+  takes new resources (`schedulable`); a location is accepted only on a host
+  that is both.
 - `llc.py restore` (a database) and `llc.py browser-api create` take `--host`
   or `--region`. A restored database is automatic unless you say otherwise;
-  it never takes the original's location.
+  it never takes the original's location. A flag given with no value is
+  refused, never taken to mean automatic.
+- `llc.py template use` takes `--host`, `--region` or `--automatic` (or
+  `placement` in `--json`): a template keeps where its resources ran unless
+  you say otherwise. `workspace.md` says how.
 - A database still on its first start refuses a new location (409): `llc.py`
   says to ask the user before deleting and creating it again, not to retry.
+- `troubleshooting.md`: a resource with a location that waits for room, or
+  whose host is gone, and what to offer the user.
 
 ## 1.8.0
 
