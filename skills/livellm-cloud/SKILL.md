@@ -166,7 +166,7 @@ Every error prints `{"error": ..., "next": ...}`. Do what `next` says.
 | 402 | The plan is full | Stop, show usage, let the user choose |
 | 403 | Beyond this agent's permissions, or someone else's resource | Tell the user which permission it needs; they turn it on on the Agents page |
 | 404 | No such resource here | `ls`; the id is probably wrong |
-| 409 | Another agent holds the machine, or the resource is mid-change | Held: wait until the time it names, or use another. Otherwise wait a few seconds, retry once |
+| 409 | Another agent holds the machine, or the resource is mid-change | Held: wait until the time it names, or use another. A database "still starting" can't move: ask the user, don't retry. Otherwise wait a few seconds, retry once |
 | 422 | A value was refused; the message names it | Fix that value, never retry unchanged |
 | 5xx | Platform trouble | Retry twice with a pause, then tell the user |
 

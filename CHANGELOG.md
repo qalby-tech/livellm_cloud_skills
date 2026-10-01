@@ -18,6 +18,8 @@ Claude Code users get the update only when the version changes.
 - `llc.py restore` (a database) and `llc.py browser-api create` take `--host`
   or `--region`. A restored database is automatic unless you say otherwise;
   it never takes the original's location.
+- A database still on its first start refuses a new location (409): `llc.py`
+  says to ask the user before deleting and creating it again, not to retry.
 
 ## 1.8.0
 

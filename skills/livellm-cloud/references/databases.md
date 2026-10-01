@@ -168,6 +168,9 @@ A restore runs where `--host` or `--region` says, automatic without them (never 
 
 - **It stays `starting`.** Postgres takes a minute to come up. `wait db`, then
   report what the status said.
+- **409 "still starting, so its location can't change".** Its first start
+  never finished. Retrying won't help: with the user's go, delete it and create
+  it again (or run the restore again from the same backup).
 - **The app can't connect.** Check its links in `ls`, and that the app reads
   the variable names you gave them. An address typed by hand must be the
   private one. From outside, the database must be exposed and the connection

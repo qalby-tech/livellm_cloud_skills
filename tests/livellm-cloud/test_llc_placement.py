@@ -214,6 +214,19 @@ class PlacementTest(unittest.TestCase):
         self.assertIsNotNone(problem)
         self.assertEqual(self.fake.calls, [])
 
+    def test_a_database_still_starting_is_not_retried(self):
+        msg = ('workloads[0]: database "db" is still starting, so its location can\'t change yet '
+               '(delete it and create it again to start it elsewhere)')
+        problem = llc.status_problem(409, {"error": msg})
+        self.assertEqual(problem.code, llc.EXIT_USER)
+        self.assertNotIn("retry once", problem.next)
+        self.assertIn("ask the user", problem.next)
+
+    def test_other_409s_keep_the_retry_hint(self):
+        problem = llc.status_problem(409, {"error": "web is mid-change"})
+        self.assertEqual(problem.code, llc.EXIT_BUSY)
+        self.assertIn("retry once", problem.next)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -130,6 +130,10 @@ def status_problem(status, payload):
         return Problem(message, "tell the user which permission this needs; they can turn it on for this agent on the console's Agents page", EXIT_USER, status)
     if status == 404:
         return Problem(message, "run: llc.py ls, the id is probably wrong", EXIT_OTHER, status)
+    if status == 409 and "location can't change" in message:
+        return Problem(message, "its first start never finished, so moving it can't help and retrying won't either: "
+                       "ask the user before deleting it and creating it again (a restore can be run again from the same backup)",
+                       EXIT_USER, status)
     if status == 409:
         return Problem(message, "if another agent holds the machine, wait until the time the message names or use another; "
                        "otherwise the resource is mid-change: wait a few seconds and retry once", EXIT_BUSY, status)
