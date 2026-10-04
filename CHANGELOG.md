@@ -31,7 +31,7 @@ Claude Code users get the update only when the version changes.
 - `SKILL.md`: rule 10 (profiles hold sign-ins; proxy logins in a file you
   delete; never work around the two permissions), three rows in the table,
   and the `browser_proxy` and `browser_profile` tools. `llc.py` answers each
-  new refusal (403, 409, 413, 429, 507) with what to do, from its code or
+  new refusal (403, 409, 413, 422, 429, 507) with what to do, from its code or
   its message; a workspace that keeps exports to its own people is told
   apart from a missing permission.
 

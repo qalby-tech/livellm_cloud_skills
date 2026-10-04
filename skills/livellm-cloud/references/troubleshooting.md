@@ -66,7 +66,8 @@ mobile proxy asked for a new IP too soon: wait its minimum time.
 change-IP address called with `GET` or `POST` (`changeIpMethod`).
 
 **A profile action answers 409 "Restart this browser once".** The browser was
-made before profiles: ask the user, then `restart ID --yes`. A 507 means its
+made before profiles: ask the user, then `restart ID --yes`. A 409 "The browser's
+profiles are still starting" needs no restart: wait half a minute and try again. A 507 means its
 storage is full: the user grows it or deletes a snapshot.
 
 **A build fails.** `progress <id>` names the stage and shows the error. Fix the

@@ -48,8 +48,11 @@ python3 scripts/llc.py profile rm shop --snapshot SNAPSHOT_ID --yes
 - `restore` puts the snapshot back in place of the current profile, which is
   gone unless you pass `--keep-current` (it becomes a snapshot of its own).
   Ask before restoring.
-- A browser keeps at most 10 snapshots, and they use its storage. A 507 means
-  it is full: the user grows its storage or picks a snapshot to delete.
+- A browser keeps at most `maxSnapshots` snapshots (`profile show` says how
+  many; 10 unless the platform set another number). One more answers 409 "…snapshots.
+  Delete one first.": ask the user which one to delete. Snapshots use
+  the browser's storage: a 507 means it is full, and the user grows it or
+  deletes a snapshot.
 - Deleting the browser deletes its snapshots.
 
 ## Export to a file
@@ -78,6 +81,8 @@ python3 scripts/llc.py profile import shop --file shop.llcprofile.age --password
   user wants a way back.
 - Only files exported from a LiveLLM browser are taken (422 otherwise). For
   sign-ins from another browser, import cookies instead.
+- A file with a password needs it: a 422 "The password doesn't open this
+  file." means ask the user for the right one.
 - A profile from a newer Chrome answers 409 "Import anyway?": pass `--force`
   only if the user agrees.
 - Language and time zone stay as the browser's settings say, whatever the

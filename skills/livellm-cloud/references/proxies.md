@@ -52,6 +52,8 @@ rm proxy.json
   rotation ends with `lastError: change_ip_failed`.
 - Up to 20 proxies. Names are short and lowercase.
 - `checkUrl` (optional) is the address used to read the exit IP; leave it out.
+  It is shown to everyone in the workspace, so one with a login, or a token,
+  key or password in its query, is refused (422).
 
 The same block can go into the create file as `"proxy": {...}`, or into
 `set` as `{"browser": {"proxy": {...}}}`.

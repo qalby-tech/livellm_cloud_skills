@@ -242,6 +242,36 @@ class BrowserTest(unittest.TestCase):
             self.assertIn(words, problem.next, payload)
             self.assertEqual(problem.code, code, payload)
 
+    def test_the_apis_own_refusals(self):
+        # Word for word as tenant-api 0.48.1 answers them.
+        cases = [
+            # the helper starting up: wait, no restart
+            (409, {"error": "The browser's profiles are still starting — try again in a moment.", "code": "needs_restart"},
+             "run the same command again", llc.EXIT_NOT_READY),
+            (409, {"error": "The browser's proxies are still starting — try again in a moment.", "code": "needs_restart"},
+             "run the same command again", llc.EXIT_NOT_READY),
+            (409, {"error": "Restart this browser once to turn on profiles.", "code": "needs_restart"}, "llc.py restart", llc.EXIT_USER),
+            # too many snapshots, in both of the API's wordings
+            (409, {"error": "This browser keeps at most 10 snapshots. Delete one first.", "code": "too_many_snapshots"},
+             "which one to delete", llc.EXIT_USER),
+            (409, {"error": "This browser has the most snapshots it can keep. Delete one first.", "code": "too_many_snapshots"},
+             "which one to delete", llc.EXIT_USER),
+            (409, {"error": "Nothing to rotate to: add another upstream, or a change-IP address.", "code": "nothing_to_rotate"},
+             "second proxy", llc.EXIT_OTHER),
+            (429, {"error": "This proxy's IP was changed moments ago. Wait for its shortest interval and try again.",
+                   "code": "change_ip_too_soon"}, "wait", llc.EXIT_BUSY),
+            (422, {"error": "The password doesn't open this file.", "code": "wrong_password"}, "--password-env", llc.EXIT_USER),
+            (403, {"error": "This API key can't export or import browser profiles. A person can give it the profiles permission on the Keys page."},
+             "profiles permission", llc.EXIT_USER),
+            (403, {"error": "Profiles hold sign-ins. Only the workspace's people can export them."}, "no permission changes that", llc.EXIT_USER),
+            # a database's refusal keeps its own answer
+            (409, {"error": "pg is still starting, so its location can't change"}, "ask the user before deleting it", llc.EXIT_USER),
+        ]
+        for status, payload, words, code in cases:
+            problem = llc.status_problem(status, payload)
+            self.assertIn(words, problem.next, payload)
+            self.assertEqual(problem.code, code, payload)
+
     # --- profiles ---
 
     def test_profile_changes_need_yes(self):

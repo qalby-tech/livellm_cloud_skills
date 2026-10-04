@@ -186,6 +186,9 @@ def browser_problem(status, code, message):
         return Problem(message, "exporting, importing or copying a profile needs the profiles permission: ask the user; a person "
                        "turns it on for this agent on the console's Agents page (for an API key, on the Keys page)",
                        EXIT_USER, status)
+    if status == 409 and ("profiles are still starting" in low or "proxies are still starting" in low):
+        return Problem(message, "the browser's helper is still starting: wait half a minute and run the same command again; "
+                       "no restart is needed", EXIT_NOT_READY, status)
     if status == 409 and (said("needs_restart") or "restart this browser" in low):
         return Problem(message, "this browser needs one restart first: ask the user, then llc.py restart ID --yes "
                        "(its tabs close; the profile and its sign-ins are kept)", EXIT_USER, status)
@@ -195,12 +198,18 @@ def browser_problem(status, code, message):
     if status == 409 and said("snapshot_key_changed"):
         return Problem(message, "this snapshot can't be restored any more, and retrying won't help: pick another one from llc.py profile show ID",
                        EXIT_OTHER, status)
-    if status == 409 and "nothing to rotate to" in low:
+    if status == 409 and (said("too_many_snapshots") or "most snapshots" in low):
+        return Problem(message, "the browser keeps no more snapshots: show the user llc.py profile show ID and ask which one "
+                       "to delete (llc.py profile rm ID --snapshot S --yes); never pick one yourself", EXIT_USER, status)
+    if status == 409 and (said("nothing_to_rotate") or "nothing to rotate to" in low):
         return Problem(message, "one proxy without a change-IP address can't rotate: add a second proxy or its change-IP address (ask the user)",
                        EXIT_OTHER, status)
     if status == 429 and (said("change_ip_too_soon") or "too soon" in low):
         return Problem(message, "the mobile proxy's shortest time between IP changes hasn't passed: wait that long, then rotate again",
                        EXIT_BUSY, status)
+    if status == 422 and (said("wrong_password") or "password doesn't open" in low):
+        return Problem(message, "ask the user for this file's password, put it in an environment variable and pass --password-env VAR; "
+                       "never guess one", EXIT_USER, status)
     if status == 507:
         return Problem(message, "the browser's storage is full: ask the user to grow it (llc.py set) or to pick a snapshot to delete",
                        EXIT_USER, status)
