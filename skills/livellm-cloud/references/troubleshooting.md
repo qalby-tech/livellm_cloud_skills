@@ -56,6 +56,17 @@ or a smaller size.
 Run `connect` again and use the fresh address. A session that is already open
 keeps working.
 
+**A browser's pages stop loading after a proxy change.** `proxy show ID`:
+`mode: waiting` means the settings haven't reached it yet (a few seconds);
+`lastError: upstream_unreachable` or `upstream_login_refused` means the proxy
+itself refuses, and nothing goes out direct in the meantime. Tell the user
+which proxy (`via`), and let them fix it or `proxy clear`. A 429 on rotate is a
+mobile proxy asked for a new IP too soon: wait its minimum time.
+
+**A profile action answers 409 "Restart this browser once".** The browser was
+made before profiles: ask the user, then `restart ID --yes`. A 507 means its
+storage is full: the user grows it or deletes a snapshot.
+
 **A build fails.** `progress <id>` names the stage and shows the error. Fix the
 repository and run `build <id>`. If the new build is worse than the old one,
 `builds <id>` then `deploy <id> <build> --yes`.

@@ -5,6 +5,28 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.10.0
+
+- A browser's language and time zone: `locale`, `timezone`, `languages` and
+  `geolocation` in the create file or in `set` (`{"browser": {...}}`).
+  Changing them restarts the browser; its profile is kept. `llc.py locales`
+  lists the languages offered and the time zone names. `browsers.md` says how.
+- Proxies (`references/proxies.md`): `llc.py proxy show|set|rotate|clear|remove`.
+  HTTP, HTTPS and SOCKS5 proxies with logins, mobile proxies with a change-IP
+  address and its shortest interval, rotation by hand, on a timer or per
+  Browser API session. Logins are written once and never shown again. It
+  needs the Proxies permission, which only a person gives (Agents page, Keys
+  page); what a proxy covers and what it doesn't is spelled out.
+- Profiles (`references/profiles.md`): `llc.py profile show|snapshot|restore|rm`
+  and `export|import|copy`; `llc.py cookies ID --json FILE` adds cookies to a
+  running browser. Export, import and copy need the Profiles permission; an
+  export's password comes from an environment variable, and the file is saved
+  readable only by you. A browser made earlier asks for one restart first.
+- `SKILL.md`: rule 10 (profiles hold sign-ins; proxy logins in a file you
+  delete; never work around the two permissions), three rows in the table,
+  and the `browser_proxy` and `browser_profile` tools. `llc.py` answers each
+  new refusal (403, 409, 429, 507) with what to do.
+
 ## 1.9.0
 
 - Where it runs: any resource may carry `placement`, a region

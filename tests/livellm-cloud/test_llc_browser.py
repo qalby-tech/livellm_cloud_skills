@@ -1,0 +1,310 @@
+"""A browser's language, proxies and profile with scripts/llc.py, against a
+stand-in for LiveLLM's API that records every call.
+
+Run from the repository root:  python3 -m unittest discover -s tests/livellm-cloud
+Only the standard library.
+"""
+
+import contextlib
+import importlib.util
+import io
+import json
+import os
+import shutil
+import stat
+import sys
+import tempfile
+import threading
+import types
+import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+sys.dont_write_bytecode = True  # keep the skill folder clean
+SCRIPT = Path(__file__).resolve().parents[2] / "skills" / "livellm-cloud" / "scripts" / "llc.py"
+spec = importlib.util.spec_from_file_location("llc", SCRIPT)
+llc = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(llc)
+
+ARCHIVE = b"\x28\xb5\x2f\xfd" + bytes(range(256)) * 9000  # binary, more than one read
+STATUS = {"mode": "proxy", "upstream": {"name": "a", "server": "http://p.example:8080"}, "exitIp": "203.0.113.7",
+          "country": "DE", "generation": 2}
+
+
+class FakeAPI:
+    """Answers the browser routes; records (method, path, headers, body) of
+    every call. `refuse` maps "METHOD path" to (status, payload)."""
+
+    def __init__(self):
+        self.calls = []
+        self.refuse = {}
+        fake = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *_):
+                pass
+
+            def body(self):
+                n = int(self.headers.get("content-length", 0))
+                return self.rfile.read(n) if n else b""
+
+            def reply(self, status, payload=None, raw=None, ctype="application/json"):
+                data = raw if raw is not None else json.dumps(payload if payload is not None else {}).encode()
+                self.send_response(status)
+                self.send_header("content-type", ctype)
+                self.send_header("content-length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def handle_any(self):
+                raw = self.body()
+                ctype = self.headers.get("content-type", "")
+                body = json.loads(raw) if raw and ctype.startswith("application/json") else raw
+                fake.calls.append((self.command, self.path, dict(self.headers), body))
+                key = f"{self.command} {self.path}"
+                if key in fake.refuse:
+                    status, payload = fake.refuse[key]
+                    return self.reply(status, payload)
+                if self.path.endswith("/profile/export"):
+                    return self.reply(200, raw=ARCHIVE, ctype="application/octet-stream")
+                if self.path.endswith("/proxy") and self.command == "GET":
+                    return self.reply(200, {"proxy": {"upstreams": [{"name": "a", "hasAuth": True}]}, "status": STATUS})
+                if "/proxy" in self.path:
+                    return self.reply(200, STATUS)
+                if self.path == "/v1/browsers/locales":
+                    return self.reply(200, {"locales": [{"locale": "ru-RU"}], "timezones": ["Europe/Moscow"]})
+                if self.path.endswith("/profile/import") or "/profile/import?" in self.path:
+                    return self.reply(200, {"imported": True, "profilesReady": True})
+                return self.reply(200 if self.command == "GET" else 202, {})
+
+            do_GET = do_POST = do_PUT = do_DELETE = do_PATCH = handle_any
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
+
+
+def args(**kw):
+    base = {"json": None, "to": None, "yes": False, "name": None, "snapshot": None, "keep_current": False,
+            "out": None, "file": None, "password_env": None, "force": False, "source": None}
+    base.update(kw)
+    return base
+
+
+class BrowserTest(unittest.TestCase):
+    def setUp(self):
+        self.fake = FakeAPI()
+        self.addCleanup(self.fake.server.server_close)
+        self.addCleanup(self.fake.server.shutdown)
+        saved = {k: getattr(llc, k) for k in ("API", "API_KEY")}
+        self.addCleanup(lambda: [setattr(llc, k, v) for k, v in saved.items()])
+        llc.API, llc.API_KEY = self.fake.url, "llc_test"
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+
+    def run_llc(self, fn, **kw):
+        buf = io.StringIO()
+        problem = None
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(io.StringIO()):
+            try:
+                fn(types.SimpleNamespace(**args(**kw)))
+            except llc.Problem as p:
+                problem = p
+        text = buf.getvalue()
+        return (json.loads(text) if text.strip() else None), problem, text
+
+    def file(self, name, value):
+        p = self.tmp / name
+        p.write_text(json.dumps(value))
+        return str(p)
+
+    # --- locales ---
+
+    def test_locales_is_one_read(self):
+        res, problem, _ = self.run_llc(llc.locales)
+        self.assertIsNone(problem)
+        self.assertEqual(res["timezones"], ["Europe/Moscow"])
+        self.assertEqual([c[:2] for c in self.fake.calls], [("GET", "/v1/browsers/locales")])
+
+    # --- proxies ---
+
+    def test_proxy_show_and_rotate(self):
+        res, problem, _ = self.run_llc(llc.proxy, action="show", id="shop")
+        self.assertIsNone(problem)
+        self.assertEqual(res["status"]["exitIp"], "203.0.113.7")
+        res, problem, _ = self.run_llc(llc.proxy, action="rotate", id="shop", to="b")
+        self.assertIsNone(problem)
+        self.assertEqual(self.fake.calls[-1][:2], ("POST", "/v1/workloads/shop/proxy/rotate"))
+        self.assertEqual(self.fake.calls[-1][3], {"to": "b"})
+        self.run_llc(llc.proxy, action="rotate", id="shop")
+        self.assertEqual(self.fake.calls[-1][3], {})
+
+    def test_proxy_set_sends_the_file_and_never_prints_the_login(self):
+        block = {"upstreams": [{"name": "a", "server": "socks5://p.example:1080", "username": "u-881", "password": "pw-secret-881",
+                                "changeIpUrl": "https://p.example/rot?key=key-secret-881"}],
+                 "rotation": {"mode": "session"}}
+        f = self.file("proxy.json", {"proxy": block})
+        res, problem, text = self.run_llc(llc.proxy, action="set", id="shop", json=f, yes=True)
+        self.assertIsNone(problem)
+        method, path, _, body = self.fake.calls[-1]
+        self.assertEqual((method, path), ("PUT", "/v1/workloads/shop/proxy"))
+        self.assertEqual(body, block)  # {"proxy": ...} unwrapped
+        for secret in ("pw-secret-881", "key-secret-881", "u-881"):
+            self.assertNotIn(secret, text)
+        self.assertIn("delete", res["next"])
+
+    def test_proxy_set_keeping_the_stored_login_says_nothing_about_deleting(self):
+        f = self.file("p.json", {"upstreams": [{"name": "a", "server": "http://p.example:8080", "hasAuth": True}]})
+        res, problem, _ = self.run_llc(llc.proxy, action="set", id="shop", json=f, yes=True)
+        self.assertIsNone(problem)
+        self.assertNotIn("next", res)
+
+    def test_proxy_set_refuses_a_login_in_the_address_before_sending(self):
+        f = self.file("p.json", {"upstreams": [{"name": "a", "server": "http://user:pw@p.example:8080"}]})
+        _, problem, _ = self.run_llc(llc.proxy, action="set", id="shop", json=f, yes=True)
+        self.assertIsNotNone(problem)
+        self.assertIn("username", problem.next)
+        f = self.file("q.json", {"upstreams": [{"name": "a", "server": "http://p.example:8080", "username": "u"}]})
+        _, problem, _ = self.run_llc(llc.proxy, action="set", id="shop", json=f, yes=True)
+        self.assertIsNotNone(problem)
+        self.assertEqual(self.fake.calls, [])
+
+    def test_proxy_changes_need_yes(self):
+        for action in ("set", "clear", "remove"):
+            _, problem, _ = self.run_llc(llc.proxy, action=action, id="shop", json=self.file("p.json", {}))
+            self.assertIsNotNone(problem, action)
+        self.assertEqual(self.fake.calls, [])
+
+    def test_proxy_clear_goes_direct_and_remove_drops_the_block(self):
+        self.run_llc(llc.proxy, action="clear", id="shop", yes=True)
+        self.assertEqual(self.fake.calls[-1][:2], ("DELETE", "/v1/workloads/shop/proxy"))
+        self.run_llc(llc.proxy, action="remove", id="shop", yes=True)
+        self.assertEqual(self.fake.calls[-1][:2], ("DELETE", "/v1/workloads/shop/proxy?remove=true"))
+
+    def test_refusals_say_what_to_do(self):
+        cases = [
+            ("POST /v1/workloads/shop/proxy/rotate", 403,
+             {"error": "This agent can't change browser proxies. A person can allow it on the Agents page."}, "Agents page", llc.EXIT_USER),
+            ("POST /v1/workloads/shop/proxy/rotate", 409,
+             {"error": "Restart this browser once to turn on profiles.", "code": "needs_restart"}, "llc.py restart", llc.EXIT_USER),
+            ("POST /v1/workloads/shop/proxy/rotate", 429,
+             {"error": "too soon", "code": "change_ip_too_soon"}, "wait", llc.EXIT_BUSY),
+            ("POST /v1/workloads/shop/proxy/rotate", 409, {"error": "nothing to rotate to"}, "second proxy", llc.EXIT_OTHER),
+        ]
+        for key, status, payload, words, code in cases:
+            self.fake.refuse = {key: (status, payload)}
+            _, problem, _ = self.run_llc(llc.proxy, action="rotate", id="shop")
+            self.assertIsNotNone(problem, payload)
+            self.assertIn(words, problem.next, payload)
+            self.assertEqual(problem.code, code, payload)
+
+    # --- profiles ---
+
+    def test_profile_changes_need_yes(self):
+        for action in ("snapshot", "restore", "rm", "export", "import", "copy"):
+            _, problem, _ = self.run_llc(llc.profile, action=action, id="shop", snapshot="s1")
+            self.assertIsNotNone(problem, action)
+            self.assertIn("ask the user", problem.next)
+        self.assertEqual(self.fake.calls, [])
+
+    def test_snapshot_restore_rm_copy(self):
+        self.run_llc(llc.profile, action="snapshot", id="shop", name="before-login", yes=True)
+        self.assertEqual(self.fake.calls[-1][1:4:2], ("/v1/workloads/shop/profile/snapshots", {"name": "before-login"}))
+        self.run_llc(llc.profile, action="restore", id="shop", snapshot="s1", keep_current=True, yes=True)
+        self.assertEqual(self.fake.calls[-1][1:4:2], ("/v1/workloads/shop/profile/snapshots/s1/restore", {"keepCurrent": True}))
+        self.run_llc(llc.profile, action="rm", id="shop", snapshot="s1", yes=True)
+        self.assertEqual(self.fake.calls[-1][:2], ("DELETE", "/v1/workloads/shop/profile/snapshots/s1"))
+        self.run_llc(llc.profile, action="copy", id="shop-2", source="shop", yes=True)
+        self.assertEqual(self.fake.calls[-1][1:4:2], ("/v1/workloads/shop-2/profile/copy", {"from": "shop"}))
+        _, problem, _ = self.run_llc(llc.profile, action="restore", id="shop", yes=True)
+        self.assertIn("profile show", problem.next)
+
+    def test_export_streams_to_a_private_file_and_takes_the_password_from_the_environment(self):
+        os.environ["PROFILE_PW"] = "pw-export-552"
+        self.addCleanup(os.environ.pop, "PROFILE_PW", None)
+        target = self.tmp / "shop.llcprofile.age"
+        res, problem, text = self.run_llc(llc.profile, action="export", id="shop", out=str(target),
+                                          password_env="PROFILE_PW", yes=True)
+        self.assertIsNone(problem)
+        self.assertEqual(target.read_bytes(), ARCHIVE)
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+        self.assertEqual(res["bytes"], len(ARCHIVE))
+        self.assertTrue(res["encrypted"])
+        self.assertNotIn("pw-export-552", text)
+        self.assertEqual(self.fake.calls[-1][3], {"password": "pw-export-552"})
+        self.assertFalse((self.tmp / "shop.llcprofile.age.part").exists())
+        # never overwrites
+        _, problem, _ = self.run_llc(llc.profile, action="export", id="shop", out=str(target), yes=True)
+        self.assertIn("already exists", problem.message)
+
+    def test_export_without_a_password_says_the_file_is_unencrypted(self):
+        res, problem, _ = self.run_llc(llc.profile, action="export", id="shop", out=str(self.tmp / "p.llcprofile"),
+                                       snapshot="s1", yes=True)
+        self.assertIsNone(problem)
+        self.assertFalse(res["encrypted"])
+        self.assertIn("unencrypted", res["note"])
+        self.assertEqual(self.fake.calls[-1][3], {"snapshot": "s1"})
+
+    def test_a_refused_export_leaves_no_file(self):
+        self.fake.refuse = {"POST /v1/workloads/shop/profile/export": (
+            403, {"error": "This agent can't export or import browser profiles. A person can allow it on the Agents page."})}
+        target = self.tmp / "x.llcprofile"
+        _, problem, _ = self.run_llc(llc.profile, action="export", id="shop", out=str(target), yes=True)
+        self.assertIn("profiles permission", problem.next)
+        self.assertEqual(list(self.tmp.iterdir()), [])
+
+    def test_an_empty_password_variable_is_refused(self):
+        os.environ["EMPTY_PW"] = ""
+        self.addCleanup(os.environ.pop, "EMPTY_PW", None)
+        _, problem, _ = self.run_llc(llc.profile, action="export", id="shop", out=str(self.tmp / "e"),
+                                     password_env="EMPTY_PW", yes=True)
+        self.assertIn("EMPTY_PW", problem.message)
+        self.assertEqual(self.fake.calls, [])
+
+    def test_import_sends_the_file_raw_with_the_password_in_a_header(self):
+        src = self.tmp / "in.llcprofile.age"
+        src.write_bytes(ARCHIVE)
+        os.environ["PROFILE_PW"] = "pw-import-553"
+        self.addCleanup(os.environ.pop, "PROFILE_PW", None)
+        res, problem, text = self.run_llc(llc.profile, action="import", id="shop", file=str(src),
+                                          password_env="PROFILE_PW", force=True, yes=True)
+        self.assertIsNone(problem)
+        method, path, headers, body = self.fake.calls[-1]
+        self.assertEqual((method, path), ("POST", "/v1/workloads/shop/profile/import?force=1"))
+        self.assertEqual(body, ARCHIVE)
+        lower = {k.lower(): v for k, v in headers.items()}
+        self.assertEqual(lower["x-profile-password"], "pw-import-553")
+        self.assertEqual(lower["content-type"], "application/octet-stream")
+        self.assertNotIn("pw-import-553", text)
+        self.assertTrue(res["imported"])
+
+    def test_a_newer_profile_asks_before_force(self):
+        src = self.tmp / "in.llcprofile"
+        src.write_bytes(b"x")
+        self.fake.refuse = {"POST /v1/workloads/shop/profile/import": (
+            409, {"error": "This profile is from Chrome 155; this browser runs 154. Import anyway?", "code": "profile_newer"})}
+        _, problem, _ = self.run_llc(llc.profile, action="import", id="shop", file=str(src), yes=True)
+        self.assertIn("--force", problem.next)
+        self.assertEqual(problem.code, llc.EXIT_USER)
+
+    def test_storage_full(self):
+        self.fake.refuse = {"POST /v1/workloads/shop/profile/snapshots": (
+            507, {"error": "Not enough room in this browser's storage. Grow it or delete a snapshot."})}
+        _, problem, _ = self.run_llc(llc.profile, action="snapshot", id="shop", yes=True)
+        self.assertIn("grow", problem.next)
+
+    # --- cookies ---
+
+    def test_cookies_send_the_list_and_print_only_the_count(self):
+        items = [{"name": "sid", "value": "cookie-secret-77", "domain": ".example.com", "path": "/"}]
+        res, problem, text = self.run_llc(llc.cookies, id="shop", json=self.file("c.json", items))
+        self.assertIsNone(problem)
+        self.assertEqual(self.fake.calls[-1][1:4:2], ("/v1/workloads/shop/cookies", items))
+        self.assertEqual(res["added"], 1)
+        self.assertNotIn("cookie-secret-77", text)
+        _, problem, _ = self.run_llc(llc.cookies, id="shop", json=self.file("d.json", {"name": "x"}))
+        self.assertIsNotNone(problem)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -30,6 +30,39 @@ python3 scripts/llc.py wait shop
 
 Ids are short and lowercase; the id shows up in the browser's addresses.
 
+## Language, time zone and location
+
+For a site that should see a Russian visitor in Moscow, add to the file:
+
+```json
+{ "id": "shop", "locale": "ru-RU", "timezone": "Europe/Moscow" }
+```
+
+- `locale` sets the browser's language, what pages read from it and the
+  `Accept-Language` it sends. `languages` (optional) is that order in full,
+  up to 6, the first one `locale`; left out, it is `ru-RU, ru, en-US, en`.
+- `timezone` is an IANA name (`Europe/Berlin`, `America/New_York`, `UTC`).
+- `geolocation`: `{"mode": "off"}` refuses location to every site;
+  `{"mode": "fixed", "latitude": 55.75, "longitude": 37.62}` reports that place
+  (`accuracy` in metres, default 100). Left out, sites ask as usual.
+- `llc.py locales` lists the languages offered and the time zone names; any
+  other is refused (422).
+
+To change them later, `set shop --json lang.json --yes` with
+`{"browser": {"locale": "de-DE", "timezone": "Europe/Berlin"}}`. **Changing
+these restarts the browser**: its tabs close; the profile, its sign-ins and
+the addresses are kept. Ask first. `""` (or `[]` for `languages`,
+`{"mode": "prompt"}` for `geolocation`) goes back to the default.
+
+A proxy's country doesn't set these: set them to match it yourself.
+
+## Proxies and profiles
+
+- Through the user's own proxies, mobile ones included, switched by hand, on a
+  timer or per session: `references/proxies.md`.
+- Snapshots to switch back to, a profile exported to a file or imported from
+  one, copied to another browser, or cookies added: `references/profiles.md`.
+
 ## Drive it
 
 ```

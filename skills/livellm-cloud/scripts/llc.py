@@ -27,6 +27,15 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS]
                    [--host H | --region R] --yes
     llc.py browser-api show NAME | add NAME BROWSER | remove NAME BROWSER --yes
+    llc.py locales                             (languages and time zones a browser takes)
+    llc.py proxy show|rotate ID [--to NAME] | proxy set ID --json FILE --yes
+    llc.py proxy clear ID --yes | proxy remove ID --yes      (clear: go direct; remove: restarts)
+    llc.py profile show ID | profile snapshot ID [--name N] --yes
+    llc.py profile restore|rm ID --snapshot S [--keep-current] --yes
+    llc.py profile export ID --out FILE [--snapshot S] [--password-env VAR] --yes
+    llc.py profile import ID --file FILE [--password-env VAR] [--force] --yes
+    llc.py profile copy ID --from BROWSER [--snapshot S] --yes
+    llc.py cookies ID --json FILE
     llc.py templates | template show T | template save NAME --from ID [--description D]
     llc.py template use T NEW [--secret PATH=VALUE] [--secret-env PATH=VAR] [--json FILE]
                    [--host H | --region R | --automatic] --yes
@@ -123,6 +132,10 @@ def http_problem(status, payload):
 
 def status_problem(status, payload):
     message = payload.get("error_description") or payload.get("error") or f"HTTP {status}"
+    code = payload.get("code") if isinstance(payload.get("code"), str) else ""
+    browser = browser_problem(status, code, message)
+    if browser:
+        return browser
     if status == 401:
         return Problem(message, "run: llc.py login, give the user the link it prints, and run login again once they press Allow", EXIT_USER, status)
     if status == 402:
@@ -143,6 +156,41 @@ def status_problem(status, payload):
     if status >= 500:
         return Problem(message, "platform trouble: retry twice with a pause, then tell the user", EXIT_OTHER, status)
     return Problem(message, "check the request", EXIT_OTHER, status)
+
+
+def browser_problem(status, code, message):
+    """A browser's proxy or profile refusal, with what to do about it; None
+    for any other answer."""
+    low = message.lower()
+    if status == 403 and ("proxies permission" in low or "browser proxies" in low):
+        return Problem(message, "changing a browser's proxy needs the proxies permission: ask the user; a person turns it on "
+                       "for this agent on the console's Agents page (for an API key, on the Keys page). Never work around it",
+                       EXIT_USER, status)
+    if status == 403 and ("profiles permission" in low or "browser profiles" in low or "profiles hold sign-ins" in low):
+        return Problem(message, "exporting, importing or copying a profile needs the profiles permission: ask the user; a person "
+                       "turns it on for this agent on the console's Agents page (for an API key, on the Keys page)",
+                       EXIT_USER, status)
+    if status == 409 and (code == "needs_restart" or "restart this browser" in low):
+        return Problem(message, "this browser needs one restart first: ask the user, then llc.py restart ID --yes "
+                       "(its tabs close; the profile and its sign-ins are kept)", EXIT_USER, status)
+    if status == 409 and (code == "profile_newer" or "import anyway" in low):
+        return Problem(message, "the profile comes from a newer Chrome: ask the user, and only if they agree run the same import with --force",
+                       EXIT_USER, status)
+    if status == 409 and code == "snapshot_key_changed":
+        return Problem(message, "this snapshot can't be restored any more: pick another one from llc.py profile show ID",
+                       EXIT_OTHER, status)
+    if status == 409 and "nothing to rotate to" in low:
+        return Problem(message, "one proxy without a change-IP address can't rotate: add a second proxy or its change-IP address (ask the user)",
+                       EXIT_OTHER, status)
+    if status == 429 and (code == "change_ip_too_soon" or "too soon" in low):
+        return Problem(message, "the mobile proxy's shortest time between IP changes hasn't passed: wait that long, then rotate again",
+                       EXIT_BUSY, status)
+    if status == 507:
+        return Problem(message, "the browser's storage is full: ask the user to grow it (llc.py set) or to pick a snapshot to delete",
+                       EXIT_USER, status)
+    if status == 413:
+        return Problem(message, "the file is larger than LiveLLM takes: tell the user", EXIT_USER, status)
+    return None
 
 
 # --- sign-in -----------------------------------------------------------------
@@ -738,6 +786,246 @@ def browser_api(args):
     })
 
 
+# --- browsers: language, proxies, profiles ----------------------------------
+
+ROTATE_TIMEOUT = 160  # a rotation with a mobile change-IP call takes up to two minutes
+PROFILE_TIMEOUT = 660  # taking or restoring a snapshot: up to ten minutes
+ARCHIVE_TIMEOUT = 3660  # an export, an import or a copy: up to an hour
+CHUNK = 1 << 20
+# Fields of a proxy that are written and never shown again.
+PROXY_SECRETS = ("username", "password", "changeIpUrl")
+
+
+def proxy_path(wid):
+    return f"{workload_path(wid)}/proxy"
+
+
+def profile_path(wid):
+    return f"{workload_path(wid)}/profile"
+
+
+def secret_env(var, what):
+    """The value of an environment variable the user filled, or None when no
+    variable was named. Secrets never go on the command line."""
+    if var is None:
+        return None
+    value = os.environ.get(var, "")
+    if not value:
+        raise Problem(f"{var} is empty or not set", f"ask the user for {what} and put it in {var}; never on the command line", EXIT_USER)
+    return value
+
+
+def read_json_file(path, what):
+    try:
+        return json.loads(Path(path).read_text())
+    except OSError as e:
+        raise Problem(f"can't read {path}: {e.strerror}", f"write {what} to the file first", EXIT_OTHER) from None
+    except json.JSONDecodeError as e:
+        raise Problem(f"{path} is not JSON: {e.msg} at line {e.lineno}", "fix the file", EXIT_OTHER) from None
+
+
+def proxy_body(path):
+    """The proxy settings to send: the file holds the whole block, or
+    {"proxy": {...}}. A login written into the address is refused here, so it
+    never reaches settings that are shown."""
+    body = read_json_file(path, "the proxy settings")
+    if isinstance(body, dict) and set(body) == {"proxy"}:
+        body = body["proxy"]
+    if not isinstance(body, dict):
+        raise Problem("the file should hold a JSON object: {\"upstreams\": [...], \"rotation\": {...}}", "fix the file", EXIT_OTHER)
+    ups = body.get("upstreams")
+    if ups is not None and not isinstance(ups, list):
+        raise Problem("upstreams should be a list", "fix the file", EXIT_OTHER)
+    secret = False
+    for i, u in enumerate(ups or []):
+        if not isinstance(u, dict):
+            raise Problem(f"upstreams[{i}] should be an object", "fix the file", EXIT_OTHER)
+        server = str(u.get("server") or "")
+        if "@" in server.partition("://")[2].split("/", 1)[0]:
+            raise Problem(f"upstreams[{i}].server has a login in the address",
+                          "put the login in \"username\" and \"password\" and keep the address as scheme://host:port", EXIT_OTHER)
+        if ("username" in u) != ("password" in u):
+            raise Problem(f"upstreams[{i}] needs username and password together", "send both, or neither to keep the stored login", EXIT_OTHER)
+        secret = secret or any(u.get(k) for k in PROXY_SECRETS)
+    return body, secret
+
+
+def proxy(args):
+    tok = token()
+    if args.action == "show":
+        out(request("GET", proxy_path(args.id), token=tok))
+        return
+    if args.action == "rotate":
+        body = {"to": args.to} if args.to else {}
+        out(request("POST", f"{proxy_path(args.id)}/rotate", body, token=tok, timeout=ROTATE_TIMEOUT))
+        return
+    if not args.yes:
+        raise Problem(f"proxy {args.action} needs --yes",
+                      "change a browser's proxy only when the user asked for it, then pass --yes", EXIT_OTHER)
+    if args.action == "set":
+        if not args.json:
+            raise Problem("proxy set needs --json FILE", "write the proxy settings to a file (references/proxies.md)", EXIT_OTHER)
+        body, secret = proxy_body(args.json)
+        answer = request("PUT", proxy_path(args.id), body, token=tok, timeout=ROTATE_TIMEOUT) or {}
+        if secret:
+            answer = {**answer, "next": f"delete {args.json}: it holds the proxy's login, which LiveLLM keeps and never shows again"}
+        out(answer)
+        return
+    if args.action == "clear":
+        out(request("DELETE", proxy_path(args.id), token=tok) or
+            {"direct": args.id, "note": "the browser goes out directly now; its proxy list is empty and it did not restart"})
+        return
+    # remove: the proxy settings go altogether, and the browser restarts
+    out(request("DELETE", proxy_path(args.id) + "?remove=true", token=tok) or
+        {"removed": "proxy", "of": args.id, "next": f"it restarts: llc.py wait {args.id}"})
+
+
+def open_stream(method, path, tok, data=None, headers=None, timeout=ARCHIVE_TIMEOUT):
+    """An API call whose answer (or body) is a file: returns the open answer
+    for the caller to read and close, or raises Problem."""
+    url = API + path
+    h = {"authorization": "Bearer " + tok, **(headers or {})}
+    req = urllib.request.Request(url, data=data, headers=h, method=method)
+    try:
+        return urllib.request.urlopen(req, timeout=timeout, context=ssl.create_default_context())
+    except urllib.error.HTTPError as e:
+        try:
+            text = e.read().decode(errors="replace")
+        finally:
+            e.close()
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            payload = {"error": text.strip()[:200] or e.reason}
+        raise http_problem(e.code, payload if isinstance(payload, dict) else {"error": str(payload)}) from None
+    except (urllib.error.URLError, ConnectionError, TimeoutError, http.client.HTTPException, OSError) as e:
+        reason = getattr(e, "reason", e)
+        raise Problem(f"cannot reach LiveLLM at {API}: {reason}",
+                      "check the network, or LIVELLM_API_URL for a self-hosted LiveLLM") from None
+
+
+def export_profile(args, tok):
+    if not args.out:
+        raise Problem("export needs --out FILE", "name the file the profile is saved to", EXIT_OTHER)
+    target = Path(args.out)
+    if target.exists():
+        raise Problem(f"{target} already exists", "pick a new file name; an export never overwrites one", EXIT_OTHER)
+    body = {}
+    if args.snapshot:
+        body["snapshot"] = args.snapshot
+    password = secret_env(args.password_env, "the password that protects the file")
+    if password:
+        body["password"] = password
+    part = target.with_name(target.name + ".part")
+    resp = open_stream("POST", f"{profile_path(args.id)}/export", tok, json.dumps(body).encode(),
+                       {"content-type": "application/json", "accept": "application/octet-stream"})
+    size = 0
+    try:
+        # It holds the browser's sign-ins: only this user may read it.
+        fd = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            while True:
+                chunk = resp.read(CHUNK)
+                if not chunk:
+                    break
+                f.write(chunk)
+                size += len(chunk)
+        os.replace(part, target)
+    except BaseException:
+        try:
+            part.unlink()
+        except OSError:
+            pass
+        raise
+    finally:
+        resp.close()
+    answer = {"exported": args.id, "file": str(target), "bytes": size, "encrypted": bool(password)}
+    answer["note"] = ("the file holds the browser's sign-ins; give it only to the user" if password else
+                      "the file holds the browser's sign-ins unencrypted; give it only to the user and delete your copy")
+    out(answer)
+
+
+def import_profile(args, tok):
+    if not args.file:
+        raise Problem("import needs --file FILE", "name the profile file exported from a LiveLLM browser", EXIT_OTHER)
+    src = Path(args.file)
+    try:
+        size = src.stat().st_size
+        f = src.open("rb")
+    except OSError as e:
+        raise Problem(f"can't read {src}: {e.strerror}", "check the file name", EXIT_OTHER) from None
+    headers = {"content-type": "application/octet-stream", "content-length": str(size), "accept": "application/json"}
+    password = secret_env(args.password_env, "the file's password")
+    if password:
+        headers["x-profile-password"] = password
+    path = f"{profile_path(args.id)}/import" + ("?force=1" if args.force else "")
+    with f:
+        resp = open_stream("POST", path, tok, f, headers)
+    with resp:
+        text = resp.read().decode(errors="replace")
+    try:
+        answer = json.loads(text) if text.strip() else {}
+    except json.JSONDecodeError:
+        answer = {}
+    out(answer or {"imported": str(src), "into": args.id, "note": "its tabs closed while the profile was put in place"})
+
+
+def profile(args):
+    tok = token()
+    if args.action == "show":
+        out(request("GET", profile_path(args.id), token=tok))
+        return
+    if not args.yes:
+        why = {"snapshot": "its tabs close for a few seconds",
+               "restore": "it replaces the browser's profile and its tabs close for a few seconds",
+               "rm": "a snapshot can't be brought back",
+               "export": "the file holds the browser's sign-ins",
+               "import": "it replaces the browser's profile",
+               "copy": "it replaces this browser's profile with the other's"}[args.action]
+        raise Problem(f"profile {args.action} needs --yes", f"{why}: ask the user first, then pass --yes", EXIT_OTHER)
+    if args.action in ("restore", "rm") and not args.snapshot:
+        raise Problem("which snapshot?", f"llc.py profile show {args.id} lists them; pass --snapshot ID", EXIT_OTHER)
+    snap = f"{profile_path(args.id)}/snapshots"
+    if args.action == "snapshot":
+        body = {"name": args.name} if args.name else {}
+        out(request("POST", snap, body, token=tok, timeout=PROFILE_TIMEOUT))
+    elif args.action == "restore":
+        out(request("POST", f"{snap}/{urllib.parse.quote(args.snapshot)}/restore", {"keepCurrent": bool(args.keep_current)},
+                    token=tok, timeout=PROFILE_TIMEOUT))
+    elif args.action == "rm":
+        request("DELETE", f"{snap}/{urllib.parse.quote(args.snapshot)}", token=tok)
+        out({"deleted": args.snapshot, "of": args.id})
+    elif args.action == "export":
+        export_profile(args, tok)
+    elif args.action == "import":
+        import_profile(args, tok)
+    else:  # copy
+        if not args.source:
+            raise Problem("copy needs --from BROWSER", "name the browser whose profile to copy", EXIT_OTHER)
+        body = {"from": args.source}
+        if args.snapshot:
+            body["snapshot"] = args.snapshot
+        out(request("POST", f"{profile_path(args.id)}/copy", body, token=tok, timeout=ARCHIVE_TIMEOUT) or
+            {"copied": args.source, "into": args.id})
+
+
+def cookies(args):
+    """Add cookies to a running browser. The values are never printed."""
+    items = read_json_file(args.json, "the cookies")
+    if isinstance(items, dict) and isinstance(items.get("cookies"), list):
+        items = items["cookies"]
+    if not isinstance(items, list) or not items:
+        raise Problem("the file should hold a JSON list of cookies: [{\"name\", \"value\", \"domain\", \"path\"}, ...]",
+                      "fix the file", EXIT_OTHER)
+    answer = request("POST", f"{workload_path(args.id)}/cookies", items, token=token())
+    out({"added": len(items), "to": args.id, **({k: v for k, v in answer.items() if k != "cookies"} if isinstance(answer, dict) else {})})
+
+
+def locales(_args):
+    """The languages a browser can take, and the time zone names."""
+    out(request("GET", "/v1/browsers/locales"))
+
+
 def backups_path(wid):
     return f"{workload_path(wid)}/backups"
 
@@ -1227,6 +1515,35 @@ def main():
     bapi_p.add_argument("--region", help="create: run it on any host in this region; neither: automatic")
     bapi_p.add_argument("--yes", action="store_true", help="create: the user asked for it; remove: the user agreed")
     bapi_p.set_defaults(fn=browser_api)
+
+    sub.add_parser("locales", help="the languages and time zones a browser can take").set_defaults(fn=locales)
+
+    proxy_p = sub.add_parser("proxy", help="a browser's proxies: show, set, rotate, clear (go direct), remove")
+    proxy_p.add_argument("action", choices=["show", "set", "rotate", "clear", "remove"])
+    proxy_p.add_argument("id", help="the browser")
+    proxy_p.add_argument("--json", help="set: a file with the proxy settings (logins in it are kept and never shown)")
+    proxy_p.add_argument("--to", help="rotate: go to this proxy, by its name")
+    proxy_p.add_argument("--yes", action="store_true", help="set, clear, remove: the user asked for this change")
+    proxy_p.set_defaults(fn=proxy)
+
+    prof_p = sub.add_parser("profile", help="a browser's profile: show, snapshot, restore, rm, export, import, copy")
+    prof_p.add_argument("action", choices=["show", "snapshot", "restore", "rm", "export", "import", "copy"])
+    prof_p.add_argument("id", help="the browser (copy: the one that receives the profile)")
+    prof_p.add_argument("--name", help="snapshot: its name")
+    prof_p.add_argument("--snapshot", help="restore, rm: the snapshot; export, copy: send this snapshot instead of the profile now")
+    prof_p.add_argument("--keep-current", action="store_true", help="restore: keep the profile it replaces as a snapshot")
+    prof_p.add_argument("--out", help="export: the file to save it to (never overwritten)")
+    prof_p.add_argument("--file", help="import: the profile file, exported from a LiveLLM browser")
+    prof_p.add_argument("--password-env", help="export, import: the environment variable holding the file's password")
+    prof_p.add_argument("--force", action="store_true", help="import: take a profile from a newer Chrome (only if the user agreed)")
+    prof_p.add_argument("--from", dest="source", help="copy: the browser whose profile to copy")
+    prof_p.add_argument("--yes", action="store_true", help="every change: the user asked for it")
+    prof_p.set_defaults(fn=profile)
+
+    cookies_p = sub.add_parser("cookies", help="add cookies to a running browser from a JSON file")
+    cookies_p.add_argument("id")
+    cookies_p.add_argument("--json", required=True, help="a JSON list of cookies: name, value, domain, path, ...")
+    cookies_p.set_defaults(fn=cookies)
 
     sub.add_parser("templates", help="the workspace's saved templates").set_defaults(
         fn=lambda a: out(request("GET", "/v1/templates", token=token())))

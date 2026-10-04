@@ -25,6 +25,9 @@ should_trigger:
   - Restore yesterday's backup of our LiveLLM Postgres into a new database.
   - What changed in my LiveLLM workspace today, and who did it?
   - Make two more LiveLLM machines like this one from a template.
+  - Make my LiveLLM browser look like a visitor from Germany, in German and Berlin time.
+  - Route the scraping browser through my mobile proxy and rotate the IP every 10 minutes.
+  - Snapshot the browser's logged-in profile so we can switch back to it later.
 should_not_trigger:
   - Set up LiteLLM as a proxy for OpenAI and Anthropic models.
   - Launch an EC2 instance on AWS.
