@@ -33,11 +33,16 @@ STATUS = {"mode": "proxy", "upstream": {"name": "a", "server": "http://p.example
 
 class FakeAPI:
     """Answers the browser routes; records (method, path, headers, body) of
-    every call. `refuse` maps "METHOD path" to (status, payload)."""
+    every call. `refuse` maps "METHOD path" to (status, payload). `early`
+    does the same but answers before the body is read (after `early_read`
+    bytes of it), the way a gate or a check of the file's first entry does,
+    and then closes the connection with the rest unread."""
 
     def __init__(self):
         self.calls = []
         self.refuse = {}
+        self.early = {}
+        self.early_read = 0
         fake = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -57,11 +62,18 @@ class FakeAPI:
                 self.wfile.write(data)
 
             def handle_any(self):
+                key = f"{self.command} {self.path}"
+                if key in fake.early:
+                    if fake.early_read:
+                        self.rfile.read(fake.early_read)
+                    fake.calls.append((self.command, self.path, dict(self.headers), None))
+                    self.close_connection = True
+                    status, payload = fake.early[key]
+                    return self.reply(status, payload)
                 raw = self.body()
                 ctype = self.headers.get("content-type", "")
                 body = json.loads(raw) if raw and ctype.startswith("application/json") else raw
                 fake.calls.append((self.command, self.path, dict(self.headers), body))
-                key = f"{self.command} {self.path}"
                 if key in fake.refuse:
                     status, payload = fake.refuse[key]
                     return self.reply(status, payload)
@@ -132,11 +144,11 @@ class BrowserTest(unittest.TestCase):
         res, problem, _ = self.run_llc(llc.proxy, action="show", id="shop")
         self.assertIsNone(problem)
         self.assertEqual(res["status"]["exitIp"], "203.0.113.7")
-        res, problem, _ = self.run_llc(llc.proxy, action="rotate", id="shop", to="b")
+        res, problem, _ = self.run_llc(llc.proxy, action="rotate", id="shop", to="b", yes=True)
         self.assertIsNone(problem)
         self.assertEqual(self.fake.calls[-1][:2], ("POST", "/v1/workloads/shop/proxy/rotate"))
         self.assertEqual(self.fake.calls[-1][3], {"to": "b"})
-        self.run_llc(llc.proxy, action="rotate", id="shop")
+        self.run_llc(llc.proxy, action="rotate", id="shop", yes=True)
         self.assertEqual(self.fake.calls[-1][3], {})
 
     def test_proxy_set_sends_the_file_and_never_prints_the_login(self):
@@ -167,10 +179,39 @@ class BrowserTest(unittest.TestCase):
         f = self.file("q.json", {"upstreams": [{"name": "a", "server": "http://p.example:8080", "username": "u"}]})
         _, problem, _ = self.run_llc(llc.proxy, action="set", id="shop", json=f, yes=True)
         self.assertIsNotNone(problem)
+        # no scheme: still a login in the address
+        f = self.file("r.json", {"upstreams": [{"name": "a", "server": "user:pw-881@p.example:1080"}]})
+        _, problem, _ = self.run_llc(llc.proxy, action="set", id="shop", json=f, yes=True)
+        self.assertIsNotNone(problem)
+        self.assertIn("login in the address", problem.message)
+        self.assertNotIn("pw-881", problem.message)
         self.assertEqual(self.fake.calls, [])
 
+    def test_create_and_set_check_a_proxy_block_like_proxy_set(self):
+        bad = {"id": "shop", "proxy": {"upstreams": [{"name": "a", "server": "user:pw@p.example:1080"}]}}
+        _, problem, _ = self.run_llc(llc.create, type="browser", json=self.file("b.json", bad), yes=True)
+        self.assertIsNotNone(problem)
+        bad = {"browser": {"proxy": {"upstreams": [{"name": "a", "server": "socks5://u:pw@p.example:1080"}]}}}
+        _, problem, _ = self.run_llc(llc.set_settings, id="shop", json=self.file("s.json", bad), yes=True)
+        self.assertIsNotNone(problem)
+        self.assertEqual(self.fake.calls, [])
+        good = {"id": "shop", "proxy": {"upstreams": [{"name": "a", "server": "http://p.example:8080",
+                                                       "username": "u", "password": "pw-create-7"}]}}
+        f = self.file("c.json", good)
+        res, problem, text = self.run_llc(llc.create, type="browser", json=f, yes=True)
+        self.assertIsNone(problem)
+        self.assertIn(f"delete {f}", res["delete"])
+        self.assertNotIn("pw-create-7", text)
+        f = self.file("t.json", {"browser": {"proxy": good["proxy"]}})
+        res, problem, _ = self.run_llc(llc.set_settings, id="shop", json=f, yes=True)
+        self.assertIsNone(problem)
+        self.assertIn(f"delete {f}", res["delete"])
+        res, problem, _ = self.run_llc(llc.set_settings, id="shop", json=self.file("u.json", {"browser": {"locale": "ru-RU"}}), yes=True)
+        self.assertIsNone(problem)
+        self.assertNotIn("delete", res)
+
     def test_proxy_changes_need_yes(self):
-        for action in ("set", "clear", "remove"):
+        for action in ("set", "rotate", "clear", "remove"):
             _, problem, _ = self.run_llc(llc.proxy, action=action, id="shop", json=self.file("p.json", {}))
             self.assertIsNotNone(problem, action)
         self.assertEqual(self.fake.calls, [])
@@ -190,10 +231,13 @@ class BrowserTest(unittest.TestCase):
             ("POST /v1/workloads/shop/proxy/rotate", 429,
              {"error": "too soon", "code": "change_ip_too_soon"}, "wait", llc.EXIT_BUSY),
             ("POST /v1/workloads/shop/proxy/rotate", 409, {"error": "nothing to rotate to"}, "second proxy", llc.EXIT_OTHER),
+            # the same refusals with only an error message, no code
+            ("POST /v1/workloads/shop/proxy/rotate", 429, {"error": "change_ip_too_soon"}, "wait", llc.EXIT_BUSY),
+            ("POST /v1/workloads/shop/proxy/rotate", 409, {"error": "needs_restart"}, "llc.py restart", llc.EXIT_USER),
         ]
         for key, status, payload, words, code in cases:
             self.fake.refuse = {key: (status, payload)}
-            _, problem, _ = self.run_llc(llc.proxy, action="rotate", id="shop")
+            _, problem, _ = self.run_llc(llc.proxy, action="rotate", id="shop", yes=True)
             self.assertIsNotNone(problem, payload)
             self.assertIn(words, problem.next, payload)
             self.assertEqual(problem.code, code, payload)
@@ -287,6 +331,100 @@ class BrowserTest(unittest.TestCase):
         self.assertIn("--force", problem.next)
         self.assertEqual(problem.code, llc.EXIT_USER)
 
+    def test_refusal_codes_are_known_from_the_message_too(self):
+        for payload in ({"error": "snapshot_key_changed"}, {"error": "x", "code": "snapshot_key_changed"}):
+            p = llc.status_problem(409, payload)
+            self.assertIn("pick another one", p.next, payload)
+            self.assertEqual(p.code, llc.EXIT_OTHER)
+        p = llc.status_problem(409, {"error": "profile_newer"})
+        self.assertIn("--force", p.next)
+
+    def test_owner_only_refusal_is_not_a_missing_permission(self):
+        p = llc.status_problem(403, {"error": "Profiles hold sign-ins. Only the workspace's people can export them."})
+        self.assertIn("no permission changes that", p.next)
+        self.assertNotIn("Agents page", p.next)
+        p = llc.status_problem(403, {"error": "This API key can't export or import browser profiles. "
+                                              "A person can give it the profiles permission on the Keys page."})
+        self.assertIn("profiles permission", p.next)
+
+    def test_import_and_copy_name_manage_when_that_is_what_was_refused(self):
+        src = self.tmp / "in.llcprofile"
+        src.write_bytes(b"x")
+        self.fake.refuse = {"POST /v1/workloads/shop/profile/import": (403, {"error": "This agent can't change shop."}),
+                            "POST /v1/workloads/shop/profile/copy": (403, {"error": "This agent can't change shop."})}
+        _, problem, _ = self.run_llc(llc.profile, action="import", id="shop", file=str(src), yes=True)
+        self.assertIn("Manage", problem.next)
+        _, problem, _ = self.run_llc(llc.profile, action="copy", id="shop", source="b1", yes=True)
+        self.assertIn("Manage", problem.next)
+
+    def test_an_import_refused_before_the_file_is_read_says_why(self):
+        src = self.tmp / "big.llcprofile"
+        src.write_bytes(os.urandom(8 << 20))  # more than the socket buffers take: the send gets cut
+        refusal = {"error": "This agent can't export or import browser profiles. A person can allow it on the Agents page."}
+        self.fake.early = {"POST /v1/workloads/shop/profile/import": (403, refusal)}
+        _, problem, _ = self.run_llc(llc.profile, action="import", id="shop", file=str(src), yes=True)
+        self.assertIsNotNone(problem)
+        self.assertEqual(problem.status, 403)
+        self.assertIn("profiles permission", problem.next)
+        self.assertNotIn("network", problem.next)
+        # after reading only the start of the file (its first entry)
+        self.fake.early = {"POST /v1/workloads/shop/profile/import": (
+            409, {"error": "This profile is from Chrome 155; this browser runs 154. Import anyway?"})}
+        self.fake.early_read = 64 << 10
+        _, problem, _ = self.run_llc(llc.profile, action="import", id="shop", file=str(src), yes=True)
+        self.assertEqual(problem.status, 409)
+        self.assertIn("--force", problem.next)
+        self.fake.early, self.fake.early_read = {"POST /v1/workloads/shop/profile/import": (
+            413, {"error": "That file is larger than this browser takes."})}, 0
+        _, problem, _ = self.run_llc(llc.profile, action="import", id="shop", file=str(src), yes=True)
+        self.assertEqual(problem.status, 413)
+
+    def test_an_import_through_a_proxy_goes_where_urllib_would(self):
+        saved = {k: os.environ.get(k) for k in ("http_proxy", "https_proxy", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY")}
+
+        def restore():
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        self.addCleanup(restore)
+        for k in saved:
+            os.environ.pop(k, None)
+        os.environ["http_proxy"] = "http://u%40x:p%3A1@proxy.example:3128"
+        conn, target, extra = llc.connection("http://api.example/v1/x?y=1", 5)
+        self.assertEqual((conn.host, conn.port), ("proxy.example", 3128))
+        self.assertEqual(target, "http://api.example/v1/x?y=1")
+        self.assertEqual(extra["Proxy-Authorization"], "Basic " + __import__("base64").b64encode(b"u@x:p:1").decode())
+        os.environ["https_proxy"] = "proxy.example:3128"
+        conn, target, extra = llc.connection("https://api.example/v1/x", 5)
+        self.assertEqual((conn.host, conn.port, conn._tunnel_host), ("proxy.example", 3128, "api.example"))
+        self.assertEqual((target, extra), ("/v1/x", {}))
+        os.environ["no_proxy"] = "api.example"
+        conn, target, _ = llc.connection("https://api.example/v1/x", 5)
+        self.assertEqual((conn.host, target), ("api.example", "/v1/x"))
+
+    def test_export_leaves_a_file_it_did_not_make_and_asks_nothing_of_the_browser(self):
+        target = self.tmp / "o.llcprofile"
+        part = self.tmp / "o.llcprofile.part"
+        part.write_bytes(b"another export")
+        _, problem, _ = self.run_llc(llc.profile, action="export", id="shop", out=str(target), yes=True)
+        self.assertIsNotNone(problem)
+        self.assertIn("already exists", problem.message)
+        self.assertEqual(part.read_bytes(), b"another export")
+        self.assertFalse(target.exists())
+        self.assertEqual(self.fake.calls, [])
+
+    def test_a_file_that_appears_meanwhile_is_not_overwritten(self):
+        target, part = self.tmp / "t.llcprofile", self.tmp / "t.llcprofile.part"
+        part.write_bytes(b"new")
+        target.write_bytes(b"theirs")
+        with self.assertRaises(llc.Problem) as cm:
+            llc.keep_as(part, target)
+        self.assertIn(str(part), cm.exception.message)
+        self.assertEqual(target.read_bytes(), b"theirs")
+        self.assertEqual(part.read_bytes(), b"new")
+
     def test_storage_full(self):
         self.fake.refuse = {"POST /v1/workloads/shop/profile/snapshots": (
             507, {"error": "Not enough room in this browser's storage. Grow it or delete a snapshot."})}
@@ -297,12 +435,15 @@ class BrowserTest(unittest.TestCase):
 
     def test_cookies_send_the_list_and_print_only_the_count(self):
         items = [{"name": "sid", "value": "cookie-secret-77", "domain": ".example.com", "path": "/"}]
-        res, problem, text = self.run_llc(llc.cookies, id="shop", json=self.file("c.json", items))
+        _, problem, _ = self.run_llc(llc.cookies, id="shop", json=self.file("c.json", items))
+        self.assertIn("--yes", problem.message)
+        self.assertEqual(self.fake.calls, [])
+        res, problem, text = self.run_llc(llc.cookies, id="shop", json=self.file("c.json", items), yes=True)
         self.assertIsNone(problem)
         self.assertEqual(self.fake.calls[-1][1:4:2], ("/v1/workloads/shop/cookies", items))
         self.assertEqual(res["added"], 1)
         self.assertNotIn("cookie-secret-77", text)
-        _, problem, _ = self.run_llc(llc.cookies, id="shop", json=self.file("d.json", {"name": "x"}))
+        _, problem, _ = self.run_llc(llc.cookies, id="shop", json=self.file("d.json", {"name": "x"}), yes=True)
         self.assertIsNotNone(problem)
 
 

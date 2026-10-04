@@ -13,19 +13,27 @@ Claude Code users get the update only when the version changes.
   lists the languages offered and the time zone names. `browsers.md` says how.
 - Proxies (`references/proxies.md`): `llc.py proxy show|set|rotate|clear|remove`.
   HTTP, HTTPS and SOCKS5 proxies with logins, mobile proxies with a change-IP
-  address and its shortest interval, rotation by hand, on a timer or per
-  Browser API session. Logins are written once and never shown again. It
-  needs the Proxies permission, which only a person gives (Agents page, Keys
-  page); what a proxy covers and what it doesn't is spelled out.
+  address (called with `GET` or `POST`) and its shortest interval, rotation
+  by hand (`--yes`: it drops open connections), on a timer or per Browser API
+  session. Logins are written once and never shown again; a login written
+  into a proxy address is refused before anything is sent, in `proxy set`,
+  `create` and `set` alike. It needs the Proxies permission, which only a
+  person gives (Agents page, Keys page); what a proxy covers and what it
+  doesn't is spelled out.
 - Profiles (`references/profiles.md`): `llc.py profile show|snapshot|restore|rm`
-  and `export|import|copy`; `llc.py cookies ID --json FILE` adds cookies to a
-  running browser. Export, import and copy need the Profiles permission; an
-  export's password comes from an environment variable, and the file is saved
-  readable only by you. A browser made earlier asks for one restart first.
+  and `export|import|copy`; `llc.py cookies ID --json FILE --yes` adds cookies
+  to a running browser. Export, import and copy need the Profiles permission
+  (import and copy also Manage, or Create on a browser you made); an export's
+  password comes from an environment variable, and the file is saved readable
+  only by you, never over another file, a half-saved one included. An import
+  refused before the whole file went out says why, instead of a network
+  error. A browser made earlier asks for one restart first.
 - `SKILL.md`: rule 10 (profiles hold sign-ins; proxy logins in a file you
   delete; never work around the two permissions), three rows in the table,
   and the `browser_proxy` and `browser_profile` tools. `llc.py` answers each
-  new refusal (403, 409, 429, 507) with what to do.
+  new refusal (403, 409, 413, 429, 507) with what to do, from its code or
+  its message; a workspace that keeps exports to its own people is told
+  apart from a missing permission.
 
 ## 1.9.0
 

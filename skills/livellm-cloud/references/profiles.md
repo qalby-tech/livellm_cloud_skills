@@ -15,12 +15,18 @@ asked for exactly that, and never upload an exported file anywhere.
 |---|---|
 | `profile show` | nothing extra |
 | `snapshot`, `restore`, `rm` | Create (on a browser you made) or Manage everything |
-| `export`, `import`, `copy` | the **Profiles** permission |
+| `export` | the **Profiles** permission |
+| `import`, `copy` | the **Profiles** permission, and Create (on a browser you made) or Manage everything for the browser that receives it |
 | `cookies` | Connect |
 
 No sign-in has the Profiles permission on its own, not even full access: a
 person turns it on for this agent on the console's Agents page (for an API key,
 on the Keys page). Without it you get a 403: tell the user.
+
+A workspace can also keep exports to its own people: then a 403 "Profiles hold
+sign-ins. Only the workspace's people can export them." refuses an export, or a
+copy out of it, whatever permissions you have. Tell the user; asking for a
+permission won't change it.
 
 A browser made before profiles were offered answers 409 "Restart this browser
 once to turn on profiles". Ask the user, then `llc.py restart ID --yes`: its
@@ -98,7 +104,7 @@ python3 scripts/llc.py profile copy shop-2 --from shop --yes
 ```
 
 ```
-python3 scripts/llc.py cookies shop --json cookies.json
+python3 scripts/llc.py cookies shop --json cookies.json --yes
 rm cookies.json
 ```
 

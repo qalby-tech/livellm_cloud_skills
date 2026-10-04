@@ -62,6 +62,8 @@ keeps working.
 itself refuses, and nothing goes out direct in the meantime. Tell the user
 which proxy (`via`), and let them fix it or `proxy clear`. A 429 on rotate is a
 mobile proxy asked for a new IP too soon: wait its minimum time.
+`change_ip_failed` on every rotation: check whether the provider wants its
+change-IP address called with `GET` or `POST` (`changeIpMethod`).
 
 **A profile action answers 409 "Restart this browser once".** The browser was
 made before profiles: ask the user, then `restart ID --yes`. A 507 means its
