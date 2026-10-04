@@ -1143,7 +1143,7 @@ def upload(path, tok, f, headers, timeout=ARCHIVE_TIMEOUT):
                 if not chunk:
                     break
                 sock.sendall(chunk)
-        except (BrokenPipeError, ConnectionResetError) as e:
+        except (BrokenPipeError, ConnectionResetError, ssl.SSLEOFError) as e:
             cut = e  # the server stopped taking the file; its answer may be waiting
         try:
             if sent is not None or cut is not None:
