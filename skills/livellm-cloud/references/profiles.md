@@ -30,8 +30,9 @@ permission won't change it.
 
 A browser made before profiles were offered answers 409 "Restart this browser
 once to turn on profiles". Ask the user, then `llc.py restart ID --yes`: its
-tabs close, the profile and sign-ins are kept. `profile show` says
-`"profilesReady": true` once it can.
+tabs close, the profile and sign-ins are kept. `proxy show ID` says
+`"profilesReady": true` once it can, and `profile show` answers instead of the
+409.
 
 ## Snapshots
 
