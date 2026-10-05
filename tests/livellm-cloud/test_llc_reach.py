@@ -487,12 +487,55 @@ class ReachTest(unittest.TestCase):
         out, _, _ = self.run_llc(llc.link, **self.link_args("desk", "cache", remove=True))
         self.assertEqual(fake.writes(), [("PATCH", "/v1/workloads/desk", {"desktop": {"databases": None}})])
         self.assertIn("nothing restarts", out["note"])
+        self.assertIn("desk no longer reaches cache", out["note"])
         fake.calls.clear()
-        # a link with variables: taking it out changes the app's variables, so set does that
-        _, problem, _ = self.run_llc(llc.link, **self.link_args("web", "db", remove=True))
-        self.assertIn("takes variables from db", problem.message)
-        self.assertIn("llc.py set web", problem.next)
+        # a link with variables goes too, as with the CLI: its variables leave and the app restarts
+        out, problem, _ = self.run_llc(llc.link, **self.link_args("web", "db", remove=True))
+        self.assertIsNone(problem)
+        self.assertEqual(fake.writes(), [("PATCH", "/v1/workloads/web", {"pod": {"databases": None}})])
+        self.assertIn("db's variables leave web: it restarts", out["note"])
+        self.assertNotIn("nothing restarts", out["note"])
+        self.assertEqual(out["removed"], ["db"])
+
+    def test_link_remove_says_what_still_reaches_the_database(self):
+        both = [
+            {"id": "web", "type": "pod", "reachableFrom": [], "pod": {"stack": "shop", "databases": [{"id": "db"}]}},
+            {"id": "api", "type": "pod", "reachableFrom": [], "pod": {"stack": "shop", "databases": [{"id": "db"}]}},
+            {"id": "solo", "type": "pod", "reachableFrom": [], "pod": {"databases": [{"id": "db"}], "dependsOn": ["db"]}},
+            {"id": "db", "type": "storage", "storage": {"engine": "postgres"}},
+        ]
+        fake = self.use(workloads=both)
+        # another service of its Composable App links it: the whole app still reaches it
+        out, _, _ = self.run_llc(llc.link, **self.link_args("web", "db", remove=True))
+        self.assertEqual(fake.writes(), [("PATCH", "/v1/workloads/web", {"pod": {"databases": None}})])
+        self.assertIn("web still reaches db: api of shop links it, and the whole app with it", out["note"])
+        self.assertNotIn("no longer reaches", out["note"])
+        self.assertEqual(out["stillReaches"], ["db"])
+        # it waits for it: dependsOn reaches it too
+        out, _, _ = self.run_llc(llc.link, **self.link_args("solo", "db", remove=True))
+        self.assertIn("solo still reaches db: it waits for it (dependsOn)", out["note"])
+        self.assertNotIn("no longer reaches", out["note"])
+
+    def test_set_refuses_what_a_database_or_a_machine_cannot_take_before_sending(self):
+        fake = self.use(workloads=self.LINKED)
+        _, problem, _ = self.run_llc(llc.set_settings, id="db", json=self.file({"reachableFrom": ["web"]}), yes=True)
+        self.assertIn("reached only by what links it", problem.message)
+        self.assertIn("llc.py link APP db", problem.next)
+        _, problem, _ = self.run_llc(llc.set_settings, id="cache", json=self.file(
+            {"storage": {"memory": "1Gi"}, "reachableFrom": ["*"]}), yes=True)
+        self.assertIn("reached only by what links it", problem.message)
+        for block, kind in (("vm", "a machine"), ("desktop", "a Desktop App")):
+            _, problem, _ = self.run_llc(llc.set_settings, id="runner", json=self.file(
+                {block: {"databases": [{"id": "db", "env": {"U": "url"}}]}}), yes=True)
+            self.assertIn(f"{kind} gets no variables from a link", problem.message)
         self.assertEqual(fake.writes(), [])
+        # a setting on what is no database, and a reach-only link, go through
+        _, problem, _ = self.run_llc(llc.set_settings, id="runner", json=self.file({"reachableFrom": ["web"]}), yes=True)
+        self.assertIsNone(problem)
+        _, problem, _ = self.run_llc(llc.set_settings, id="runner", json=self.file({"vm": {"databases": [{"id": "db"}]}}),
+                                     yes=True)
+        self.assertIsNone(problem)
+        self.assertEqual(len(fake.writes()), 2)
 
     def test_link_that_changes_nothing_sends_nothing(self):
         fake = self.use(workloads=self.LINKED)

@@ -850,7 +850,16 @@ def set_settings(args):
         raise Problem("the file should hold a JSON object with the settings that change", "fix the file", EXIT_OTHER)
     reminder = check_settings_proxy(changes, args.json)
     check_body_reach(changes, args.json, patch=True)
-    patch_workload(args.id, changes, token())
+    check_patch_links(changes, args.json)
+    tok = token()
+    if changes.get("reachableFrom") not in (None, []):
+        # a database takes none: known by the file's own storage block, or
+        # else by the workspace (read only when a setting is sent)
+        is_db = "storage" in changes or any(
+            x.get("id") == args.id and x.get("type") == "storage" for x in workspace_workloads(tok))
+        if is_db:
+            raise db_reach_problem(args.id, args.json)
+    patch_workload(args.id, changes, tok)
     out({"changed": args.id, **({"delete": reminder} if reminder else {})})
 
 
@@ -944,6 +953,16 @@ def check_body_links(body, typ, where):
             raise Problem(f"{where}: databases ({d.get('id')}): {machine_kind(typ)} gets no variables from a link: "
                           "it only lets it reach the database",
                           'send {"id": "<database>"} alone', EXIT_OTHER)
+
+
+def check_patch_links(changes, where):
+    """The same refusal for a set file: its vm or desktop block is a machine's
+    or a Desktop App's, so a link there carrying env is refused before sending."""
+    if not isinstance(changes, dict):
+        return
+    for block, typ in (("vm", "vm-"), ("desktop", "desktop")):
+        if isinstance(changes.get(block), dict):
+            check_body_links(changes[block], typ, f"{where} ({block})")
 
 
 def split_names(text):
@@ -1185,9 +1204,10 @@ def reach_view(w, workloads, current, workspace):
 
 def link(args):
     """Link databases to an app, a machine or a Desktop App so that it reaches
-    them, with no variables (reach only: nothing restarts), or take such links
-    out with --remove. Links with variables are kept as they are, and are
-    never taken out here (that changes the app's variables: set)."""
+    them, with no variables (reach only: nothing restarts), or take links out
+    with --remove. Adding keeps the links with variables as they are; taking
+    out a link with variables takes those variables from the app, which
+    restarts it (said in the note, as the CLI does)."""
     tok = token()
     workloads = workspace_workloads(tok)
     w = next((x for x in workloads if x.get("id") == args.id), None)
@@ -1215,18 +1235,14 @@ def link(args):
                           EXIT_OTHER)
     if not args.yes:
         raise Problem("changing what a resource links needs --yes",
-                      "a link lets the resource reach the database, and taking one out cuts it off: ask the user and "
+                      "a link lets the resource reach the database, and taking one out cuts it off (and takes its "
+                      "variables away, if it has any, which restarts the app): ask the user and "
                       "wait for their agreement (SKILL.md rule 11), then pass --yes", EXIT_OTHER)
     current = link_list(w)
     linked = [d.get("id") for d in current]
+    with_env = []
     if args.remove:
         with_env = [d.get("id") for d in current if d.get("env") and d.get("id") in names]
-        if with_env:
-            raise Problem(f"{args.id} takes variables from {', '.join(with_env)}: taking the link out takes them away "
-                          "and restarts it",
-                          "that is a change of the app's variables, not of what it reaches: with the user's agreement, "
-                          f"send the links {args.id} keeps with llc.py set {args.id} --json FILE --yes "
-                          '({"pod": {"databases": [...]}}, copied from ls)', EXIT_OTHER)
         new = [d for d in current if d.get("id") not in names]
         missing = [d for d in names if d not in linked]
     else:
@@ -1244,7 +1260,32 @@ def link(args):
     if missing:
         answer["notLinked" if args.remove else "alreadyLinked"] = missing
     if args.remove:
-        answer["note"] = f"{args.id} no longer reaches them; nothing restarts"
+        removed = [d for d in names if d in linked]
+        answer["removed"] = removed
+        after = [dict(x, **{block: dict(x.get(block) or {}, databases=new or None)}) if x is w else x
+                 for x in workloads]
+        notes, still = [], []
+        for d in with_env:
+            notes.append(f"{d}'s variables leave {args.id}: it restarts")
+        for d in removed:
+            if by_id.get(d) is None:
+                continue
+            why = next((c for c in implicit_callers(after, by_id[d]) if c.get("id") == args.id), None)
+            if why:
+                if why.get("via"):
+                    how = f"{why['via']} of {why['app']} {why['why']}, and the whole app with it"
+                elif why["why"] == "waits for it":
+                    how = "it waits for it (dependsOn)"
+                else:
+                    how = f"it {why['why']}"
+                still.append(d)
+                notes.append(f"{args.id} still reaches {d}: {how}")
+        gone = [d for d in removed if d not in still]
+        if gone:
+            notes.append(f"{args.id} no longer reaches {', '.join(gone)}" + ("" if with_env else "; nothing restarts"))
+        if still:
+            answer["stillReaches"] = still
+        answer["note"] = "; ".join(notes)
     else:
         whole = f", with its whole Composable App {stack_of(w)}" if stack_of(w) else ""
         answer["note"] = f"reach only: {args.id} reaches them{whole}; no variables are added and nothing restarts"
