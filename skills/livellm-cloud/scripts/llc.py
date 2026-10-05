@@ -26,7 +26,8 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py restore ID BACKUP --yes                         (a machine: in place, stopped)
     llc.py stop ID --yes | start ID | set ID --json CHANGES --yes
     llc.py reach ID                            (who reaches it inside the workspace; ID or a Composable App's name)
-    llc.py reach ID (--from a,b | --from '*' | --none | --add X | --remove X) --yes
+    llc.py reach ID (--from a,b | --from '*' | --none | --add X | --remove X) --yes   (not a database)
+    llc.py link ID DB [DB...] [--remove] --yes (an app, machine or Desktop App reaches a database; no variables)
     llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS]
                    [--host H | --region R] --yes
     llc.py browser-api show NAME | (add | remove) NAME BROWSER --yes
@@ -167,6 +168,9 @@ def status_problem(status, payload):
     if status == 409:
         return Problem(message, "if another agent holds the machine, wait until the time the message names or use another; "
                        "otherwise the resource is mid-change: wait a few seconds and retry once", EXIT_BUSY, status)
+    if status == 422 and DB_REACH in message:
+        return Problem(message, "leave reachableFrom out for a database; link it from what uses it instead: "
+                       "llc.py link APP DB --yes, once the user agreed (SKILL.md rule 11)", EXIT_OTHER, status)
     if status == 422:
         return Problem(message, "fix the field the message names; do not retry unchanged", EXIT_OTHER, status)
     if status >= 500:
@@ -176,7 +180,11 @@ def status_problem(status, payload):
 
 NETWORK_NEXT = ("letting one resource reach another inside the workspace needs the Network permission: ask the user, "
                 "saying what would reach what and why; a person turns on Network for this key on the Keys page, or for this "
-                "agent on the Agents page, or sets Reachable from in the console. Never work around it, a public address included")
+                "agent on the Agents page, or sets Reachable from (or links the database) in the console. Never work around "
+                "it, a public address included")
+
+# The API's words when reachableFrom is sent for a database (422).
+DB_REACH = "a database is reached only by what links it"
 
 
 def inside_problem(status, code, message):
@@ -527,8 +535,9 @@ def resources(tok):
             "createdBy": (w.get("createdBy") or {}).get("name", "a person"),
             "endpoints": live.get("endpoints", []),
             "ssh": live.get("ssh", ""),
-            # an app's database links as its settings hold them, and the apps a database serves
-            **({"databases": (w.get("pod") or {})["databases"]} if (w.get("pod") or {}).get("databases") else {}),
+            # the database links of an app, a machine or a Desktop App as its settings hold them,
+            # and the apps a database serves
+            **({"databases": link_list(w)} if link_list(w) else {}),
             **({"usedBy": live["usedBy"]} if live.get("usedBy") else {}),
             # a Camoufox browser says so; a Chrome one carries no engine (a Browser API has none)
             **({"engine": "camoufox"} if (w.get("browser") or {}).get("engine") == "camoufox" else {}),
@@ -577,7 +586,8 @@ def create(args):
     body = json.loads(Path(args.json).read_text())
     body = with_engine(body, args.type, getattr(args, "engine", None))
     reminder = None if args.type == "apps" else check_settings_proxy(body, args.json)
-    check_body_reach(body, args.json)
+    check_body_reach(body, args.json, typ=args.type)
+    check_body_links(body, args.type, args.json)
     if args.type == "apps":
         # several apps at once, all or nothing: a list of app settings, or
         # {"apps": [...], "databases": [...]} with the databases to make with them
@@ -864,20 +874,76 @@ def check_reach(value, where):
         raise Problem(f"{where}: reachableFrom lists {', '.join(twice)} twice", "name each resource once", EXIT_OTHER)
 
 
-def check_body_reach(body, where, patch=False):
+def db_reach_problem(db, where=None):
+    """A database has no reachableFrom: what links it reaches it, nothing else.
+    The API's own words (422), checked before anything is sent."""
+    return Problem(f"{where + ': ' if where else ''}reachableFrom: {DB_REACH}: add {db} to the databases of the app, "
+                   "machine or Desktop App that uses it",
+                   f"leave reachableFrom out; once the user agreed (SKILL.md rule 11), link it: llc.py link APP {db} --yes",
+                   EXIT_OTHER)
+
+
+def check_body_reach(body, where, patch=False, typ=None):
     """A create or set file keeps its reachableFrom as written (every entry of
     a create apps file too); only its shape is checked here. In a set, null
-    closes the resource like []."""
-    entries = []
+    closes the resource like []. A database (a create storage file, or the
+    databases of a create apps file) takes none: [] or null pass, as the API
+    drops them, and anything else is refused with the API's words."""
+    entries = []  # (entry, is a database)
     if isinstance(body, list):
-        entries = body
+        entries = [(e, False) for e in body]
     elif isinstance(body, dict):
-        entries = [body] + [e for k in ("apps", "databases") for e in (body.get(k) or []) if isinstance(body.get(k), list)]
-    for e in entries:
+        entries = [(body, typ == "storage")] + [
+            (e, k == "databases") for k in ("apps", "databases") if isinstance(body.get(k), list) for e in body[k]]
+    for e, is_db in entries:
         if isinstance(e, dict) and "reachableFrom" in e:
+            if is_db:
+                if e["reachableFrom"] not in (None, []):
+                    raise db_reach_problem(e.get("id", "the database"), where)
+                continue
             if patch and e["reachableFrom"] is None:
                 continue
             check_reach(e["reachableFrom"], f"{where} ({e.get('id', 'the resource')})")
+
+
+# The types that may link databases, and where their settings keep the links.
+LINK_BLOCK = {"pod": "pod", "desktop": "desktop"}  # and every vm-* type: "vm"
+MAX_LINKS = 8
+
+
+def link_block(t):
+    """Where a type keeps its database links ("pod", "vm" or "desktop"), or
+    None for a type that links none."""
+    t = t or ""
+    return "vm" if t.startswith("vm-") else LINK_BLOCK.get(t)
+
+
+def link_list(w):
+    """A resource's database links as its settings hold them."""
+    block = link_block(w.get("type"))
+    links = ((w.get(block) or {}).get("databases") if block else None) or []
+    return [d for d in links if isinstance(d, dict)]
+
+
+def machine_kind(t):
+    return "a Desktop App" if t == "desktop" else "a machine"
+
+
+def check_body_links(body, typ, where):
+    """A machine or a Desktop App links a database to reach it, never for
+    variables: a link of theirs carrying env is refused with the API's words."""
+    if not isinstance(body, dict) or link_block(typ) not in ("vm", "desktop"):
+        return
+    links = body.get("databases")
+    if links is None:
+        return
+    if not isinstance(links, list):
+        raise Problem(f"{where}: databases should be a list of {{\"id\": \"<database>\"}}", "fix the file", EXIT_OTHER)
+    for d in links:
+        if isinstance(d, dict) and d.get("env"):
+            raise Problem(f"{where}: databases ({d.get('id')}): {machine_kind(typ)} gets no variables from a link: "
+                          "it only lets it reach the database",
+                          'send {"id": "<database>"} alone', EXIT_OTHER)
 
 
 def split_names(text):
@@ -915,16 +981,16 @@ def implicit_callers(spec_workloads, target):
     other services of its own Composable App; the apps that link it or wait for
     it (or for any service of its Composable App), each with its whole
     Composable App (a service that doesn't link it itself names the one that
-    does in "via"); a Browser API that drives it, with what reaches that
-    Browser API in "through"."""
+    does in "via"); the machines and Desktop Apps that link it (a database);
+    a Browser API that drives it, with what reaches that Browser API in
+    "through"."""
     group = reach_group(spec_workloads, target)
     tid = target.get("id")
 
     def link_why(x):
-        pod = x.get("pod") or {}
-        if any(isinstance(d, dict) and d.get("id") in group for d in pod.get("databases") or []):
+        if any(d.get("id") in group for d in link_list(x)):
             return "links it"
-        if any(d in group for d in pod.get("dependsOn") or []):
+        if x.get("type") == "pod" and any(d in group for d in (x.get("pod") or {}).get("dependsOn") or []):
             return "waits for it"
         return ""
 
@@ -954,6 +1020,9 @@ def implicit_callers(spec_workloads, target):
             if via:
                 e["via"] = via
             found.append(e)
+        elif link_block(x.get("type")) in ("vm", "desktop"):
+            if link_why(x):
+                found.append({"id": xid, "why": "links it"})
         elif x.get("type") == BROWSER_API and target.get("type") == "browser":
             c = x.get("controller") or {}
             if c.get("autodiscover") or tid in (c.get("browsers") or []):
@@ -1021,6 +1090,9 @@ def inside_addresses(res, w):
     return []
 
 
+DB_NOTE = ("a database is reached only by what links it (alsoFrom); to let an app, a machine or a Desktop App "
+           "reach it, link it once the user agreed: llc.py link APP DB --yes")
+
 UNSET_NOTE = ("not set: made before this setting existed. Until the platform gave it a value this meant the whole "
               "workspace; after that, nothing. Set it with --from or --none")
 
@@ -1045,6 +1117,8 @@ def reach(args):
     if not whole_list and not adds and not removes:
         out(reach_view(w, workloads, current, ws.get("name")))
         return
+    if w.get("type") == "storage":
+        raise db_reach_problem(wid)
     if not args.yes:
         raise Problem("changing who reaches a resource needs --yes",
                       "who may reach a resource is the user's call: ask the user and wait for their agreement "
@@ -1094,14 +1168,83 @@ def reach_view(w, workloads, current, workspace):
     stack = stack_of(w)
     if stack:
         view["app"] = stack
-    view["reachableFrom"] = current
-    if current is None:
-        view["note"] = UNSET_NOTE
     also = implicit_callers(workloads, w)
+    if w.get("type") == "storage":
+        # no setting: what links it reaches it, nothing else
+        view["note"] = DB_NOTE
+        current = None
+    else:
+        view["reachableFrom"] = current
+        if current is None:
+            view["note"] = UNSET_NOTE
     view["alsoFrom"] = also
     if (current or also) and workspace:
         view["addresses"] = inside_addresses(f"{workspace}-{w.get('id')}", w)
     return view
+
+
+def link(args):
+    """Link databases to an app, a machine or a Desktop App so that it reaches
+    them, with no variables (reach only: nothing restarts), or take links out
+    with --remove. Links with variables already there are kept as they are."""
+    tok = token()
+    workloads = workspace_workloads(tok)
+    w = next((x for x in workloads if x.get("id") == args.id), None)
+    if w is None:
+        services = sorted(x.get("id") for x in workloads if stack_of(x) == args.id)
+        if services:
+            raise Problem(f"{args.id} is a Composable App: a link goes on one of its services ({', '.join(services)})",
+                          "name the service that uses the database; the whole app reaches it", EXIT_OTHER)
+        raise Problem(f"no resource {args.id}", "run: llc.py ls, the id is probably wrong", EXIT_OTHER)
+    block = link_block(w.get("type"))
+    if block is None:
+        raise Problem(f"{args.id} is a {w.get('type')}: only an app, a machine or a Desktop App links a database",
+                      "link the database from what uses it", EXIT_OTHER)
+    names = list(dict.fromkeys(d.strip() for d in args.databases if d.strip()))
+    if not names:
+        raise Problem("name the databases to link", "llc.py link ID DB [DB...] --yes", EXIT_OTHER)
+    by_id = {x.get("id"): x for x in workloads}
+    for d in names:
+        x = by_id.get(d)
+        if x is None and not args.remove:
+            raise Problem(f"no database {d}", "run: llc.py ls --type storage, the id is probably wrong", EXIT_OTHER)
+        if x is not None and x.get("type") != "storage":
+            raise Problem(f"{d} is a {x.get('type')}, not a database: only databases are linked",
+                          f"to let {args.id} reach it, ask the user, then: llc.py reach {d} --add {args.id} --yes",
+                          EXIT_OTHER)
+    if not args.yes:
+        raise Problem("changing what a resource links needs --yes",
+                      "a link lets the resource reach the database, and taking one out cuts it off: ask the user and "
+                      "wait for their agreement (SKILL.md rule 11), then pass --yes", EXIT_OTHER)
+    current = link_list(w)
+    linked = [d.get("id") for d in current]
+    if args.remove:
+        new = [d for d in current if d.get("id") not in names]
+        missing = [d for d in names if d not in linked]
+    else:
+        new = current + [{"id": d} for d in names if d not in linked]
+        missing = [d for d in names if d in linked]
+    if new == current:
+        out({"id": args.id, "databases": current,
+             "already": "none of them is linked" if args.remove else "every one is linked already"})
+        return
+    if len(new) > MAX_LINKS:
+        raise Problem(f"{args.id} would link {len(new)} databases: at most {MAX_LINKS}",
+                      "take a link out first, with the user's agreement", EXIT_OTHER)
+    patch_workload(args.id, {block: {"databases": new or None}}, tok)
+    answer = {"id": args.id, "databases": new, "before": current}
+    if missing:
+        answer["notLinked" if args.remove else "alreadyLinked"] = missing
+    gone_env = [d.get("id") for d in current if d.get("env") and d.get("id") in names] if args.remove else []
+    if gone_env:
+        answer["note"] = (f"the variables {args.id} took from {', '.join(gone_env)} are gone: it restarts once, "
+                          "and no longer reaches them")
+    elif args.remove:
+        answer["note"] = f"{args.id} no longer reaches them; nothing restarts"
+    else:
+        whole = f", with its whole Composable App {stack_of(w)}" if stack_of(w) else ""
+        answer["note"] = f"reach only: {args.id} reaches them{whole}; no variables are added and nothing restarts"
+    out(answer)
 
 
 # A Browser API is one address over several browsers; its type is "controller".
@@ -2153,7 +2296,7 @@ def main():
     set_p.add_argument("--yes", action="store_true", required=True, help="the user agreed to this change")
     set_p.set_defaults(fn=set_settings)
 
-    reach_p = sub.add_parser("reach", help="who may reach a resource from inside the workspace; change it with the user's agreement")
+    reach_p = sub.add_parser("reach", help="who may reach a resource from inside the workspace; change it with the user's agreement (a database: link)")
     reach_p.add_argument("id")
     reach_p.add_argument("--from", dest="source", help="exactly these resources, comma-separated, or '*' for the whole workspace")
     reach_p.add_argument("--none", action="store_true", help="nothing in the workspace reaches it")
@@ -2161,6 +2304,13 @@ def main():
     reach_p.add_argument("--remove", help="not these resources any more, comma-separated")
     reach_p.add_argument("--yes", action="store_true", help="any change: the user agreed to it")
     reach_p.set_defaults(fn=reach)
+
+    link_p = sub.add_parser("link", help="let an app, a machine or a Desktop App reach databases (no variables); --remove takes links out")
+    link_p.add_argument("id")
+    link_p.add_argument("databases", nargs="+")
+    link_p.add_argument("--remove", action="store_true", help="take these links out")
+    link_p.add_argument("--yes", action="store_true", help="any change: the user agreed to it")
+    link_p.set_defaults(fn=link)
 
     bapi_p = sub.add_parser("browser-api", help="one address over several browsers: create, show, add, remove")
     bapi_p.add_argument("action", choices=["create", "show", "add", "remove"])

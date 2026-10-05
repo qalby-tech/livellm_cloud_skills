@@ -25,11 +25,13 @@ spec = importlib.util.spec_from_file_location("llc", SCRIPT)
 llc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(llc)
 
-# A workspace as the API answers it. `old` was made before the setting existed.
+# A workspace as the API answers it. `old` was made before the setting existed;
+# a database never has one: what links it reaches it.
 WORKLOADS = [
     {"id": "web", "type": "pod", "reachableFrom": [], "pod": {"databases": [{"id": "db", "env": {"DATABASE_URL": "url"}}]}},
     {"id": "worker", "type": "pod", "reachableFrom": ["web"], "pod": {"dependsOn": ["db"]}},
-    {"id": "db", "type": "storage", "reachableFrom": ["web"], "storage": {"engine": "postgres"}},
+    {"id": "db", "type": "storage", "storage": {"engine": "postgres"}},
+    {"id": "api", "type": "pod", "reachableFrom": ["web"], "pod": {"ports": [{"port": 8080}]}},
     {"id": "old", "type": "vm-ubuntu"},
     {"id": "shop-web", "type": "pod", "reachableFrom": ["*"], "pod": {"stack": "shop"}},
     {"id": "shop-api", "type": "pod", "reachableFrom": ["*"], "pod": {"stack": "shop"}},
@@ -82,7 +84,7 @@ class FakeAPI:
 
 
 def reach_args(**kw):
-    base = {"id": "db", "source": None, "none": False, "add": None, "remove": None, "yes": False}
+    base = {"id": "api", "source": None, "none": False, "add": None, "remove": None, "yes": False}
     base.update(kw)
     return base
 
@@ -130,9 +132,8 @@ class ReachTest(unittest.TestCase):
     def test_show_gives_the_setting_who_else_reaches_it_and_its_inside_addresses(self):
         self.use()
         out, _, _ = self.run_llc(llc.reach, **reach_args())
-        self.assertEqual(out, {"id": "db", "type": "storage", "reachableFrom": ["web"],
-                               "alsoFrom": [{"id": "web", "why": "links it"}, {"id": "worker", "why": "waits for it"}],
-                               "addresses": [{"host": "acme-db-rw", "port": 5432}]})
+        self.assertEqual(out, {"id": "api", "type": "pod", "reachableFrom": ["web"], "alsoFrom": [],
+                               "addresses": [{"host": "acme-api", "port": 8080}]})
         out, _, _ = self.run_llc(llc.reach, **reach_args(id="pool"))
         self.assertEqual(out["addresses"], [{"host": "acme-pool", "port": 8000}])
         # nothing reaches it: no address to hand out
@@ -149,7 +150,8 @@ class ReachTest(unittest.TestCase):
         self.assertIsNone(problem)
         self.assertIsNone(out["reachableFrom"])
         self.assertIn("not set", out["note"])
-        self.assertEqual(out["alsoFrom"], [{"id": "web", "why": "links it"}, {"id": "worker", "why": "waits for it"}])
+        self.assertEqual(out["alsoFrom"], [])
+        self.assertNotIn("addresses", out)
 
     def test_show_names_same_app_and_the_browser_api_with_what_reaches_it(self):
         self.use()
@@ -220,7 +222,7 @@ class ReachTest(unittest.TestCase):
             fake.calls.clear()
             out, problem, _ = self.run_llc(llc.reach, **reach_args(yes=True, **kw))
             self.assertIsNone(problem, kw)
-            self.assertEqual(fake.writes(), [("PATCH", "/v1/workloads/db", {"reachableFrom": want})], kw)
+            self.assertEqual(fake.writes(), [("PATCH", "/v1/workloads/api", {"reachableFrom": want})], kw)
             self.assertEqual((out["reachableFrom"], out["before"]), (want, ["web"]), kw)
 
     def test_none_sends_an_empty_list_never_null(self):
@@ -283,7 +285,7 @@ class ReachTest(unittest.TestCase):
     def test_a_refused_change_asks_the_user_for_network(self):
         refusal = {"error": "This agent can't let web reach db inside the workspace. A person can turn on Network for it on the Agents page.",
                    "code": "network_permission"}
-        self.use({"PATCH /v1/workloads/db": (403, refusal)})
+        self.use({"PATCH /v1/workloads/api": (403, refusal)})
         _, problem, _ = self.run_llc(llc.reach, **reach_args(add="worker", yes=True))
         self.assertEqual((problem.status, problem.code), (403, llc.EXIT_USER))
         self.assertIn("ask the user", problem.next)
@@ -307,19 +309,19 @@ class ReachTest(unittest.TestCase):
 
     def test_create_keeps_reachable_from_as_written(self):
         fake = self.use()
-        body = {"id": "cache", "engine": "redis", "reachableFrom": ["web"]}
-        _, problem, _ = self.run_llc(llc.create, type="storage", json=self.file(body), yes=True, join=None)
+        body = {"id": "b2", "reachableFrom": ["web"]}
+        _, problem, _ = self.run_llc(llc.create, type="browser", json=self.file(body), yes=True, join=None, engine=None)
         self.assertIsNone(problem)
-        self.assertEqual(fake.writes(), [("POST", "/v1/workloads/storage", body)])
+        self.assertEqual(fake.writes(), [("POST", "/v1/workloads/browser", body)])
         fake.calls.clear()
         body = {"id": "web2", "image": "nginx", "reachableFrom": []}
         self.run_llc(llc.create, type="pod", json=self.file(body), yes=True, join=None)
         self.assertEqual(fake.writes(), [("POST", "/v1/workloads/pod", body)])
 
-    def test_create_apps_keeps_it_on_every_app_and_database(self):
+    def test_create_apps_keeps_it_on_every_app(self):
         fake = self.use({"POST /v1/workloads": (202, {"created": ["a"], "databases": ["a-db"]})})
         body = {"apps": [{"id": "a", "image": "x", "reachableFrom": ["*"], "databases": [{"id": "a-db", "env": {"U": "url"}}]}],
-                "databases": [{"id": "a-db", "engine": "postgres", "reachableFrom": ["worker"]}]}
+                "databases": [{"id": "a-db", "engine": "postgres"}]}
         _, problem, _ = self.run_llc(llc.create, type="apps", json=self.file(body), yes=True, join=None)
         self.assertIsNone(problem)
         self.assertEqual(fake.writes(), [("POST", "/v1/workloads", body)])
@@ -349,7 +351,8 @@ class ReachTest(unittest.TestCase):
         self.use()
         out, _, _ = self.run_llc(llc.ls, type=None)
         by = {r["id"]: r for r in out["resources"]}
-        self.assertEqual(by["db"]["reachableFrom"], ["web"])
+        self.assertEqual(by["api"]["reachableFrom"], ["web"])
+        self.assertNotIn("reachableFrom", by["db"])
         self.assertEqual(by["b1"]["reachableFrom"], [])
         self.assertNotIn("reachableFrom", by["old"])
 
@@ -381,6 +384,178 @@ class ReachTest(unittest.TestCase):
                                 (422, {"error": 'reachableFrom: there is no resource "x" in this workspace'})):
             p = llc.status_problem(status, payload)
             self.assertNotIn("Network permission", p.next, payload)
+
+    # --- a database is reached only by what links it ---
+
+    def test_a_database_shows_no_setting_only_what_links_it(self):
+        workloads = WORKLOADS + [
+            {"id": "runner", "type": "vm-ubuntu", "reachableFrom": [], "vm": {"databases": [{"id": "db"}]}},
+            {"id": "desk", "type": "desktop", "reachableFrom": [], "desktop": {"databases": [{"id": "db"}]}},
+            {"id": "lone-db", "type": "storage", "storage": {"engine": "redis"}},
+        ]
+        self.use(workloads=workloads)
+        out, problem, _ = self.run_llc(llc.reach, **reach_args(id="db"))
+        self.assertIsNone(problem)
+        self.assertNotIn("reachableFrom", out)
+        self.assertIn("reached only by what links it", out["note"])
+        self.assertEqual(out["alsoFrom"], [{"id": "web", "why": "links it"}, {"id": "worker", "why": "waits for it"},
+                                           {"id": "runner", "why": "links it"}, {"id": "desk", "why": "links it"}])
+        self.assertEqual(out["addresses"], [{"host": "acme-db-rw", "port": 5432}])
+        # nothing links it: no address to hand out
+        out, _, _ = self.run_llc(llc.reach, **reach_args(id="lone-db"))
+        self.assertEqual(out["alsoFrom"], [])
+        self.assertNotIn("addresses", out)
+        self.assertNotIn("reachableFrom", out)
+
+    def test_a_databases_setting_is_never_changed_and_the_answer_points_at_link(self):
+        fake = self.use()
+        for kw in ({"source": "web"}, {"source": "*"}, {"none": True}, {"add": "api"}, {"remove": "web"}):
+            for yes in (False, True):
+                _, problem, _ = self.run_llc(llc.reach, **reach_args(id="db", yes=yes, **kw))
+                self.assertIsNotNone(problem, kw)
+                self.assertIn("a database is reached only by what links it: add db to the databases of the app, "
+                              "machine or Desktop App that uses it", problem.message, kw)
+                self.assertIn("llc.py link APP db --yes", problem.next, kw)
+        self.assertEqual(fake.writes(), [])
+
+    def test_create_refuses_reachable_from_on_a_database_and_lets_empty_pass(self):
+        fake = self.use({"POST /v1/workloads": (202, {"created": ["a"]})})
+        for value in (["web"], ["*"]):
+            _, problem, _ = self.run_llc(llc.create, type="storage", json=self.file(
+                {"id": "cache", "engine": "redis", "reachableFrom": value}), yes=True, join=None)
+            self.assertIn("reached only by what links it", problem.message, value)
+            _, problem, _ = self.run_llc(llc.create, type="apps", json=self.file(
+                {"apps": [{"id": "a"}], "databases": [{"id": "a-db", "reachableFrom": value}]}), yes=True, join=None)
+            self.assertIn("add a-db to the databases", problem.message, value)
+        self.assertEqual(fake.writes(), [])
+        # [] and null: closed anyway, the API drops them
+        for value in ([], None):
+            body = {"id": "cache", "engine": "redis", "reachableFrom": value}
+            _, problem, _ = self.run_llc(llc.create, type="storage", json=self.file(body), yes=True, join=None)
+            self.assertIsNone(problem, value)
+        self.assertEqual(len(fake.writes()), 2)
+
+    def test_the_apis_database_refusal_points_at_link(self):
+        p = llc.status_problem(422, {"error": "reachableFrom: a database is reached only by what links it: add db to the "
+                                              "databases of the app, machine or Desktop App that uses it"})
+        self.assertIn("llc.py link", p.next)
+        self.assertIn("rule 11", p.next)
+
+    # --- link: reach only, apps, machines and Desktop Apps ---
+
+    LINKED = [
+        {"id": "web", "type": "pod", "reachableFrom": [], "pod": {"stack": "shop",
+                                                                  "databases": [{"id": "db", "env": {"DATABASE_URL": "url"}}]}},
+        {"id": "db", "type": "storage", "storage": {"engine": "postgres"}},
+        {"id": "cache", "type": "storage", "storage": {"engine": "redis"}},
+        {"id": "runner", "type": "vm-ubuntu", "reachableFrom": []},
+        {"id": "desk", "type": "desktop", "reachableFrom": [], "desktop": {"databases": [{"id": "cache"}]}},
+        {"id": "b1", "type": "browser", "reachableFrom": []},
+    ]
+
+    def link_args(self, id, *dbs, remove=False, yes=True):
+        return dict(id=id, databases=list(dbs), remove=remove, yes=yes)
+
+    def test_link_adds_a_reach_only_link_and_keeps_the_others(self):
+        fake = self.use(workloads=self.LINKED)
+        out, problem, _ = self.run_llc(llc.link, **self.link_args("web", "cache"))
+        self.assertIsNone(problem)
+        self.assertEqual(fake.writes(), [("PATCH", "/v1/workloads/web", {"pod": {"databases": [
+            {"id": "db", "env": {"DATABASE_URL": "url"}}, {"id": "cache"}]}})])
+        self.assertIn("nothing restarts", out["note"])
+        self.assertIn("whole Composable App shop", out["note"])
+
+    def test_link_on_a_machine_and_a_desktop_app_goes_in_their_own_block(self):
+        fake = self.use(workloads=self.LINKED)
+        self.run_llc(llc.link, **self.link_args("runner", "db", "cache"))
+        self.run_llc(llc.link, **self.link_args("desk", "db"))
+        self.assertEqual(fake.writes(), [
+            ("PATCH", "/v1/workloads/runner", {"vm": {"databases": [{"id": "db"}, {"id": "cache"}]}}),
+            ("PATCH", "/v1/workloads/desk", {"desktop": {"databases": [{"id": "cache"}, {"id": "db"}]}}),
+        ])
+
+    def test_link_needs_yes_and_says_ask_the_user(self):
+        fake = self.use(workloads=self.LINKED)
+        for remove in (False, True):
+            _, problem, _ = self.run_llc(llc.link, **self.link_args("web", "cache", remove=remove, yes=False))
+            self.assertIn("--yes", problem.message)
+            self.assertIn("ask the user and wait for their agreement", problem.next)
+        self.assertEqual(fake.writes(), [])
+
+    def test_link_remove_takes_only_the_named_links_out(self):
+        fake = self.use(workloads=self.LINKED)
+        out, _, _ = self.run_llc(llc.link, **self.link_args("desk", "cache", remove=True))
+        self.assertEqual(fake.writes(), [("PATCH", "/v1/workloads/desk", {"desktop": {"databases": None}})])
+        self.assertIn("nothing restarts", out["note"])
+        fake.calls.clear()
+        out, _, _ = self.run_llc(llc.link, **self.link_args("web", "db", remove=True))
+        self.assertEqual(fake.writes(), [("PATCH", "/v1/workloads/web", {"pod": {"databases": None}})])
+        self.assertIn("restarts once", out["note"])
+
+    def test_link_that_changes_nothing_sends_nothing(self):
+        fake = self.use(workloads=self.LINKED)
+        out, _, _ = self.run_llc(llc.link, **self.link_args("web", "db"))
+        self.assertEqual(out["already"], "every one is linked already")
+        out, _, _ = self.run_llc(llc.link, **self.link_args("runner", "db", remove=True))
+        self.assertEqual(out["already"], "none of them is linked")
+        self.assertEqual(fake.writes(), [])
+
+    def test_link_refuses_what_is_no_link_before_sending(self):
+        fake = self.use(workloads=self.LINKED)
+        cases = [
+            (("nope", "db"), "no resource nope"),
+            (("shop", "db"), "is a Composable App"),
+            (("b1", "db"), "only an app, a machine or a Desktop App links a database"),
+            (("db", "cache"), "only an app, a machine or a Desktop App links a database"),
+            (("web", "nope"), "no database nope"),
+            (("web", "runner"), "not a database"),
+        ]
+        for ids, said in cases:
+            _, problem, _ = self.run_llc(llc.link, **self.link_args(*ids))
+            self.assertIsNotNone(problem, ids)
+            self.assertIn(said, problem.message, ids)
+        _, problem, _ = self.run_llc(llc.link, **self.link_args("web", "runner"))
+        self.assertIn("llc.py reach runner --add web", problem.next)
+        many = self.LINKED + [{"id": f"d{i}", "type": "storage"} for i in range(8)]
+        fake2 = self.use(workloads=many)
+        _, problem, _ = self.run_llc(llc.link, **self.link_args("web", *[f"d{i}" for i in range(8)]))
+        self.assertIn("at most 8", problem.message)
+        self.assertEqual(fake.writes() + fake2.writes(), [])
+
+    def test_a_refused_link_asks_the_user_for_network(self):
+        refusal = {"error": "This agent can't let runner reach db inside the workspace. A person can turn on Network for "
+                            "it on the Agents page.", "code": "network_permission"}
+        self.use({"PATCH /v1/workloads/runner": (403, refusal)}, workloads=self.LINKED)
+        _, problem, _ = self.run_llc(llc.link, **self.link_args("runner", "db"))
+        self.assertEqual((problem.status, problem.code), (403, llc.EXIT_USER))
+        self.assertIn("ask the user", problem.next)
+
+    def test_create_refuses_variables_on_a_machines_or_desktop_apps_link(self):
+        fake = self.use()
+        for typ, kind in (("vm-ubuntu", "a machine"), ("desktop", "a Desktop App")):
+            body = {"id": "m", "databases": [{"id": "db", "env": {"U": "url"}}]}
+            _, problem, _ = self.run_llc(llc.create, type=typ, json=self.file(body), yes=True, join=None)
+            self.assertIn(f"{kind} gets no variables from a link: it only lets it reach the database", problem.message)
+        self.assertEqual(fake.writes(), [])
+        body = {"id": "m", "databases": [{"id": "db"}]}
+        _, problem, _ = self.run_llc(llc.create, type="vm-ubuntu", json=self.file(body), yes=True, join=None)
+        self.assertIsNone(problem)
+        self.assertEqual(fake.writes(), [("POST", "/v1/workloads/vm-ubuntu", body)])
+
+    def test_ls_shows_the_links_of_machines_and_desktop_apps(self):
+        self.use(workloads=self.LINKED + [{"id": "runner2", "type": "vm-windows", "vm": {"databases": [{"id": "db"}]}}])
+        out, _, _ = self.run_llc(llc.ls, type=None)
+        by = {r["id"]: r for r in out["resources"]}
+        self.assertEqual(by["desk"]["databases"], [{"id": "cache"}])
+        self.assertEqual(by["runner2"]["databases"], [{"id": "db"}])
+        self.assertNotIn("databases", by["runner"])
+
+    def test_a_join_refusal_is_a_network_refusal(self):
+        p = llc.status_problem(403, {"error": "This API key can't add worker to Composable App shop inside the workspace. "
+                                              "A person can turn on Network for it on the Keys page.",
+                                     "code": "network_permission"})
+        self.assertEqual(p.code, llc.EXIT_USER)
+        self.assertIn("ask the user", p.next)
 
 
 if __name__ == "__main__":
