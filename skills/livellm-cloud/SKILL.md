@@ -55,8 +55,10 @@ Everything goes through `scripts/llc.py`, which talks to the API and prints JSON
     you created both or the one reached already lets the whole workspace in.
     Letting the whole workspace in always needs their agreement. An API key
     or an agent also needs the Network permission for this, which only a
-    person turns on. Never get around a refusal, for example with a public
-    address (`references/inside-access.md`).
+    person turns on. Giving a resource a public address so that another
+    resource here can reach it is letting it in too. Never get around a
+    refusal, for example with a public address
+    (`references/inside-access.md`).
 
 ## Signing in
 

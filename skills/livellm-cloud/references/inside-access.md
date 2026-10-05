@@ -20,7 +20,8 @@ workspace in always needs their agreement. An API key or an agent also needs
 the Network permission for this, which only a person turns on.
 
 A public address isn't a way around this: it is reachable from the workspace
-too, so rule 5 applies. Whatever drives a browser or a desktop acts from its
+too. Giving a resource a public address so that another resource here can
+reach it is letting it in: ask the user first (rule 11), not only rule 5. Whatever drives a browser or a desktop acts from its
 place: it can open what that browser or desktop may reach.
 
 Say plainly what would reach what, and why: "web needs to reach shop-db to
@@ -41,8 +42,8 @@ read its data; may I let it in?".
   the app takes it; different values on the services in one change are
   refused (422).
 - When a resource named in the list is deleted, it drops out of the list.
-- Resources made before this setting existed kept reaching each other: they
-  show `["*"]`.
+- Resources made before this setting existed kept what reached them; `reach`
+  shows what that is for each one.
 
 ## Reached without the setting
 
@@ -51,7 +52,8 @@ Whatever the setting says, a resource is reached by:
 - its own parts: its copies, a database's standby instances, the services of
   its own Composable App;
 - the apps that link it as a database (`pod.databases`) or wait for it
-  (`pod.dependsOn`), with their whole Composable App;
+  (`pod.dependsOn`), or for any service of its Composable App, with their
+  whole Composable App (`via` names the service that links);
 - a browser: the Browser API that drives it, on the browser's own ports. The
   Browser API needs no key inside the workspace, so whatever reaches a Browser
   API drives every browser in it.
@@ -121,7 +123,16 @@ an agent on the console's Agents page, for an API key on the Keys page.
   it`, `drives it` (a Browser API; `through` is what can drive the browser
   through it), `same app`.
 - `addresses` are the names that answer inside the workspace, for the
-  resources allowed. `connect ID` shows the same under `inside`.
+  resources allowed. They are left out when nothing may reach it.
+- `reachableFrom: null` with a `note`: a resource that has no setting yet. Set
+  the whole list with `--from` or `--none`; `--add` and `--remove` are refused
+  on it.
+- A Composable App's name works in place of an id: `reach shop` shows and
+  changes the whole app.
+
+`reach` only reads the workspace's settings: it holds no machine and hands out
+no token. (`connect ID` holds a machine for this agent and makes a link, so use
+it to connect, not to look.)
 
 ## When it is refused
 

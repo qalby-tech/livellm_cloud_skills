@@ -7,17 +7,21 @@ Claude Code users get the update only when the version changes.
 
 ## 1.12.0
 
-Needs LiveLLM with inside access (api 0.51); against an earlier one `reach`
-reads the settings and everything still reaches everything.
+Needs LiveLLM with inside access (api 0.51); against an earlier one
+everything still reaches everything and `reach` shows no setting.
 
 - Inside the workspace (`references/inside-access.md`): resources don't reach
   each other unless the user allows it. A new resource is closed; its
   `reachableFrom` names who may reach it (`[]` nothing, ids, `["*"]` the whole
   workspace). A Composable App is one resource with one setting. Links,
   `dependsOn` and a Browser API's browsers are reached without it.
-- `llc.py reach ID` shows who reaches a resource and its inside addresses;
+- `llc.py reach ID` shows who reaches a resource and its inside addresses,
+  read from the workspace's settings only (it never connects, so it holds no
+  machine and makes no link or token); a Composable App's name works too.
   `--from a,b`, `--from '*'`, `--none`, `--add`, `--remove` change it (with
-  `--yes`, after the user agreed). `create` and `set` keep `reachableFrom`
+  `--yes`, after the user agreed); `--add` and `--remove` are refused on a
+  resource with no setting yet. `browser-api add` needs `--yes` now: putting a
+  browser in a Browser API lets in whatever reaches it. `create` and `set` keep `reachableFrom`
   as written and refuse a malformed one before sending; `ls` shows it.
 - The Network permission: an agent or a key needs it to let one resource
   reach another, unless it made both or the one reached already lets the
@@ -33,7 +37,9 @@ reads the settings and everything still reaches everything.
   answer only the resources allowed; joining an app takes its setting (an
   agent joins only apps it created); the Browser API asks no key inside, so
   putting a browser in one is an opening; a restored database starts with the
-  original's setting.
+  original's setting. `machines.md`: machines that talk to each other each
+  need a `reachableFrom`. A public address given so that another resource can
+  reach it counts as letting it in (rule 11).
 
 ## 1.11.1
 

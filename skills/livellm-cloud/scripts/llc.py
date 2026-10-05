@@ -25,11 +25,11 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
                    [--host H | --region R] --yes           (a database: into a new one)
     llc.py restore ID BACKUP --yes                         (a machine: in place, stopped)
     llc.py stop ID --yes | start ID | set ID --json CHANGES --yes
-    llc.py reach ID                            (who reaches it inside the workspace, its inside addresses)
+    llc.py reach ID                            (who reaches it inside the workspace; ID or a Composable App's name)
     llc.py reach ID (--from a,b | --from '*' | --none | --add X | --remove X) --yes
     llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS]
                    [--host H | --region R] --yes
-    llc.py browser-api show NAME | add NAME BROWSER | remove NAME BROWSER --yes
+    llc.py browser-api show NAME | (add | remove) NAME BROWSER --yes
     llc.py locales                             (languages and time zones a browser takes)
     llc.py engines                             (browser engines offered: Chrome, Camoufox)
     llc.py proxy show ID | proxy rotate ID [--to NAME] --yes | proxy set ID --json FILE --yes
@@ -884,40 +884,157 @@ def split_names(text):
     return [x.strip() for x in (text or "").split(",") if x.strip()]
 
 
+def stack_of(w):
+    if w.get("type") != "pod":
+        return ""
+    return ((w.get("pod") or {}).get("stack") or "").strip()
+
+
+def reach_group(workloads, target):
+    """The ids that count as one resource with target: its Composable App's
+    services, or target alone."""
+    stack = stack_of(target)
+    if not stack:
+        return {target.get("id")}
+    return {x.get("id") for x in workloads if stack_of(x) == stack}
+
+
+def find_reach_target(workloads, name):
+    """A resource by its id, or a Composable App by its name (its first
+    service stands for the whole app)."""
+    w = next((x for x in workloads if x.get("id") == name), None)
+    if w is None:
+        w = next((x for x in workloads if stack_of(x) == name), None)
+    if w is None:
+        raise Problem(f"no resource {name}", "run: llc.py ls, the id (or the Composable App's name) is probably wrong", EXIT_OTHER)
+    return w
+
+
 def implicit_callers(spec_workloads, target):
-    """Who reaches a resource whatever its setting, read from the settings:
-    apps that link it or wait for it, a Browser API that drives it, the other
-    services of its own Composable App. Only for an API whose connect answer
-    has no inside block."""
-    stack = ((target.get("pod") or {}).get("stack") or "").strip()
-    tid, found = target.get("id"), []
-    for w in spec_workloads:
-        wid = w.get("id")
-        if wid == tid:
+    """Who reaches a resource whatever its setting, read from the settings: the
+    other services of its own Composable App; the apps that link it or wait for
+    it (or for any service of its Composable App), each with its whole
+    Composable App (a service that doesn't link it itself names the one that
+    does in "via"); a Browser API that drives it, with what reaches that
+    Browser API in "through"."""
+    group = reach_group(spec_workloads, target)
+    tid = target.get("id")
+
+    def link_why(x):
+        pod = x.get("pod") or {}
+        if any(isinstance(d, dict) and d.get("id") in group for d in pod.get("databases") or []):
+            return "links it"
+        if any(d in group for d in pod.get("dependsOn") or []):
+            return "waits for it"
+        return ""
+
+    by_stack = {}  # a linking Composable App: its first service that links
+    for x in spec_workloads:
+        s = stack_of(x)
+        if x.get("type") == "pod" and x.get("id") not in group and s and s not in by_stack:
+            why = link_why(x)
+            if why:
+                by_stack[s] = (x.get("id"), why)
+    found = []
+    for x in spec_workloads:
+        xid = x.get("id")
+        if xid in group:
+            if xid != tid:
+                found.append({"id": xid, "why": "same app"})
             continue
-        pod = w.get("pod") or {}
-        if stack and (pod.get("stack") or "").strip() == stack:
-            found.append({"id": wid, "why": "same app"})
-            continue
-        if tid in [d.get("id") for d in pod.get("databases") or [] if isinstance(d, dict)]:
-            found.append({"id": wid, "why": "links it"})
-        elif tid in (pod.get("dependsOn") or []):
-            found.append({"id": wid, "why": "waits for it"})
-        c = w.get("controller") or {}
-        if w.get("type") == BROWSER_API and target.get("type") == "browser" and (c.get("autodiscover") or tid in (c.get("browsers") or [])):
-            found.append({"id": wid, "why": "drives it", "through": w.get("reachableFrom", [WHOLE])})
+        if x.get("type") == "pod":
+            why, via, s = link_why(x), None, stack_of(x)
+            if not why and s in by_stack:
+                via, why = by_stack[s]
+            if not why:
+                continue
+            e = {"id": xid, "why": why}
+            if s:
+                e["app"] = s
+            if via:
+                e["via"] = via
+            found.append(e)
+        elif x.get("type") == BROWSER_API and target.get("type") == "browser":
+            c = x.get("controller") or {}
+            if c.get("autodiscover") or tid in (c.get("browsers") or []):
+                found.append({"id": xid, "why": "drives it", "through": x.get("reachableFrom")})
     return found
+
+
+def inside_addresses(res, w):
+    """The names a resource answers on inside the workspace (res is
+    <workspace>-<id>), by type, as the platform names them."""
+    t = w.get("type") or ""
+
+    def hp(host, port, **kw):
+        return {"host": host, "port": port, **kw}
+
+    if t == "pod":
+        pod = w.get("pod") or {}
+        host = (pod.get("hostname") or w.get("id")) if stack_of(w) else None
+        found = []
+        for p in pod.get("ports") or []:
+            n = (p or {}).get("port")
+            if not n:
+                continue
+            raw = not p.get("internal") and (p.get("udp") or p.get("tcp"))
+            e = hp(f"{res}-raw" if raw else res, n)
+            if raw and p.get("udp"):
+                e["protocol"] = "udp"
+            if p.get("name"):
+                e["name"] = p["name"]
+            if host:
+                e["inStack"] = f"{host}:{n}"
+            found.append(e)
+        return found
+    if t.startswith("vm-"):
+        found = [hp(res, 22, name="ssh")]
+        for p in (w.get("vm") or {}).get("ports") or []:
+            n = (p or {}).get("port")
+            if not n:
+                continue
+            if p.get("internal"):
+                host = f"{res}-internal"
+            elif p.get("udp") or p.get("tcp"):
+                host = res
+            else:
+                host = f"{res}-http"
+            e = hp(host, n)
+            if p.get("name"):
+                e["name"] = p["name"]
+            if p.get("udp") and not p.get("internal"):
+                e["protocol"] = "udp"
+            found.append(e)
+        if t in ("vm-windows", "vm-ubuntu-desktop"):
+            found.append(hp(f"{res}-rdp", 3389, name="rdp"))
+        return found
+    if t == "storage":
+        if (w.get("storage") or {}).get("engine") == "redis":
+            return [hp(res, 6379)]
+        return [hp(f"{res}-rw", 5432)]
+    if t == "browser":
+        return [hp(res, 9222), hp(res, 9000)]
+    if t == BROWSER_API:
+        return [hp(res, 8000)]
+    if t == "desktop":
+        return [hp(f"{res}-0.{res}", 5900)]
+    return []
+
+
+UNSET_NOTE = ("not set: made before this setting existed. Until the platform gave it a value this meant the whole "
+              "workspace; after that, nothing. Set it with --from or --none")
 
 
 def reach(args):
     """Who may reach a resource from inside the workspace; with --from, --none,
-    --add or --remove, change it (only what the user agreed to)."""
+    --add or --remove, change it (only what the user agreed to). It reads the
+    workspace only: connect would hold a machine or hand out a token."""
     tok = token()
-    workloads = workspace_workloads(tok)
-    w = next((x for x in workloads if x.get("id") == args.id), None)
-    if w is None:
-        raise Problem(f"no resource {args.id}", "run: llc.py ls, the id is probably wrong", EXIT_OTHER)
-    current = w.get("reachableFrom")  # None: set before this setting existed, so the whole workspace reaches it
+    ws = request("GET", "/v1/workspace", token=tok)
+    workloads = (ws.get("spec") or {}).get("workloads", [])
+    w = find_reach_target(workloads, args.id)
+    wid = w.get("id")
+    current = w.get("reachableFrom")  # None: set before this setting existed
     adds, removes = split_names(args.add), split_names(args.remove)
     whole_list = args.source is not None or args.none
     if args.source is not None and args.none:
@@ -926,7 +1043,7 @@ def reach(args):
         raise Problem("--from and --none set the whole list; --add and --remove change one entry",
                       "use one way or the other", EXIT_OTHER)
     if not whole_list and not adds and not removes:
-        out(reach_view(w, workloads, current, tok))
+        out(reach_view(w, workloads, current, ws.get("name")))
         return
     if not args.yes:
         raise Problem("changing who reaches a resource needs --yes",
@@ -939,7 +1056,17 @@ def reach(args):
         if not new:
             raise Problem("--from needs resource ids, or '*' for the whole workspace", "--none means nothing reaches it", EXIT_OTHER)
     else:
-        base = [WHOLE] if current is None else list(current)
+        # Read again just before writing, so a change made since the first
+        # read is kept (a change landing between this read and the write is
+        # still lost: the API takes the whole list).
+        fresh = next((x for x in workspace_workloads(tok) if x.get("id") == wid), None)
+        if fresh is None:
+            raise Problem(f"no resource {args.id}", "it was deleted meanwhile; run: llc.py ls", EXIT_OTHER)
+        current = fresh.get("reachableFrom")
+        if current is None:
+            raise Problem(f"{args.id} has no setting yet, so there is nothing to add to or take from",
+                          "set the whole list: --from with the resources that may reach it, or --none", EXIT_OTHER)
+        base = list(current)
         if base == [WHOLE]:
             if removes:
                 raise Problem(f"{args.id} lets the whole workspace in, so there is nothing to take out",
@@ -951,34 +1078,29 @@ def reach(args):
     if current is not None and new == current:
         out({"id": args.id, "reachableFrom": current, "already": "nothing changes"})
         return
-    patch_workload(args.id, {"reachableFrom": new}, tok)
-    answer = {"id": args.id, "reachableFrom": new, "before": [WHOLE] if current is None else current}
-    stack = ((w.get("pod") or {}).get("stack") or "").strip()
+    patch_workload(wid, {"reachableFrom": new}, tok)
+    answer = {"id": args.id, "reachableFrom": new, "before": current}
+    stack = stack_of(w)
     if stack:
         answer["note"] = f"every service of the Composable App {stack} takes it"
     out(answer)
 
 
-def reach_view(w, workloads, current, tok):
-    """The setting, who else reaches the resource and its inside addresses, as
-    the connect answer's inside block says; read from the settings when the
-    connect answer has none. The connect token itself is never printed."""
+def reach_view(w, workloads, current, workspace):
+    """The setting, who else reaches the resource and its inside addresses,
+    read from the workspace's settings (never from connect, which holds a
+    machine or hands out a token)."""
     view = {"id": w.get("id"), "type": w.get("type")}
-    inside = None
-    try:
-        info = request("POST", f"{workload_path(w['id'])}/connect", {}, token=tok)
-        inside = info.get("inside") if isinstance(info, dict) else None
-    except Problem as p:
-        if p.status in (401, 404) or p.status is None:
-            raise
-    if isinstance(inside, dict):
-        for k in ("reachableFrom", "alsoFrom", "addresses"):
-            if k in inside:
-                view[k] = inside[k]
-        return view
-    view["reachableFrom"] = [WHOLE] if current is None else current
-    view["alsoFrom"] = implicit_callers(workloads, w)
-    view["note"] = f"read from the settings; llc.py connect {w.get('id')} shows its addresses"
+    stack = stack_of(w)
+    if stack:
+        view["app"] = stack
+    view["reachableFrom"] = current
+    if current is None:
+        view["note"] = UNSET_NOTE
+    also = implicit_callers(workloads, w)
+    view["alsoFrom"] = also
+    if (current or also) and workspace:
+        view["addresses"] = inside_addresses(f"{workspace}-{w.get('id')}", w)
     return view
 
 
@@ -1021,7 +1143,10 @@ def browser_api(args):
     tok = token()
     if args.action == "create":
         if not args.yes:
-            raise Problem("creating needs --yes", "only create a Browser API the user asked for, then pass --yes", EXIT_OTHER)
+            raise Problem("creating needs --yes",
+                          "only create a Browser API the user asked for; the browsers you put in it are reached by "
+                          "whatever reaches it, so ask the user and wait for their agreement (SKILL.md rule 11), "
+                          "then pass --yes", EXIT_OTHER)
         body = browser_api_body(args.name, args.browsers, args.all, args.remote, placement(host, region))
         request("POST", f"/v1/workloads/{BROWSER_API}", body, token=tok)
         out({"created": args.name, "type": BROWSER_API,
@@ -1031,6 +1156,10 @@ def browser_api(args):
         if not args.browser:
             raise Problem("which browser?", f"llc.py browser-api {args.action} {args.name} BROWSER", EXIT_OTHER)
         if args.action == "add":
+            if not args.yes:
+                raise Problem("putting a browser in needs --yes",
+                              "whatever reaches the Browser API then drives the browser: ask the user and wait for "
+                              "their agreement (SKILL.md rule 11), then pass --yes", EXIT_OTHER)
             request("PUT", member_path(args.name, args.browser), {}, token=tok)
             out({"added": args.browser, "to": args.name})
         else:
@@ -2042,7 +2171,7 @@ def main():
     bapi_p.add_argument("--remote", action="append", help="create: a browser running elsewhere, ID=wss://address")
     bapi_p.add_argument("--host", help="create: pin it to this host (ids from llc.py hosts)")
     bapi_p.add_argument("--region", help="create: run it on any host in this region; neither: automatic")
-    bapi_p.add_argument("--yes", action="store_true", help="create: the user asked for it; remove: the user agreed")
+    bapi_p.add_argument("--yes", action="store_true", help="create, add: the user agreed to what it lets in; remove: the user agreed")
     bapi_p.set_defaults(fn=browser_api)
 
     sub.add_parser("locales", help="the languages and time zones a browser can take").set_defaults(fn=locales)

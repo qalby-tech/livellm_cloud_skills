@@ -37,9 +37,6 @@ WORKLOADS = [
     {"id": "pool", "type": "controller", "reachableFrom": ["old"], "controller": {"browsers": ["b1"]}},
 ]
 
-INSIDE = {"reachableFrom": ["web"], "alsoFrom": [{"id": "worker", "why": "waits for it"}],
-          "addresses": [{"host": "acme-db-rw", "port": 5432}]}
-
 
 class FakeAPI:
     """GET /v1/workspace answers WORKLOADS; `routes` ("METHOD /path" →
@@ -62,7 +59,7 @@ class FakeAPI:
                 if key in fake.routes:
                     status, payload = fake.routes[key]
                 elif key == "GET /v1/workspace":
-                    status, payload = 200, {"spec": {"workloads": fake.workloads}}
+                    status, payload = 200, {"name": "acme", "spec": {"workloads": fake.workloads}}
                 elif key == "GET /v1/status":
                     status, payload = 200, {"workloads": []}
                 else:
@@ -81,7 +78,7 @@ class FakeAPI:
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
 
     def writes(self):
-        return [c for c in self.calls if c[0] != "GET" and not c[1].endswith("/connect")]
+        return [c for c in self.calls if c[0] != "GET"]
 
 
 def reach_args(**kw):
@@ -120,23 +117,39 @@ class ReachTest(unittest.TestCase):
 
     # --- reading ---
 
-    def test_show_prints_the_connect_answers_inside_block_and_never_its_token(self):
-        self.use({"POST /v1/workloads/db/connect": (200, {"type": "storage", "token": "llt_secret-42", "inside": INSIDE})})
-        out, problem, text = self.run_llc(llc.reach, **reach_args())
-        self.assertIsNone(problem)
-        self.assertEqual(out, {"id": "db", "type": "storage", **INSIDE})
-        self.assertNotIn("llt_secret-42", text)
+    def test_show_reads_the_workspace_only_and_never_connects(self):
+        # connect holds a machine, makes a screen link or a token and writes an
+        # activity line: the view sends nothing but GETs, for every type
+        fake = self.use()
+        for wid in ("db", "old", "b1", "pool", "web"):
+            _, problem, _ = self.run_llc(llc.reach, **reach_args(id=wid))
+            self.assertIsNone(problem, wid)
+        self.assertEqual(fake.writes(), [])
+        self.assertEqual({c[1] for c in fake.calls}, {"/v1/workspace"})
 
-    def test_show_against_an_api_without_inside_reads_the_settings(self):
-        # tenant-api 0.48: connect has no inside block, and no resource has the setting
+    def test_show_gives_the_setting_who_else_reaches_it_and_its_inside_addresses(self):
+        self.use()
+        out, _, _ = self.run_llc(llc.reach, **reach_args())
+        self.assertEqual(out, {"id": "db", "type": "storage", "reachableFrom": ["web"],
+                               "alsoFrom": [{"id": "web", "why": "links it"}, {"id": "worker", "why": "waits for it"}],
+                               "addresses": [{"host": "acme-db-rw", "port": 5432}]})
+        out, _, _ = self.run_llc(llc.reach, **reach_args(id="pool"))
+        self.assertEqual(out["addresses"], [{"host": "acme-pool", "port": 8000}])
+        # nothing reaches it: no address to hand out
+        out, _, _ = self.run_llc(llc.reach, **reach_args(id="web"))
+        self.assertEqual((out["reachableFrom"], out["alsoFrom"]), ([], []))
+        self.assertNotIn("addresses", out)
+
+    def test_show_a_resource_with_no_setting_says_so_and_claims_no_value(self):
+        # before inside access (api 0.48) no resource has the setting; after the
+        # platform's own pass an unset one means nothing, so the view guesses neither
         bare = [{k: v for k, v in w.items() if k != "reachableFrom"} for w in WORKLOADS]
-        self.use({"POST /v1/workloads/db/connect": (200, {"type": "storage", "token": "llt_x"})}, workloads=bare)
-        out, problem, text = self.run_llc(llc.reach, **reach_args())
+        self.use(workloads=bare)
+        out, problem, _ = self.run_llc(llc.reach, **reach_args())
         self.assertIsNone(problem)
-        self.assertEqual(out["reachableFrom"], ["*"])
+        self.assertIsNone(out["reachableFrom"])
+        self.assertIn("not set", out["note"])
         self.assertEqual(out["alsoFrom"], [{"id": "web", "why": "links it"}, {"id": "worker", "why": "waits for it"}])
-        self.assertIn("llc.py connect db", out["note"])
-        self.assertNotIn("llt_x", text)
 
     def test_show_names_same_app_and_the_browser_api_with_what_reaches_it(self):
         self.use()
@@ -146,11 +159,35 @@ class ReachTest(unittest.TestCase):
         out, _, _ = self.run_llc(llc.reach, **reach_args(id="shop-web"))
         self.assertEqual(out["alsoFrom"], [{"id": "shop-api", "why": "same app"}])
 
-    def test_show_falls_back_when_connect_is_refused(self):
-        self.use({"POST /v1/workloads/db/connect": (403, {"error": "This agent can't connect to db."})})
-        out, problem, _ = self.run_llc(llc.reach, **reach_args())
+    def test_a_link_reaches_the_targets_whole_app_from_the_linkers_whole_app(self):
+        workloads = [
+            {"id": "s-web", "type": "pod", "reachableFrom": [], "pod": {"stack": "s", "ports": [{"port": 80}]}},
+            {"id": "s-db", "type": "pod", "reachableFrom": [], "pod": {"stack": "s", "hostname": "db",
+                                                                      "ports": [{"port": 5432, "internal": True}]}},
+            {"id": "f-a", "type": "pod", "reachableFrom": [], "pod": {"stack": "f", "dependsOn": ["s-db"]}},
+            {"id": "f-b", "type": "pod", "reachableFrom": [], "pod": {"stack": "f"}},
+            {"id": "lone", "type": "pod", "reachableFrom": [], "pod": {}},
+        ]
+        self.use(workloads=workloads)
+        out, _, _ = self.run_llc(llc.reach, **reach_args(id="s-web"))
+        self.assertEqual(out["alsoFrom"], [
+            {"id": "s-db", "why": "same app"},
+            {"id": "f-a", "why": "waits for it", "app": "f"},
+            {"id": "f-b", "why": "waits for it", "app": "f", "via": "f-a"},
+        ])
+        self.assertEqual(out["addresses"], [{"host": "acme-s-web", "port": 80, "inStack": "s-web:80"}])
+        out, _, _ = self.run_llc(llc.reach, **reach_args(id="s-db"))
+        self.assertEqual(out["addresses"], [{"host": "acme-s-db", "port": 5432, "inStack": "db:5432"}])
+
+    def test_a_composable_apps_name_shows_and_changes_the_whole_app(self):
+        fake = self.use()
+        out, problem, _ = self.run_llc(llc.reach, **reach_args(id="shop"))
         self.assertIsNone(problem)
-        self.assertEqual(out["reachableFrom"], ["web"])
+        self.assertEqual((out["app"], out["reachableFrom"]), ("shop", ["*"]))
+        out, problem, _ = self.run_llc(llc.reach, **reach_args(id="shop", source="web", yes=True))
+        self.assertIsNone(problem)
+        self.assertEqual(fake.writes(), [("PATCH", "/v1/workloads/shop-web", {"reachableFrom": ["web"]})])
+        self.assertIn("every service of the Composable App shop", out["note"])
 
     def test_an_unknown_id_is_refused_before_anything_is_sent(self):
         fake = self.use()
@@ -210,15 +247,24 @@ class ReachTest(unittest.TestCase):
 
     def test_a_resource_open_to_everyone_takes_no_add_and_no_remove(self):
         fake = self.use()
-        out, problem, _ = self.run_llc(llc.reach, **reach_args(id="old", add="web", yes=True))
+        out, problem, _ = self.run_llc(llc.reach, **reach_args(id="shop-web", add="web", yes=True))
         self.assertIsNone(problem)
         self.assertEqual(out["already"], "the whole workspace reaches it")
         _, problem, _ = self.run_llc(llc.reach, **reach_args(id="shop-web", remove="web", yes=True))
         self.assertIn("--from", problem.next)
         self.assertEqual(fake.writes(), [])
-        # an unset one (made before the setting) counts as the whole workspace
+
+    def test_a_resource_with_no_setting_takes_only_a_whole_list(self):
+        # unset may mean the whole workspace (before the platform's pass) or
+        # nothing (after it): adding to or taking from it would be a guess
+        fake = self.use()
+        for kw in ({"add": "web"}, {"remove": "web"}):
+            _, problem, _ = self.run_llc(llc.reach, **reach_args(id="old", yes=True, **kw))
+            self.assertIsNotNone(problem, kw)
+            self.assertIn("--from", problem.next, kw)
+        self.assertEqual(fake.writes(), [])
         out, _, _ = self.run_llc(llc.reach, **reach_args(id="old", none=True, yes=True))
-        self.assertEqual(out["before"], ["*"])
+        self.assertIsNone(out["before"])
         self.assertEqual(fake.writes(), [("PATCH", "/v1/workloads/old", {"reachableFrom": []})])
 
     def test_nothing_changes_sends_nothing(self):
@@ -242,6 +288,20 @@ class ReachTest(unittest.TestCase):
         self.assertEqual((problem.status, problem.code), (403, llc.EXIT_USER))
         self.assertIn("ask the user", problem.next)
         self.assertIn("Network", problem.next)
+
+    # --- a browser put in a Browser API is an opening ---
+
+    def test_browser_api_add_needs_yes_and_says_ask_the_user(self):
+        fake = self.use()
+        args = dict(action="add", name="pool", browser="b2", browsers=None, all=False, remote=None,
+                    host=None, region=None)
+        _, problem, _ = self.run_llc(llc.browser_api, **args, yes=False)
+        self.assertIn("--yes", problem.message)
+        self.assertIn("ask the user and wait for their agreement", problem.next)
+        self.assertEqual(fake.writes(), [])
+        _, problem, _ = self.run_llc(llc.browser_api, **args, yes=True)
+        self.assertIsNone(problem)
+        self.assertEqual(fake.writes(), [("PUT", "/v1/workloads/pool/browsers/b2", {})])
 
     # --- create and set keep it ---
 

@@ -71,10 +71,12 @@ connection details go into which environment variables:
   the app, across `env`, `secretEnv` and every link.
 - The app starts once its databases accept connections; no `dependsOn`
   needed for them.
-- A link lets the app (its whole Composable App) reach the database. Linking
-  a database you didn't make is letting a resource in: ask the user first
-  (rule 11); an agent or key without the Network permission gets a 403,
-  unless the database already lets the whole workspace in.
+- A link lets the app (its whole Composable App) reach the database. A link
+  is letting a resource in unless this agent or key made both the app and the
+  database (now or earlier), or the database already lets the whole workspace
+  in. Otherwise ask the user first (rule 11): an agent or key without the
+  Network permission gets a 403. Linking a database you made from an app you
+  didn't make counts too.
 - `ls` shows each app's links as its settings hold them, and on a database,
   `usedBy`: the apps that link it or wait for it.
 - A linked database can't be deleted (409 names the app): take the link out,
@@ -93,7 +95,7 @@ connection details go into which environment variables:
 `connect db` prints the addresses. Apps in the same workspace use the private
 one, which never leaves the platform; a link gives it to them. It answers only
 the resources allowed to reach the database: the apps that link it, and what
-its `reachableFrom` names (`connect db` shows them under `inside`; a new
+its `reachableFrom` names (`reach db` shows them; a new
 database is reached by nothing else). Ask for the public address only when the
 user needs to reach the database from outside:
 

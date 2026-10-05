@@ -233,6 +233,27 @@ backups (a count, 1 to 100):
   `start ci-box` runs it again.
 - Never delete a machine you did not create, even if it looks unused.
 
+## Inside the workspace
+
+A new machine or Desktop App is closed to the rest of the workspace: no other
+resource there can connect to it until its `reachableFrom` names them. Machines
+that must talk to each other (cluster nodes, a database on one and its app on
+another, a job runner and its workers) each need a `reachableFrom` that names
+the others, set in the create file or later with `reach`:
+
+```json
+{ "id": "node-2", "cpus": 2, "memory": "4Gi", "reachableFrom": ["node-1", "node-3"] }
+```
+
+```
+python3 scripts/llc.py reach node-1 --add node-2,node-3 --yes
+```
+
+Each of these lets resources in: ask the user first (rule 11). `["*"]` (the
+whole workspace) always needs their agreement. `reach ID` lists the names a
+machine answers on inside: `<res>` for SSH and raw ports, `<res>-http`,
+`<res>-internal` and `<res>-rdp`. See `references/inside-access.md`.
+
 ## Where it runs
 
 Leave `placement` out and LiveLLM picks the host. To choose, put

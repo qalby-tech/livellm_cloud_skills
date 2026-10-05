@@ -148,7 +148,7 @@ A new browser is closed to the rest of the workspace: its automation address
 answers inside only the Browser API that drives it and the resources its
 `reachableFrom` names. Whatever reaches it can drive it and read its sign-ins,
 so opening it is the user's call (rule 11, `references/inside-access.md`).
-`connect` shows its inside addresses under `inside`.
+`reach ID` shows who reaches it and its inside addresses.
 
 ## Several browsers behind one address
 

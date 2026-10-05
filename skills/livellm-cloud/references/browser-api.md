@@ -62,14 +62,15 @@ again (answers carry `"hasAuth": true`).
 
 ```
 python3 scripts/llc.py browser-api show scrapers
-python3 scripts/llc.py browser-api add scrapers agent-3
+python3 scripts/llc.py browser-api add scrapers agent-3 --yes
 python3 scripts/llc.py browser-api remove scrapers agent-3 --yes
 ```
 
 `show` lists its browsers and, under `answering`, each one's open tabs. `add`
 and `remove` change one browser and leave the rest as they are. A browser that
 is taken out stops answering, and its sessions end: ask the user before
-`remove`, then pass `--yes`.
+`remove`, then pass `--yes`. `add` lets whatever reaches the Browser API drive
+that browser: ask the user first too (rule 11), then pass `--yes`.
 
 ## Call it
 
@@ -101,8 +102,8 @@ same.
 ## From inside the workspace
 
 Another resource of the workspace (a machine, an app) calls the Browser API's
-inside address with no key and no token: `connect scrapers` lists it under
-`inside.addresses`. Only the resources its `reachableFrom` names, or the whole
+inside address with no key and no token: `reach scrapers` lists it under
+`addresses`. Only the resources its `reachableFrom` names, or the whole
 workspace with `["*"]`, reach it; a new Browser API is reached by none
 (it always reaches its own browsers).
 

@@ -82,7 +82,8 @@ each other by plain name:
   belong to the stack, so two stacks can both have a `db`. Any port works
   between them, declared or not.
 - `"internal": true` on a port means no public address: it answers only
-  inside the workspace, to its own stack and the resources the app's
+  inside the workspace, to its own stack, the apps that link it or wait for
+  it (with their whole Composable App) and the resources the app's
   `reachableFrom` names, and may be any TCP protocol. Give every database,
   cache and queue an internal port — never a public one. `connect` shows where
   it answers.
