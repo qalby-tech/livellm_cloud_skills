@@ -22,7 +22,7 @@ everything still reaches everything and `reach` shows no setting.
   and the API's 422 points at `link`.
 - `llc.py link ID DB... [--remove] --yes`: an app, a machine or a Desktop App
   links databases with no variables, which only lets it reach them (nothing
-  restarts; links with variables already there are kept). An app's link may
+  restarts; links with variables already there are kept, and `--remove` leaves them to `set`). An app's link may
   name no variables (`{"id": "cache"}`); a machine's or a Desktop App's link
   never does (`"databases": [{"id": "db"}]` in its create file, `env` refused
   before sending). `ls` shows their links, and `reach` lists them as `links

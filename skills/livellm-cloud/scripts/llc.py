@@ -1185,8 +1185,9 @@ def reach_view(w, workloads, current, workspace):
 
 def link(args):
     """Link databases to an app, a machine or a Desktop App so that it reaches
-    them, with no variables (reach only: nothing restarts), or take links out
-    with --remove. Links with variables already there are kept as they are."""
+    them, with no variables (reach only: nothing restarts), or take such links
+    out with --remove. Links with variables are kept as they are, and are
+    never taken out here (that changes the app's variables: set)."""
     tok = token()
     workloads = workspace_workloads(tok)
     w = next((x for x in workloads if x.get("id") == args.id), None)
@@ -1219,6 +1220,13 @@ def link(args):
     current = link_list(w)
     linked = [d.get("id") for d in current]
     if args.remove:
+        with_env = [d.get("id") for d in current if d.get("env") and d.get("id") in names]
+        if with_env:
+            raise Problem(f"{args.id} takes variables from {', '.join(with_env)}: taking the link out takes them away "
+                          "and restarts it",
+                          "that is a change of the app's variables, not of what it reaches: with the user's agreement, "
+                          f"send the links {args.id} keeps with llc.py set {args.id} --json FILE --yes "
+                          '({"pod": {"databases": [...]}}, copied from ls)', EXIT_OTHER)
         new = [d for d in current if d.get("id") not in names]
         missing = [d for d in names if d not in linked]
     else:
@@ -1235,11 +1243,7 @@ def link(args):
     answer = {"id": args.id, "databases": new, "before": current}
     if missing:
         answer["notLinked" if args.remove else "alreadyLinked"] = missing
-    gone_env = [d.get("id") for d in current if d.get("env") and d.get("id") in names] if args.remove else []
-    if gone_env:
-        answer["note"] = (f"the variables {args.id} took from {', '.join(gone_env)} are gone: it restarts once, "
-                          "and no longer reaches them")
-    elif args.remove:
+    if args.remove:
         answer["note"] = f"{args.id} no longer reaches them; nothing restarts"
     else:
         whole = f", with its whole Composable App {stack_of(w)}" if stack_of(w) else ""

@@ -488,9 +488,11 @@ class ReachTest(unittest.TestCase):
         self.assertEqual(fake.writes(), [("PATCH", "/v1/workloads/desk", {"desktop": {"databases": None}})])
         self.assertIn("nothing restarts", out["note"])
         fake.calls.clear()
-        out, _, _ = self.run_llc(llc.link, **self.link_args("web", "db", remove=True))
-        self.assertEqual(fake.writes(), [("PATCH", "/v1/workloads/web", {"pod": {"databases": None}})])
-        self.assertIn("restarts once", out["note"])
+        # a link with variables: taking it out changes the app's variables, so set does that
+        _, problem, _ = self.run_llc(llc.link, **self.link_args("web", "db", remove=True))
+        self.assertIn("takes variables from db", problem.message)
+        self.assertIn("llc.py set web", problem.next)
+        self.assertEqual(fake.writes(), [])
 
     def test_link_that_changes_nothing_sends_nothing(self):
         fake = self.use(workloads=self.LINKED)

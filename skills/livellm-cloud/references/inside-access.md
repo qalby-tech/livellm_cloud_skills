@@ -88,8 +88,9 @@ python3 scripts/llc.py link web shop-db --remove --yes    # web no longer reache
   never restarts anything. Links already there are kept as they are.
 - A link with variables (`env`) also hands the app the database's connection
   details and makes it wait for the database when it starts
-  (`references/databases.md`, "Link it to an app"). Taking one out takes the
-  variables away, and the app restarts once.
+  (`references/databases.md`, "Link it to an app"). `link --remove` never
+  takes such a link out: that changes the app's variables (`set`, with the
+  user's agreement; the app restarts once).
 - A machine or a Desktop App takes no variables from a link (422): it only
   reaches the database. In a create file, `"databases": [{"id": "shop-db"}]`.
 - At most 8 links per resource. A database something links can't be deleted

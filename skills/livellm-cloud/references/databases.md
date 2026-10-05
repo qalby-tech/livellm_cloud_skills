@@ -74,7 +74,7 @@ connection details go into which environment variables:
 - A link with no variables, `{ "id": "cache" }`, only lets the app reach the
   database: no variable, no wait, and adding or taking it out never restarts
   the app. `python3 scripts/llc.py link web cache --yes` makes one on an app
-  that exists, keeping its other links; `--remove` takes links out.
+  that exists, keeping its other links; `--remove` takes such links out.
 - A link is the only way anything reaches a database: it lets the app (its
   whole Composable App) in. A link is letting a resource in unless this agent
   or key made both the app and the database (now or earlier). Otherwise ask
