@@ -9,7 +9,7 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py ls [--type TYPE]
     llc.py hosts                               (where resources can run: ids, regions, free room)
     llc.py create TYPE --json FILE --yes
-    llc.py create browser|controller --json FILE --engine chrome|camoufox --yes
+    llc.py create browser --json FILE --engine chrome|camoufox --yes
     llc.py create apps --json FILE --yes       (several apps and their databases, linked)
     llc.py create apps --json FILE --join APP --yes   (add services to an existing app)
     llc.py wait ID [--timeout 600]
@@ -26,7 +26,7 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py restore ID BACKUP --yes                         (a machine: in place, stopped)
     llc.py stop ID --yes | start ID | set ID --json CHANGES --yes
     llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS]
-                   [--engine chrome|camoufox] [--host H | --region R] --yes
+                   [--host H | --region R] --yes
     llc.py browser-api show NAME | add NAME BROWSER | remove NAME BROWSER --yes
     llc.py locales                             (languages and time zones a browser takes)
     llc.py engines                             (browser engines offered: Chrome, Camoufox)
@@ -216,28 +216,24 @@ def browser_problem(status, code, message):
                           or said("password_required") or "password protected" in low):
         return Problem(message, "ask the user for this file's password, put it in an environment variable and pass --password-env VAR "
                        "(never on the command line); never guess one", EXIT_USER, status)
-    # A browser's engine (Chrome or Camoufox): set when it is made, one engine
-    # per Browser API, profiles only between browsers of one engine.
+    # A browser's engine (Chrome or Camoufox): set when it is made, profiles
+    # only between browsers of one engine. A Browser API has no engine: it
+    # holds browsers of both.
     if status == 422 and (said("engine_unavailable") or "doesn't offer camoufox" in low):
         return Problem(message, "this LiveLLM makes no Camoufox browsers (llc.py engines lists what it offers): tell the user, "
                        "and make a Chrome browser only if they agree", EXIT_USER, status)
-    # Known by the code or by naming a browser or a Browser API: a database's
-    # "engine can't change" is a different refusal and keeps the plain answer.
-    if status == 422 and ("browser api's engine can't change" in low or (code == "engine_fixed" and "browser api" in low)):
-        return Problem(message, "a Browser API's engine is set when it is made: leave engine out of the change. For the other "
-                       "engine, ask the user, then make a new Browser API (llc.py browser-api create NAME --engine ENGINE)",
-                       EXIT_OTHER, status)
+    # Known by the code or by naming a browser: a database's "engine can't
+    # change" is a different refusal and keeps the plain answer.
     if status == 422 and (said("engine_fixed") or "browser's engine can't change" in low):
         return Problem(message, "a browser's engine is set when it is made: leave engine out of the change. For the other engine, "
                        "ask the user, then make a new browser and add this one's cookies to it (llc.py cookies)", EXIT_OTHER, status)
     if status == 422 and (said("extensions_unsupported") or "take no extensions" in low):
         return Problem(message, "Camoufox browsers take no extensions (an ad blocker is built in): leave extensions out, "
                        "or use a Chrome browser", EXIT_OTHER, status)
-    if status == 422 and (said("engine_mismatch") or "remote browsers go only in a chrome" in low
-                          or "drives camoufox browsers" in low or "drives chrome browsers" in low):
-        return Problem(message, "a Browser API drives browsers of one engine, remote browsers go only in a Chrome one, and a profile "
-                       "copies only between browsers of one engine: pick browsers of the same engine (llc.py ls names a Camoufox "
-                       "browser's engine; the rest are Chrome), make a second Browser API for the other engine, or add cookies instead",
+    # A profile copied from a browser of the other engine.
+    if status == 422 and said("engine_mismatch"):
+        return Problem(message, "a profile copies only between browsers of one engine: add the sign-ins as cookies instead "
+                       "(llc.py cookies ID --json FILE --yes); llc.py ls names a Camoufox browser's engine, the rest are Chrome",
                        EXIT_OTHER, status)
     if status == 422 and (said("profile_engine") or "profiles move only between browsers of one engine" in low):
         return Problem(message, "profiles move only between browsers of one engine: add the sign-ins as cookies instead "
@@ -520,8 +516,8 @@ def resources(tok):
             # an app's database links as its settings hold them, and the apps a database serves
             **({"databases": (w.get("pod") or {})["databases"]} if (w.get("pod") or {}).get("databases") else {}),
             **({"usedBy": live["usedBy"]} if live.get("usedBy") else {}),
-            # a Camoufox browser or Browser API says so; a Chrome one carries no engine
-            **({"engine": "camoufox"} if (w.get("browser") or w.get("controller") or {}).get("engine") == "camoufox" else {}),
+            # a Camoufox browser says so; a Chrome one carries no engine (a Browser API has none)
+            **({"engine": "camoufox"} if (w.get("browser") or {}).get("engine") == "camoufox" else {}),
             # a database's login name (its password is never shown)
             **({"username": w["storage"]["credentials"]["username"]}
                if ((w.get("storage") or {}).get("credentials") or {}).get("username") else {}),
@@ -533,7 +529,7 @@ def ls(args):
     out({"resources": items})
 
 
-ENGINE_TYPES = ("browser", "controller")  # the types made with an engine
+ENGINE_TYPES = ("browser",)  # the types made with an engine
 
 
 def with_engine(body, typ, engine):
@@ -543,7 +539,7 @@ def with_engine(body, typ, engine):
     if not engine:
         return body
     if typ not in ENGINE_TYPES:
-        raise Problem(f"--engine is for a browser or a Browser API, not {typ}", "leave out --engine", EXIT_OTHER)
+        raise Problem(f"--engine is for a browser, not {typ}", "leave out --engine", EXIT_OTHER)
     said = body.get("engine") if isinstance(body, dict) else None
     if said and said != engine:
         raise Problem(f"the file says engine {said!r} and --engine says {engine!r}", "say it once", EXIT_OTHER)
@@ -553,12 +549,11 @@ def with_engine(body, typ, engine):
 
 
 def stored_engine(wid, tok):
-    """The engine a browser or a Browser API was made with, as LiveLLM keeps
-    it: "camoufox", or "chrome" when it keeps none."""
+    """The engine a browser was made with, as LiveLLM keeps it: "camoufox",
+    or "chrome" when it keeps none."""
     for w in request("GET", "/v1/workspace", token=tok).get("spec", {}).get("workloads", []):
         if w.get("id") == wid:
-            block = w.get("browser") or w.get("controller") or {}
-            return block.get("engine") or "chrome"
+            return (w.get("browser") or {}).get("engine") or "chrome"
     return None
 
 
@@ -839,13 +834,10 @@ def member_path(api, browser):
     return f"{workload_path(api)}/browsers/{urllib.parse.quote(browser)}"
 
 
-def browser_api_body(name, browsers, every, remotes, place=None, engine=None):
+def browser_api_body(name, browsers, every, remotes, place=None):
     names = [b.strip() for b in (browsers or "").split(",") if b.strip()]
     if every and names:
         raise Problem("--all already means every browser in the workspace", "leave out --browsers", EXIT_OTHER)
-    if engine == "camoufox" and remotes:
-        raise Problem("Remote browsers go only in a Chrome Browser API",
-                      "leave out --remote, or make a Chrome Browser API for the remote browsers", EXIT_OTHER)
     ext = []
     for r in remotes or []:
         rid, _, ws = r.partition("=")
@@ -862,8 +854,6 @@ def browser_api_body(name, browsers, every, remotes, place=None, engine=None):
         body["externalBrowsers"] = ext
     if place:
         body["placement"] = place
-    if engine == "camoufox":
-        body["engine"] = "camoufox"
     return body
 
 
@@ -876,18 +866,11 @@ def browser_api(args):
     if args.action == "create":
         if not args.yes:
             raise Problem("creating needs --yes", "only create a Browser API the user asked for, then pass --yes", EXIT_OTHER)
-        engine = getattr(args, "engine", None)
-        body = browser_api_body(args.name, args.browsers, args.all, args.remote, placement(host, region), engine)
+        body = browser_api_body(args.name, args.browsers, args.all, args.remote, placement(host, region))
         request("POST", f"/v1/workloads/{BROWSER_API}", body, token=tok)
-        answer = {"created": args.name, "type": BROWSER_API,
-                  "next": f"llc.py wait {args.name} then llc.py connect {args.name} --tool api"}
-        if engine == "camoufox":
-            camoufox_made(args.name, tok)
-            answer["engine"] = "camoufox"
-        out(answer)
+        out({"created": args.name, "type": BROWSER_API,
+             "next": f"llc.py wait {args.name} then llc.py connect {args.name} --tool api"})
         return
-    if getattr(args, "engine", None):
-        raise Problem("--engine is for create", "a Browser API's engine is set when it is made", EXIT_OTHER)
     if args.action in ("add", "remove"):
         if not args.browser:
             raise Problem("which browser?", f"llc.py browser-api {args.action} {args.name} BROWSER", EXIT_OTHER)
@@ -908,17 +891,14 @@ def browser_api(args):
         raise Problem(f"no Browser API {args.name}", f"llc.py ls --type {BROWSER_API}", EXIT_OTHER)
     c = w.get("controller") or {}
     live = next((x for x in request("GET", "/v1/status", token=tok).get("workloads", []) if x.get("id") == args.name), {})
-    camoufox = c.get("engine") == "camoufox"
-    every = "every Camoufox browser in the workspace" if camoufox else "every browser in the workspace"
     out({
         "id": args.name,
-        "drives": every if c.get("autodiscover") else "only these",
+        "drives": "every browser in the workspace" if c.get("autodiscover") else "only these",
         "browsers": c.get("browsers") or [],
         "remoteBrowsers": [e.get("id") for e in c.get("externalBrowsers") or []],
         "state": live.get("phase", "unknown"),
         "ready": live.get("ready", False),
         "answering": live.get("browsers", []),
-        **({"engine": "camoufox"} if camoufox else {}),
     })
 
 
@@ -1786,7 +1766,7 @@ def main():
     create_p.add_argument("--json", required=True)
     create_p.add_argument("--join", help="type apps: add them to this existing app (or stack) in the same step")
     create_p.add_argument("--engine", choices=["chrome", "camoufox"],
-                          help="browser, controller: the browser engine, set for good when it is made (default chrome)")
+                          help="browser: the browser engine, set for good when it is made (default chrome)")
     create_p.add_argument("--yes", action="store_true", required=True, help="the user asked for this resource")
     create_p.set_defaults(fn=create)
 
@@ -1892,8 +1872,6 @@ def main():
     bapi_p.add_argument("--browsers", help="create: the workspace browsers it drives, comma-separated")
     bapi_p.add_argument("--all", action="store_true", help="create: every browser in the workspace")
     bapi_p.add_argument("--remote", action="append", help="create: a browser running elsewhere, ID=wss://address")
-    bapi_p.add_argument("--engine", choices=["chrome", "camoufox"],
-                        help="create: the engine of the browsers it drives, set for good (default chrome)")
     bapi_p.add_argument("--host", help="create: pin it to this host (ids from llc.py hosts)")
     bapi_p.add_argument("--region", help="create: run it on any host in this region; neither: automatic")
     bapi_p.add_argument("--yes", action="store_true", help="create: the user asked for it; remove: the user agreed")

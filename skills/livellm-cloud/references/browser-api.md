@@ -28,25 +28,27 @@ A Browser API always has browsers; create the browsers first. A workspace
 browser belongs to at most one Browser API. When one is already in another,
 the answer is a 422 naming it: ask the user before taking it out there.
 
-## Chrome or Camoufox browsers
+## Chrome and Camoufox browsers
 
-A Browser API drives browsers of one engine (`references/browsers.md`),
-chosen when it is made and fixed after: Chrome unless you say otherwise.
+One Browser API holds Chrome and Camoufox browsers together
+(`references/browsers.md`); it has no engine of its own. `--browsers` names
+browsers of either engine, and `--all` takes every browser in the workspace,
+whatever its engine. Remote browsers (`--remote`, `externalBrowsers`) are
+Chrome.
+
+To work on a browser of one engine, start a session with `engine`:
 
 ```
-python3 scripts/llc.py browser-api create foxes --engine camoufox --browsers fox-1,fox-2 --yes
+curl -X POST "$URL/start_session" -H "$HEADER" -H "Content-Type: application/json" \
+  -d '{"engine": "camoufox"}'
 ```
 
-- Every browser named, and every one added later, must run its engine; a
-  browser of the other engine is refused (422 `engine_mismatch`).
-- `--all` means every browser of its engine: an every-Chrome Browser API and
-  an every-Camoufox one can both exist in a workspace.
-- Remote browsers (`--remote`, `externalBrowsers`) go only in a Chrome one.
-- Calls, sessions and `/browsers/<name>/…` work the same for both.
+Without `engine`, a call or a session goes to the browser with the fewest open
+tabs over all its browsers. `X-Browser-Id` and `/browsers/<name>/…` work the
+same for both engines.
 
 `create controller --json FILE --yes` takes the same settings as a file:
-`{"id": "scrapers", "browsers": ["agent-1", "agent-2"]}` (with
-`"engine": "camoufox"` for Camoufox browsers). A remote browser
+`{"id": "scrapers", "browsers": ["agent-1", "agent-2"]}`. A remote browser
 with a login goes in `externalBrowsers`:
 `[{"id": "office", "wsUrl": "wss://…", "authHeader": "Bearer …"}]`.
 `authHeader` is `Name: value`, or a bare value sent as `Authorization`. The
@@ -98,7 +100,8 @@ same.
 Every call lands on one browser, in one of three ways:
 
 1. **No browser named**: the one with the fewest open tabs. Nothing waits and
-   nothing is refused; a browser that can't be reached is skipped.
+   nothing is refused; a browser that can't be reached is skipped. A
+   `start_session` with `engine` picks among that engine's browsers only.
 2. **`X-Session-Id`**: the browser the session started on. Send that header
    alone.
 3. **`/browsers/<name>/…` or `X-Browser-Id: <name>`**: that browser.
@@ -119,7 +122,8 @@ curl -X DELETE "$URL/end_session" -H "$HEADER" -H "X-Session-Id: s_81f"
 ```
 
 To start the session on a chosen browser, add `X-Browser-Id` to
-`start_session`. End sessions you started. A restart of the Browser API ends
+`start_session`; for any browser of one engine, send `{"engine": "camoufox"}`
+(or `"chrome"`). End sessions you started. A restart of the Browser API ends
 them all: start a new one.
 
 ## Where it runs
@@ -136,7 +140,8 @@ Changing it (`set` with `{"controller": {"placement": {"strategy": "region", "re
 | 401 | The token ran out | `connect` again, or use the workspace key |
 | 404 | No browser of that name here, or the session is gone | `browser-api show`; start a new session |
 | 409 | The browser named contradicts the session's browser | Send `X-Session-Id` alone |
+| 409 on `start_session` | It holds no browser of that `engine`, or the browser named runs the other one | `browser-api show`; ask the user before adding a browser |
+| 422 on `start_session` | `engine` is neither `chrome` nor `camoufox` | Fix the value |
 | 400 | The path names one browser and `X-Browser-Id` another | Name it once |
-| 422 `engine_mismatch` | A browser of the other engine, or a remote browser in a Camoufox one | Pick browsers of its engine; make a second Browser API for the others |
 | 502 | The named browser can't be reached | `wait` for it, or leave the name out |
 | 503 | No browsers, or none can be reached | Just made: wait until `GET <url>/browsers` lists them (up to about 2 minutes), then retry. Otherwise `browser-api show`; tell the user |

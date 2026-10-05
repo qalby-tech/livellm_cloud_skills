@@ -10,12 +10,15 @@ Claude Code users get the update only when the version changes.
 - Camoufox browsers: a second browser engine, Firefox-based, beside Chrome
   (the default). Pick it when a site blocks Chrome as a bot or says you use a
   VPN when you don't. `llc.py create browser --json FILE --engine camoufox
-  --yes` (or `"engine": "camoufox"` in the file) and `llc.py browser-api
-  create NAME --engine camoufox …`; `llc.py engines` lists the engines this
-  LiveLLM offers. The engine is set when a browser or a Browser API is made
-  and can't change; `ls` and `browser-api show` name a Camoufox one. A
-  create that a LiveLLM without engines turned into Chrome is said, not
-  passed off as Camoufox.
+  --yes` (or `"engine": "camoufox"` in the file); `llc.py engines` lists the
+  engines this LiveLLM offers. A browser's engine is set when it is made and
+  can't change; `ls` names a Camoufox browser. A create that a LiveLLM
+  without engines turned into Chrome is said, not passed off as Camoufox.
+- One Browser API holds Chrome and Camoufox browsers together: `browser-api
+  create` takes no engine, `--all` is every browser in the workspace, and
+  remote browsers are Chrome. `POST /start_session` takes an optional
+  `engine` (`{"engine": "camoufox"}`) to start on a browser of that engine;
+  without it, the browser with the fewest open tabs over all of them.
 - A Camoufox browser's `connect --tool cdp` answers `playwright` (address,
   header and version) instead of `cdp`. It takes **Playwright 1.62 only**;
   another version is refused with a 428. A later Camoufox release may move
@@ -31,18 +34,18 @@ Claude Code users get the update only when the version changes.
   `troubleshooting.md`: work in `contexts[0]`, never `browser.new_page()`; a
   context of your own needs `no_viewport=True`; `page.evaluate` runs apart
   from the page, `mw:` runs it in the page; no extensions (an ad blocker is
-  built in); a Browser API drives one engine, remote browsers only in a
-  Chrome one; profiles move only between browsers of one engine, cookies
+  built in); a Browser API holds both engines, and `start_session` takes
+  `engine`; profiles move only between browsers of one engine, cookies
   between any (a cookie Camoufox refuses is counted in `dropped`); a new
   Firefox major version draws a new fingerprint; a context with its own proxy
   goes around the browser's proxies.
 - `llc.py` answers the new refusals with what to do: 422
   `engine_unavailable`, `engine_fixed`, `extensions_unsupported`,
-  `engine_mismatch`, `profile_engine`, a `not_livellm_profile` that names an
-  engine (a profile from the other engine: add its cookies), and a 409
-  `profile_newer` from a newer Camoufox. A Browser API's `engine_fixed` is
-  told to make a new Browser API, and a database's engine refusal keeps its
-  own answer. Chrome's answers from a LiveLLM without engines are unchanged.
+  `engine_mismatch` (a profile copied from a browser of the other engine),
+  `profile_engine`, a `not_livellm_profile` that names an engine (a profile
+  from the other engine: add its cookies), and a 409 `profile_newer` from a
+  newer Camoufox. A database's engine refusal keeps its own answer. Chrome's
+  answers from a LiveLLM without engines are unchanged.
 - `llc.py engines` asks with the sign-in or key when there is one (an engine
   offered to some people only is listed to them alone), and without one, or
   with one the list won't take, reads the public list.

@@ -141,7 +141,8 @@ Reconnecting needs a fresh `connect`.
 
 To spread many pages over several browsers, or give a service one address that
 keeps working as browsers are added, put them in a Browser API:
-`references/browser-api.md`.
+`references/browser-api.md`. One Browser API holds Chrome and Camoufox
+browsers together.
 
 ## Let the user watch or step in
 

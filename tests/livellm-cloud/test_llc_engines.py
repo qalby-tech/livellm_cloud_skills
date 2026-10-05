@@ -4,7 +4,9 @@ examples in assets/, against stand-ins that record every call.
 The refusals are pinned to the wording the platform's engine contract gives
 them (422 engine_unavailable, engine_fixed, extensions_unsupported,
 engine_mismatch, profile_engine; 409 profile_newer for Camoufox); the Chrome
-answers must come out exactly as they did before engines existed.
+answers must come out exactly as they did before engines existed. Only a
+browser has an engine: a Browser API holds browsers of both engines, and its
+create sends no engine.
 
 Run from the repository root:  python3 -m unittest discover -s tests/livellm-cloud
 Only the standard library (node, when it is there, for the .mjs examples).
@@ -22,6 +24,7 @@ import tempfile
 import threading
 import types
 import unittest
+from unittest import mock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -133,13 +136,10 @@ class EngineTest(unittest.TestCase):
             (422, "engine_unavailable", "This platform doesn't offer Camoufox browsers.", "llc.py engines", llc.EXIT_USER),
             (422, "engine_fixed", "A browser's engine can't change after creation — make a new browser "
                                   "(its cookies can be imported into it).", "leave engine out", llc.EXIT_OTHER),
-            (422, "engine_fixed", "A Browser API's engine can't change after creation — make a new Browser API.",
-             "make a new Browser API (llc.py browser-api create", llc.EXIT_OTHER),
             (422, "extensions_unsupported", "Camoufox browsers take no extensions yet.", "leave extensions out", llc.EXIT_OTHER),
-            (422, "engine_mismatch", "Browser API scrapers drives Camoufox browsers; agent-1 runs Chrome",
-             "browsers of the same engine", llc.EXIT_OTHER),
-            (422, "engine_mismatch", "Remote browsers go only in a Chrome Browser API", "remote browsers go only in a Chrome",
-             llc.EXIT_OTHER),
+            # the profile copy, as the platform words it
+            (422, "engine_mismatch", "shop runs Chrome and fox runs Camoufox: profiles move only between browsers of one "
+                                     "engine — import its cookies instead.", "llc.py cookies", llc.EXIT_OTHER),
             (422, "profile_engine", "This profile is from a Chrome browser; this browser runs Camoufox. Profiles move only "
                                     "between browsers of one engine — import its cookies instead.", "llc.py cookies", llc.EXIT_OTHER),
             (422, "not_livellm_profile", "Only profiles exported from LiveLLM Camoufox browsers can be imported into this "
@@ -152,14 +152,17 @@ class EngineTest(unittest.TestCase):
                 problem = llc.status_problem(status, payload)
                 self.assertIn(words, problem.next, payload)
                 self.assertEqual(problem.code, exit_code, payload)
-            if code not in ("not_livellm_profile", "profile_newer") and "Browser API's" not in message:
+            if code not in ("not_livellm_profile", "profile_newer"):
                 problem = llc.status_problem(status, {"error": "refused", "code": code})
                 self.assertIn(words, problem.next, code)
-        # a Browser API's refusal never gets the browser's advice (cookies)
-        for payload in ({"error": "A Browser API's engine can't change after creation — make a new Browser API.",
-                         "code": "engine_fixed"},
-                        {"error": "A Browser API's engine can't change after creation — make a new Browser API."}):
-            self.assertNotIn("cookies", llc.status_problem(422, payload).next, payload)
+        # engine_mismatch is the profile copy only: never advice about a Browser API's engine
+        problem = llc.status_problem(422, {"error": "refused", "code": "engine_mismatch"})
+        self.assertNotIn("Browser API", problem.next)
+        # the pool wordings of before mean nothing now: the plain answer
+        for message in ("Browser API scrapers drives Camoufox browsers; agent-1 runs Chrome",
+                        "Remote browsers go only in a Chrome Browser API"):
+            self.assertEqual(llc.status_problem(422, {"error": message}).next,
+                             "fix the field the message names; do not retry unchanged", message)
 
     def test_a_database_engine_refusal_is_not_a_browser_one(self):
         # tenant-api's own refusal for a database (no code): the plain 422 answer, as before engines
@@ -224,6 +227,9 @@ class EngineTest(unittest.TestCase):
     def test_engine_is_refused_where_it_does_not_belong(self):
         _, problem = self.run_json(llc.create, type="pod", json=self.file("p.json", {"id": "web"}), engine="camoufox")
         self.assertIn("--engine is for a browser", problem.message)
+        # a Browser API has no engine
+        _, problem = self.run_json(llc.create, type="controller", json=self.file("c.json", {"id": "scrapers"}), engine="camoufox")
+        self.assertEqual(problem.message, "--engine is for a browser, not controller")
         _, problem = self.run_json(llc.create, type="browser", json=self.file("b.json", {"id": "b", "engine": "chrome"}),
                                    engine="camoufox")
         self.assertIn("say it once", problem.next)
@@ -232,45 +238,57 @@ class EngineTest(unittest.TestCase):
     # --- Browser API ---
 
     def test_browser_api_create(self):
-        res, problem = self.run_json(llc.browser_api, action="create", name="scrapers", browsers="a,b", engine="chrome")
+        res, problem = self.run_json(llc.browser_api, action="create", name="scrapers", browsers="a,b")
         self.assertIsNone(problem)
         self.assertEqual(self.posts(), [("/v1/workloads/controller", {"id": "scrapers", "autodiscover": False, "browsers": ["a", "b"]})])
         self.assertEqual(res, {"created": "scrapers", "type": "controller",
                                "next": "llc.py wait scrapers then llc.py connect scrapers --tool api"})
+        # every browser in the workspace, whatever its engine, and remote browsers beside them
         self.fake.calls.clear()
-        self.fake.workspace({"id": "foxes", "type": "controller", "controller": {"engine": "camoufox", "autodiscover": True}})
-        res, problem = self.run_json(llc.browser_api, action="create", name="foxes", all=True, engine="camoufox")
+        res, problem = self.run_json(llc.browser_api, action="create", name="all", all=True,
+                                     remote=["office=wss://office.example/cdp"])
         self.assertIsNone(problem)
-        self.assertEqual(self.posts(), [("/v1/workloads/controller", {"id": "foxes", "autodiscover": True, "engine": "camoufox"})])
-        self.assertEqual(res["engine"], "camoufox")
+        self.assertEqual(self.posts(), [("/v1/workloads/controller", {
+            "id": "all", "autodiscover": True, "externalBrowsers": [{"id": "office", "wsUrl": "wss://office.example/cdp"}]})])
+        self.assertNotIn("engine", res)
 
-    def test_a_camoufox_browser_api_takes_no_remote_browsers(self):
-        _, problem = self.run_json(llc.browser_api, action="create", name="foxes", browsers="a",
-                                   remote=["office=wss://office.example/cdp"], engine="camoufox")
-        self.assertIn("Remote browsers go only in a Chrome Browser API", problem.message)
+    def test_browser_api_create_takes_no_engine(self):
+        # refused by the command line itself, before anything is sent
+        for argv in (["browser-api", "create", "foxes", "--all", "--engine", "camoufox", "--yes"],
+                     ["browser-api", "create", "foxes", "--all", "--engine", "chrome", "--yes"]):
+            err = io.StringIO()
+            with mock.patch.object(sys, "argv", ["llc.py", *argv]), contextlib.redirect_stderr(err), \
+                    contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as done:
+                llc.main()
+            self.assertEqual(done.exception.code, 2, argv)
+            self.assertIn("--engine", err.getvalue())
         self.assertEqual(self.fake.calls, [])
 
-    def test_browser_api_show_names_a_camoufox_pool(self):
-        self.fake.workspace({"id": "foxes", "type": "controller", "controller": {"engine": "camoufox", "autodiscover": True}},
-                            {"id": "scrapers", "type": "controller", "controller": {"autodiscover": True}})
-        res, _ = self.run_json(llc.browser_api, action="show", name="foxes")
-        self.assertEqual(res["drives"], "every Camoufox browser in the workspace")
-        self.assertEqual(res["engine"], "camoufox")
+    def test_browser_api_show_holds_both_engines(self):
+        self.fake.workspace({"id": "shop", "type": "browser", "browser": {}},
+                            {"id": "fox", "type": "browser", "browser": {"engine": "camoufox"}},
+                            {"id": "scrapers", "type": "controller", "controller": {"autodiscover": True}},
+                            {"id": "pair", "type": "controller", "controller": {"browsers": ["shop", "fox"]}})
         res, _ = self.run_json(llc.browser_api, action="show", name="scrapers")
         self.assertEqual(sorted(res), ["answering", "browsers", "drives", "id", "ready", "remoteBrowsers", "state"])
         self.assertEqual(res["drives"], "every browser in the workspace")
+        res, _ = self.run_json(llc.browser_api, action="show", name="pair")
+        self.assertEqual(res["drives"], "only these")
+        self.assertEqual(res["browsers"], ["shop", "fox"])
+        self.assertNotIn("engine", res)
 
     # --- ls, engines, cookies ---
 
     def test_ls_names_only_a_camoufox_engine(self):
         self.fake.workspace({"id": "shop", "type": "browser", "browser": {}},
                             {"id": "fox", "type": "browser", "browser": {"engine": "camoufox"}},
-                            {"id": "foxes", "type": "controller", "controller": {"engine": "camoufox"}})
+                            {"id": "scrapers", "type": "controller", "controller": {"autodiscover": True}})
         res, _ = self.run_json(llc.ls, type=None)
         by_id = {r["id"]: r for r in res["resources"]}
         self.assertNotIn("engine", by_id["shop"])
         self.assertEqual(by_id["fox"]["engine"], "camoufox")
-        self.assertEqual(by_id["foxes"]["engine"], "camoufox")
+        # a Browser API has no engine
+        self.assertNotIn("engine", by_id["scrapers"])
 
     def test_engines_is_one_read_with_the_sign_in_when_there_is_one(self):
         # An engine in preview is listed only to whom it is offered, so the
