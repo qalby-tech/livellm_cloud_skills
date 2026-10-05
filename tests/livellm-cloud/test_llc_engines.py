@@ -265,13 +265,20 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(self.fake.calls, [])
 
     def test_browser_api_show_holds_both_engines(self):
+        # "old-foxes" still carries the engine a Browser API once had: it is
+        # ignored, so the Browser API drives every browser, of any engine.
         self.fake.workspace({"id": "shop", "type": "browser", "browser": {}},
                             {"id": "fox", "type": "browser", "browser": {"engine": "camoufox"}},
                             {"id": "scrapers", "type": "controller", "controller": {"autodiscover": True}},
+                            {"id": "old-foxes", "type": "controller",
+                             "controller": {"autodiscover": True, "engine": "camoufox"}},
                             {"id": "pair", "type": "controller", "controller": {"browsers": ["shop", "fox"]}})
-        res, _ = self.run_json(llc.browser_api, action="show", name="scrapers")
-        self.assertEqual(sorted(res), ["answering", "browsers", "drives", "id", "ready", "remoteBrowsers", "state"])
-        self.assertEqual(res["drives"], "every browser in the workspace")
+        for name in ("scrapers", "old-foxes"):
+            res, _ = self.run_json(llc.browser_api, action="show", name=name)
+            self.assertEqual(sorted(res), ["answering", "browsers", "drives", "id", "ready", "remoteBrowsers", "state"],
+                             name)
+            self.assertEqual(res["drives"], "every browser in the workspace", name)
+            self.assertNotIn("Camoufox", json.dumps(res), name)
         res, _ = self.run_json(llc.browser_api, action="show", name="pair")
         self.assertEqual(res["drives"], "only these")
         self.assertEqual(res["browsers"], ["shop", "fox"])
@@ -282,20 +289,23 @@ class EngineTest(unittest.TestCase):
     def test_ls_names_only_a_camoufox_engine(self):
         self.fake.workspace({"id": "shop", "type": "browser", "browser": {}},
                             {"id": "fox", "type": "browser", "browser": {"engine": "camoufox"}},
-                            {"id": "scrapers", "type": "controller", "controller": {"autodiscover": True}})
+                            {"id": "scrapers", "type": "controller", "controller": {"autodiscover": True}},
+                            {"id": "old-foxes", "type": "controller",
+                             "controller": {"autodiscover": True, "engine": "camoufox"}})
         res, _ = self.run_json(llc.ls, type=None)
         by_id = {r["id"]: r for r in res["resources"]}
         self.assertNotIn("engine", by_id["shop"])
         self.assertEqual(by_id["fox"]["engine"], "camoufox")
-        # a Browser API has no engine
+        # a Browser API has no engine, even one that still carries the old field
         self.assertNotIn("engine", by_id["scrapers"])
+        self.assertNotIn("engine", by_id["old-foxes"])
 
     def test_engines_is_one_read_with_the_sign_in_when_there_is_one(self):
-        # An engine in preview is listed only to whom it is offered, so the
-        # key (or sign-in) goes with the read; without one, the public list.
+        # The key (or sign-in) goes with the read, so the list is the one
+        # this account gets; without one, or with one it won't take, the
+        # public list.
         answer = {"engines": [{"id": "chrome", "name": "Chrome", "protocol": "cdp", "default": True},
-                              {"id": "camoufox", "name": "Camoufox", "protocol": "playwright", "playwright": "1.62",
-                               "preview": True}]}
+                              {"id": "camoufox", "name": "Camoufox", "protocol": "playwright", "playwright": "1.62"}]}
         self.fake.routes["GET /v1/browsers/engines"] = (200, answer)
         res, problem = self.run_json(llc.engines)
         self.assertIsNone(problem)

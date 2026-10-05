@@ -1357,8 +1357,8 @@ def cookies(args):
 
 def engines(_args):
     """The browser engines this LiveLLM offers: Chrome, and Camoufox where it is offered.
-    Asked with the sign-in or key when there is one, since an engine offered
-    to some people only is listed to them alone; without one, the public list."""
+    Asked with the sign-in or key when there is one; without one, or with one
+    the list won't take, the public list."""
     path = "/v1/browsers/engines"
     try:
         tok = token()

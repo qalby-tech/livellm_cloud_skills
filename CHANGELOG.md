@@ -46,9 +46,8 @@ Claude Code users get the update only when the version changes.
   from the other engine: add its cookies), and a 409 `profile_newer` from a
   newer Camoufox. A database's engine refusal keeps its own answer. Chrome's
   answers from a LiveLLM without engines are unchanged.
-- `llc.py engines` asks with the sign-in or key when there is one (an engine
-  offered to some people only is listed to them alone), and without one, or
-  with one the list won't take, reads the public list.
+- `llc.py engines` asks with the sign-in or key when there is one, and
+  without one, or with one the list won't take, reads the public list.
 
 ## 1.10.1
 
