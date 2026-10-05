@@ -28,8 +28,25 @@ A Browser API always has browsers; create the browsers first. A workspace
 browser belongs to at most one Browser API. When one is already in another,
 the answer is a 422 naming it: ask the user before taking it out there.
 
+## Chrome or Camoufox browsers
+
+A Browser API drives browsers of one engine (`references/browsers.md`),
+chosen when it is made and fixed after: Chrome unless you say otherwise.
+
+```
+python3 scripts/llc.py browser-api create foxes --engine camoufox --browsers fox-1,fox-2 --yes
+```
+
+- Every browser named, and every one added later, must run its engine; a
+  browser of the other engine is refused (422 `engine_mismatch`).
+- `--all` means every browser of its engine: an every-Chrome Browser API and
+  an every-Camoufox one can both exist in a workspace.
+- Remote browsers (`--remote`, `externalBrowsers`) go only in a Chrome one.
+- Calls, sessions and `/browsers/<name>/…` work the same for both.
+
 `create controller --json FILE --yes` takes the same settings as a file:
-`{"id": "scrapers", "browsers": ["agent-1", "agent-2"]}`. A remote browser
+`{"id": "scrapers", "browsers": ["agent-1", "agent-2"]}` (with
+`"engine": "camoufox"` for Camoufox browsers). A remote browser
 with a login goes in `externalBrowsers`:
 `[{"id": "office", "wsUrl": "wss://…", "authHeader": "Bearer …"}]`.
 `authHeader` is `Name: value`, or a bare value sent as `Authorization`. The
@@ -120,5 +137,6 @@ Changing it (`set` with `{"controller": {"placement": {"strategy": "region", "re
 | 404 | No browser of that name here, or the session is gone | `browser-api show`; start a new session |
 | 409 | The browser named contradicts the session's browser | Send `X-Session-Id` alone |
 | 400 | The path names one browser and `X-Browser-Id` another | Name it once |
+| 422 `engine_mismatch` | A browser of the other engine, or a remote browser in a Camoufox one | Pick browsers of its engine; make a second Browser API for the others |
 | 502 | The named browser can't be reached | `wait` for it, or leave the name out |
 | 503 | No browsers, or none can be reached | Just made: wait until `GET <url>/browsers` lists them (up to about 2 minutes), then retry. Otherwise `browser-api show`; tell the user |

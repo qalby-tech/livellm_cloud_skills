@@ -21,6 +21,9 @@ def main() -> int:
         return 2
     info = json.loads(open(sys.argv[1]).read())
     url = sys.argv[2]
+    if "cdp" not in info and info.get("playwright"):
+        print("This browser runs Camoufox: use assets/playwright_connect.py", file=sys.stderr)
+        return 2
 
     with sync_playwright() as p:
         browser = p.chromium.connect_over_cdp(info["cdp"]["url"], headers=info["cdp"]["headers"])

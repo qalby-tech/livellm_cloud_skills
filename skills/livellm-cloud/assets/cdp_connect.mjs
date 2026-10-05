@@ -17,6 +17,10 @@ if (!file || !url) {
 }
 
 const info = JSON.parse(readFileSync(file, "utf8"));
+if (!info.cdp && info.playwright) {
+  console.error("This browser runs Camoufox: use assets/playwright_connect.mjs");
+  process.exit(2);
+}
 const browser = await chromium.connectOverCDP(info.cdp.url, { headers: info.cdp.headers });
 const context = browser.contexts()[0] ?? (await browser.newContext());
 const page = await context.newPage();

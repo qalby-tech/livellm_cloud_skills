@@ -120,7 +120,7 @@ Say this to the user plainly when it matters:
   current exit with `"proxyRotated": false` and a `reason` that says which.
   A session started right after `proxy set` keeps the first exit.
 - **It covers the browser as LiveLLM starts it.** A tool connected to the
-  browser can open its own context with a proxy of its own, and an extension
+  browser (Chrome or Camoufox) can open its own context with a proxy of its own, and an extension
   with proxy permissions can change it. The Proxies permission controls the
   browser's settings, not what a connected tool does.
 

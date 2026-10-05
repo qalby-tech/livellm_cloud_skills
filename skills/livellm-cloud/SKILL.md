@@ -1,11 +1,11 @@
 ---
 name: livellm-cloud
-description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP while a person watches the live view, give it a language, a time zone and the user's own proxies (rotating, mobile ones too), save, restore, export or import its profile, put several browsers behind one Browser API address, run commands on Linux (Ubuntu, Debian or Fedora) and Windows machines, work on Ubuntu or Windows desktops and Desktop Apps by screenshot and click, share a screen with the user by link, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
+description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP, or a Firefox-based Camoufox browser with Playwright for sites that block Chrome, while a person watches the live view, give it a language, a time zone and the user's own proxies (rotating, mobile ones too), save, restore, export or import its profile, put several browsers behind one Browser API address, run commands on Linux (Ubuntu, Debian or Fedora) and Windows machines, work on Ubuntu or Windows desktops and Desktop Apps by screenshot and click, share a screen with the user by link, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
 license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.10.1
+  version: 1.11.0
   documentation: https://docs.live-llm.com
 ---
 
@@ -80,6 +80,7 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 | The user to watch a screen, or take it over | Screen link (`share`) | `references/machines.md` |
 | A service or site online, from an image or a Git repo, one service or several; a raw TCP/UDP port (game server, VPN) | Composable App (`pod`) | `references/apps.md` |
 | A site automated, logged into, scraped or tested in real Chrome | Browser (`browser`) | `references/browsers.md` |
+| A site that blocks Chrome as a bot or says "VPN" when there is none | Camoufox browser (`create browser --engine camoufox`) | `references/browsers.md` |
 | A browser in another language or time zone | Browser `locale`, `timezone` | `references/browsers.md` |
 | A browser through the user's proxies; rotating IPs, mobile proxies | `proxy set`, `proxy rotate` | `references/proxies.md` |
 | A browser's sign-ins kept as a snapshot, switched back, exported, imported, moved; cookies added | `profile`, `cookies` | `references/profiles.md` |
@@ -123,7 +124,8 @@ python3 scripts/llc.py connect shop --tool cdp
 ```
 
 Connect a Playwright client to `cdp.url` with the header from `cdp.headers`
-(see `assets/cdp_connect.py`), drive the page, and when the site asks for a
+(see `assets/cdp_connect.py`; a Camoufox browser answers `playwright` instead:
+`assets/playwright_connect.py`), drive the page, and when the site asks for a
 code, run `connect shop --tool view` and give the user that link so they can
 type it while you wait. Leave the browser running: it stays logged in for
 next time.
@@ -190,7 +192,8 @@ screen; one still going after its wait answers `done: false` and a run id, and
 run, and `release_machine` lets a machine go. To hand the user a screen (rule
 6), `share_screen` with mode control gives a link to a machine or a Desktop
 App and `stop_sharing` closes it; for a browser, `connect_resource`
-with tool view gives its live view. `browser_proxy` reads, sets and rotates a
+with tool view gives its live view; with tool cdp, a Camoufox browser
+answers a Playwright address (follow its `how`). `browser_proxy` reads, sets and rotates a
 browser's proxies, and `browser_profile` lists, takes, restores, deletes and
 copies its profile snapshots; exporting or importing a profile file stays with
 this script. A tool you lack permission for is not listed at all.

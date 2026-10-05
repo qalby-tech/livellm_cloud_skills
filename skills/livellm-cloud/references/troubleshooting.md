@@ -56,6 +56,24 @@ or a smaller size.
 Run `connect` again and use the fresh address. A session that is already open
 keeps working.
 
+**A browser refuses an engine.** 422 `engine_unavailable`: this LiveLLM
+doesn't offer Camoufox (`llc.py engines`); tell the user. `engine_fixed`: a
+browser's engine can't change; make a new one and add the cookies.
+`extensions_unsupported`: Camoufox takes no extensions. `engine_mismatch`: a
+Browser API drives one engine, and a profile copies only within one.
+`profile_engine`: a profile from the other engine; add its cookies instead.
+
+**A Camoufox browser's address refuses Playwright (428).** The installed
+Playwright isn't the one `playwright.version` names (1.62). Install that one
+(`assets/playwright_connect.py` prints the line). `cdp_connect` saying "This
+browser runs Camoufox" means use `playwright_connect` instead. A
+`browser.new_page()` that hangs or a page at the wrong size: open pages in
+`contexts[0]`, and give a context of your own `no_viewport=True`.
+
+**A Camoufox browser looks like a new device to a site.** An update to a new
+Firefox major version draws a new fingerprint. Ask the user to sign in again
+on the live view if the site asks.
+
 **A browser's pages stop loading after a proxy change.** `proxy show ID`:
 `mode: waiting` means the settings haven't reached it yet (a few seconds);
 `lastError: upstream_unreachable` or `upstream_login_refused` means the proxy

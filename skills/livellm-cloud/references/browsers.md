@@ -1,9 +1,9 @@
 # Browsers
 
-A browser is a real Chrome the user owns. It keeps its profile, so logins
-survive between tasks, and a person can watch it or take over at any time. In
-the console, browsers are made under New resource → Apps → Browser and listed
-under Apps.
+A browser is a real Chrome (or Camoufox, below) the user owns. It keeps its
+profile, so logins survive between tasks, and a person can watch it or take
+over at any time. In the console, browsers are made under New resource → Apps
+→ Browser and listed under Apps.
 
 ## Reuse before you create
 
@@ -29,6 +29,31 @@ python3 scripts/llc.py wait shop
 ```
 
 Ids are short and lowercase; the id shows up in the browser's addresses.
+
+## Chrome or Camoufox
+
+A browser runs one of two engines, chosen when it is made:
+
+- **Chrome** (the default): driven over CDP, takes extensions.
+- **Camoufox**: Firefox-based. Pick it when a site blocks Chrome as a bot or
+  says you use a VPN when you don't; otherwise use Chrome. It is driven with
+  Playwright 1.62 only, takes no extensions (an ad blocker, uBlock Origin, is
+  built in), and is offered only where `llc.py engines` lists it.
+
+```
+python3 scripts/llc.py create browser --json browser.json --engine camoufox --yes
+```
+
+(or `"engine": "camoufox"` in the file). **The engine can't change later**: a
+422 `engine_fixed` says so. For the other engine, make a new browser and add
+the old one's cookies to it (`references/profiles.md`); profiles themselves
+move only between browsers of one engine. `ls` shows `"engine": "camoufox"`
+on a Camoufox browser; a browser without it is Chrome.
+
+Language, time zone, location, proxies and the live view work the same on
+both. A Camoufox browser keeps the same fingerprint (fonts, graphics, audio)
+across restarts; an update to a new Firefox major version draws a new one,
+which sites can see as a new device.
 
 ## Language, time zone and location
 
@@ -80,6 +105,35 @@ Connect straight to `cdp.url`. Don't look for a discovery page: there isn't one
 on that address. `assets/cdp_connect.py` and `assets/cdp_connect.mjs` are
 working examples for Playwright in Python and Node.
 
+### A Camoufox browser
+
+The same `connect ID --tool cdp` answers `playwright` instead of `cdp`:
+
+- `playwright.url` and `playwright.headers`: the address and the header,
+  good for 15 minutes;
+- `playwright.version`: the Playwright it takes, `1.62`. Any other version is
+  refused (428): `pip install "playwright==1.62.*"` or `npm i playwright@1.62`.
+
+```python
+b = p.firefox.connect(info["playwright"]["url"], headers=info["playwright"]["headers"])
+page = b.contexts[0].new_page()
+```
+
+- Work in `b.contexts[0]`: it holds the cookies and sign-ins. Never call
+  `b.new_page()`. A context of your own needs `no_viewport=True`
+  (`viewport: null` in Node), or its pages open at the wrong size.
+- Close your pages; never close the context or the browser.
+- `page.evaluate` runs apart from the page's own scripts, so they can't see
+  it. Start the script with `mw:` to run it in the page itself, when you need
+  the page's own variables.
+- A context of your own with its own `proxy` goes around the browser's
+  proxies; use the browser's (`references/proxies.md`).
+
+`assets/playwright_connect.py` and `assets/playwright_connect.mjs` are working
+examples; they check the Playwright version first and print the line to
+install the right one. `connect --env` exports `LIVELLM_PLAYWRIGHT_URL` and
+`LIVELLM_PLAYWRIGHT_VERSION` for a Camoufox browser.
+
 A session that is already open keeps working after the 15 minutes are up.
 Reconnecting needs a fresh `connect`.
 
@@ -129,4 +183,10 @@ the browser there; one pinned to a host waits while that host is down.
 - **The page looks logged out.** The site ended the session. Ask the user to log
   in again on the live view.
 - **A site blocks automation.** Slow down, and drive the page the way a person
-  would. Don't try to hide what you are.
+  would. Don't try to hide what you are. A site that blocks Chrome outright
+  ("you use a VPN", a bot page) may let a Camoufox browser through, often with
+  a CAPTCHA for the user to solve on the live view: ask the user before making
+  one.
+- **`cdp_connect` says "This browser runs Camoufox".** Use
+  `assets/playwright_connect.py`. A 428 from the address is the wrong
+  Playwright version: install the one `playwright.version` names.

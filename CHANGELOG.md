@@ -5,6 +5,42 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.11.0
+
+- Camoufox browsers: a second browser engine, Firefox-based, beside Chrome
+  (the default). Pick it when a site blocks Chrome as a bot or says you use a
+  VPN when you don't. `llc.py create browser --json FILE --engine camoufox
+  --yes` (or `"engine": "camoufox"` in the file) and `llc.py browser-api
+  create NAME --engine camoufox …`; `llc.py engines` lists the engines this
+  LiveLLM offers. The engine is set when a browser or a Browser API is made
+  and can't change; `ls` and `browser-api show` name a Camoufox one. A
+  create that a LiveLLM without engines turned into Chrome is said, not
+  passed off as Camoufox.
+- A Camoufox browser's `connect --tool cdp` answers `playwright` (address,
+  header and version) instead of `cdp`. It takes **Playwright 1.62 only**;
+  another version is refused with a 428. A later Camoufox release may move
+  that pin, and the answer's `playwright.version` always names the one to
+  use. New `assets/playwright_connect.py` and `.mjs` check the installed
+  version first and print the exact `pip` or `npm` line; `connect --env`
+  exports `LIVELLM_PLAYWRIGHT_URL` and `LIVELLM_PLAYWRIGHT_VERSION`.
+- Earlier skill versions can't drive a Camoufox browser: their
+  `cdp_connect` and `connect --env` look for `cdp` and find none. From this
+  version, `cdp_connect.py` and `.mjs` given a Camoufox answer point at
+  `playwright_connect` and exit 2; with Chrome they work as before.
+- `browsers.md`, `browser-api.md`, `profiles.md`, `proxies.md` and
+  `troubleshooting.md`: work in `contexts[0]`, never `browser.new_page()`; a
+  context of your own needs `no_viewport=True`; `page.evaluate` runs apart
+  from the page, `mw:` runs it in the page; no extensions (an ad blocker is
+  built in); a Browser API drives one engine, remote browsers only in a
+  Chrome one; profiles move only between browsers of one engine, cookies
+  between any (a cookie Camoufox refuses is counted in `dropped`); a new
+  Firefox major version draws a new fingerprint; a context with its own proxy
+  goes around the browser's proxies.
+- `llc.py` answers the new refusals with what to do: 422
+  `engine_unavailable`, `engine_fixed`, `extensions_unsupported`,
+  `engine_mismatch`, `profile_engine`, a Camoufox `not_livellm_profile`, and a
+  409 `profile_newer` from a newer Camoufox. Chrome's answers are unchanged.
+
 ## 1.10.1
 
 - A profile import of a password-protected file sent without its password

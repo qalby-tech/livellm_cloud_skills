@@ -1,7 +1,8 @@
 # Browser profiles
 
 A browser's profile is everything it remembers: cookies and sign-ins, saved
-site data, settings and extensions. It is kept between tasks. You can take
+site data, settings and extensions (a Camoufox browser's also holds its
+fingerprint, so an imported or copied profile brings that along). It is kept between tasks. You can take
 snapshots of it and switch back, export it to a file, import one, copy it to
 another browser, or add cookies to it.
 
@@ -87,8 +88,12 @@ python3 scripts/llc.py profile import shop --file shop.llcprofile.age --password
   means ask the user for the file's password, put it in an environment
   variable and pass `--password-env VAR`. Never guess one, never type it on
   the command line.
-- A profile from a newer Chrome answers 409 "Import anyway?": pass `--force`
-  only if the user agrees.
+- A profile from a newer Chrome (or Camoufox) answers 409 "Import anyway?":
+  pass `--force` only if the user agrees.
+- **Profiles move only between browsers of one engine.** A Chrome profile into
+  a Camoufox browser, or the other way, is refused (422 `profile_engine`);
+  so is a copy across engines (422 `engine_mismatch`). Add the sign-ins as
+  cookies instead (below).
 - Language and time zone stay as the browser's settings say, whatever the
   file had.
 
@@ -101,7 +106,8 @@ python3 scripts/llc.py profile copy shop-2 --from shop --yes
 ```
 
 `shop-2`'s profile is replaced with `shop`'s (or with `--snapshot ID` of
-`shop`). `shop` is left as it is. Both must be in this workspace.
+`shop`). `shop` is left as it is. Both must be in this workspace and run the
+same engine.
 
 ## Add cookies
 
@@ -118,7 +124,10 @@ rm cookies.json
 ```
 
 They are added to the running browser at once; the answer gives only the
-count. Up to 5000 cookies. Cookies are sign-ins too: only ones the user gave
+count. Up to 5000 cookies. This is how sign-ins move between a Chrome and a
+Camoufox browser. A Camoufox browser leaves out cookies Firefox refuses (a
+`"sameSite": "None"` one without `"secure": true`, for one) and counts them in
+`dropped`. Cookies are sign-ins too: only ones the user gave
 you, and delete the file afterwards.
 
 ## With the LiveLLM tools
