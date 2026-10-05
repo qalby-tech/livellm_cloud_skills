@@ -142,6 +142,14 @@ install the right one. `connect ID --tool cdp --env` exports `LIVELLM_PLAYWRIGHT
 A session that is already open keeps working after the 15 minutes are up.
 Reconnecting needs a fresh `connect`.
 
+## From inside the workspace
+
+A new browser is closed to the rest of the workspace: its automation address
+answers inside only the Browser API that drives it and the resources its
+`reachableFrom` names. Whatever reaches it can drive it and read its sign-ins,
+so opening it is the user's call (rule 11, `references/inside-access.md`).
+`connect` shows its inside addresses under `inside`.
+
 ## Several browsers behind one address
 
 To spread many pages over several browsers, or give a service one address that

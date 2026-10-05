@@ -1,5 +1,6 @@
 """The validator's consent check: SKILL.md must say, word for word, that the
-agent asks the person before changing proxies or moving a profile.
+agent asks the person before changing proxies, moving a profile or letting
+resources reach each other.
 
 Run from the repository root:  python3 -m unittest discover -s tests/livellm-cloud
 Needs PyYAML (the validator does).
@@ -19,7 +20,7 @@ SKILL = ROOT / "skills" / "livellm-cloud" / "SKILL.md"
 
 
 class ConsentSentencesTest(unittest.TestCase):
-    def test_the_skill_says_both(self):
+    def test_the_skill_says_all_three(self):
         self.assertEqual(validate.missing_consent_sentences(SKILL.read_text(encoding="utf-8")), [])
 
     def test_wrapping_and_indents_do_not_count(self):

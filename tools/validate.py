@@ -30,13 +30,20 @@ MAX_BODY_WORDS = 5000
 # What an agent must ask the person before doing, word for word in the
 # livellm-cloud skill's SKILL.md (line breaks and indents don't count). The
 # platform no longer stops an agent from changing proxies or moving profiles,
-# so these sentences are what does.
+# so these sentences are what does; letting resources reach each other also
+# needs the Network permission, which only a person turns on.
 CONSENT_SKILL = "livellm-cloud"
 CONSENT_SENTENCES = {
     "S1 (proxies)": "Before you change a browser's proxies (set, clear or rotate), ask the user and wait for their "
                     "agreement: it changes where the browser's traffic goes and the address sites see.",
     "S2 (profiles)": "A profile holds the user's sign-ins. Before you export, import or copy one, or add cookies, ask the "
                      "user and wait for their agreement. Never upload an exported file.",
+    "S3 (inside access)": "Resources in a workspace can't reach each other unless the user allows it (a Composable App "
+                          "counts as one resource). Before you let a resource reach another (reachableFrom, a database "
+                          "link, dependsOn, or a browser put in a Browser API), ask the user and wait for their agreement, "
+                          "unless you created both or the one reached already lets the whole workspace in. Letting the "
+                          "whole workspace in always needs their agreement. An API key or an agent also needs the Network "
+                          "permission for this, which only a person turns on.",
 }
 
 problems: list[str] = []

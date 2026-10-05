@@ -71,6 +71,10 @@ connection details go into which environment variables:
   the app, across `env`, `secretEnv` and every link.
 - The app starts once its databases accept connections; no `dependsOn`
   needed for them.
+- A link lets the app (its whole Composable App) reach the database. Linking
+  a database you didn't make is letting a resource in: ask the user first
+  (rule 11); an agent or key without the Network permission gets a 403,
+  unless the database already lets the whole workspace in.
 - `ls` shows each app's links as its settings hold them, and on a database,
   `usedBy`: the apps that link it or wait for it.
 - A linked database can't be deleted (409 names the app): take the link out,
@@ -87,8 +91,11 @@ connection details go into which environment variables:
 ## Connecting
 
 `connect db` prints the addresses. Apps in the same workspace use the private
-one, which never leaves the platform; a link gives it to them. Ask for the
-public address only when the user needs to reach the database from outside:
+one, which never leaves the platform; a link gives it to them. It answers only
+the resources allowed to reach the database: the apps that link it, and what
+its `reachableFrom` names (`connect db` shows them under `inside`; a new
+database is reached by nothing else). Ask for the public address only when the
+user needs to reach the database from outside:
 
 ```json
 "network": { "expose": true }
@@ -135,8 +142,8 @@ running untouched. `--at` picks a minute after the backup ended, with
 continuous backups. The new database keeps the original's login name and
 takes the new password you generate (pass it through an environment
 variable, never on the command line). It counts toward the plan like any new
-database. Point the app at it only when the user says so, and restore only
-when the user asked for it.
+database. It starts with the original's `reachableFrom`. Point the app at
+it only when the user says so, and restore only when the user asked for it.
 
 ## Care
 
@@ -173,7 +180,8 @@ A restore runs where `--host` or `--region` says, automatic without them (never 
   it again (or run the restore again from the same backup).
 - **The app can't connect.** Check its links in `ls`, and that the app reads
   the variable names you gave them. An address typed by hand must be the
-  private one. From outside, the database must be exposed and the connection
-  must use TLS.
+  private one, and the app must be allowed to reach the database: linked, or
+  named in its `reachableFrom` (`reach db`). From outside, the database must be
+  exposed and the connection must use TLS.
 - **Password refused.** It was set at creation and can't be read back. The user
   can set a new one; every app then needs the new value.

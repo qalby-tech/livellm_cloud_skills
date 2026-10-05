@@ -128,9 +128,12 @@ The console's Agents page lists every agent signed in to the workspace, with its
 permissions and when it was last used, and signs any of them out in one click.
 The permissions are Connect (browsers, apps, databases), Use desktops, Run
 commands, Create, and Manage everything; the user turns each on or off there,
-and it applies on the agent's next call. Changing a browser's proxies or
-moving its profile needs no permission of its own, only the user's agreement
-each time (rule 10). The page also shows which machines
+and it applies on the agent's next call. One more is never part of any access
+level and only a person turns it on: Network (let resources in the workspace
+reach each other, `references/inside-access.md`). It is off on a new API key
+too, until the user turns it on on the Keys page. Changing a browser's proxies
+or moving its profile needs no permission of its own, only the user's
+agreement each time (rule 10). The page also shows which machines
 agents are holding, and lets the user release them. Tell the user about it when
 they wonder what an agent can still do. Signing out takes effect immediately,
 including for this agent.

@@ -5,6 +5,36 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.12.0
+
+Needs LiveLLM with inside access (api 0.51); against an earlier one `reach`
+reads the settings and everything still reaches everything.
+
+- Inside the workspace (`references/inside-access.md`): resources don't reach
+  each other unless the user allows it. A new resource is closed; its
+  `reachableFrom` names who may reach it (`[]` nothing, ids, `["*"]` the whole
+  workspace). A Composable App is one resource with one setting. Links,
+  `dependsOn` and a Browser API's browsers are reached without it.
+- `llc.py reach ID` shows who reaches a resource and its inside addresses;
+  `--from a,b`, `--from '*'`, `--none`, `--add`, `--remove` change it (with
+  `--yes`, after the user agreed). `create` and `set` keep `reachableFrom`
+  as written and refuse a malformed one before sending; `ls` shows it.
+- The Network permission: an agent or a key needs it to let one resource
+  reach another, unless it made both or the one reached already lets the
+  whole workspace in. A 403 `network_permission` says: ask the user; a person
+  turns on Network on the Agents page or the Keys page.
+- `SKILL.md`: new rule 11 says, word for word, to ask the user and wait for
+  their agreement before letting a resource reach another, beside rule 10's two
+  sentences from 1.11.1. `tools/validate.py` fails when any of the three
+  sentences is missing. A "Pick the tool" row for `reach`, and a 403 row for
+  Network.
+- `apps.md`, `databases.md`, `browsers.md`, `browser-api.md` and
+  `troubleshooting.md`: an internal port and a database's private address
+  answer only the resources allowed; joining an app takes its setting (an
+  agent joins only apps it created); the Browser API asks no key inside, so
+  putting a browser in one is an opening; a restored database starts with the
+  original's setting.
+
 ## 1.11.1
 
 - Changing a browser's proxies and exporting, importing or copying its

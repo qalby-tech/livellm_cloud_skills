@@ -25,6 +25,8 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
                    [--host H | --region R] --yes           (a database: into a new one)
     llc.py restore ID BACKUP --yes                         (a machine: in place, stopped)
     llc.py stop ID --yes | start ID | set ID --json CHANGES --yes
+    llc.py reach ID                            (who reaches it inside the workspace, its inside addresses)
+    llc.py reach ID (--from a,b | --from '*' | --none | --add X | --remove X) --yes
     llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS]
                    [--host H | --region R] --yes
     llc.py browser-api show NAME | add NAME BROWSER | remove NAME BROWSER --yes
@@ -143,6 +145,9 @@ def http_problem(status, payload):
 def status_problem(status, payload):
     message = payload.get("error_description") or payload.get("error") or f"HTTP {status}"
     code = payload.get("code") if isinstance(payload.get("code"), str) else ""
+    inside = inside_problem(status, code, message)
+    if inside:
+        return inside
     browser = browser_problem(status, code, message)
     if browser:
         return browser
@@ -167,6 +172,21 @@ def status_problem(status, payload):
     if status >= 500:
         return Problem(message, "platform trouble: retry twice with a pause, then tell the user", EXIT_OTHER, status)
     return Problem(message, "check the request", EXIT_OTHER, status)
+
+
+NETWORK_NEXT = ("letting one resource reach another inside the workspace needs the Network permission: ask the user, "
+                "saying what would reach what and why; a person turns on Network for this key on the Keys page, or for this "
+                "agent on the Agents page, or sets Reachable from in the console. Never work around it, a public address included")
+
+
+def inside_problem(status, code, message):
+    """A refusal to let one resource reach another (the Network permission),
+    known by its code or, when the answer carries none, by its words; None for
+    any other answer."""
+    low = message.lower()
+    if status == 403 and (code == "network_permission" or "turn on network" in low or "network permission" in low):
+        return Problem(message, NETWORK_NEXT, EXIT_USER, status)
+    return None
 
 
 def browser_problem(status, code, message):
@@ -512,6 +532,8 @@ def resources(tok):
             **({"usedBy": live["usedBy"]} if live.get("usedBy") else {}),
             # a Camoufox browser says so; a Chrome one carries no engine (a Browser API has none)
             **({"engine": "camoufox"} if (w.get("browser") or {}).get("engine") == "camoufox" else {}),
+            # who else in the workspace may reach it, as its settings hold it
+            **({"reachableFrom": w["reachableFrom"]} if "reachableFrom" in w else {}),
             # a database's login name (its password is never shown)
             **({"username": w["storage"]["credentials"]["username"]}
                if ((w.get("storage") or {}).get("credentials") or {}).get("username") else {}),
@@ -555,6 +577,7 @@ def create(args):
     body = json.loads(Path(args.json).read_text())
     body = with_engine(body, args.type, getattr(args, "engine", None))
     reminder = None if args.type == "apps" else check_settings_proxy(body, args.json)
+    check_body_reach(body, args.json)
     if args.type == "apps":
         # several apps at once, all or nothing: a list of app settings, or
         # {"apps": [...], "databases": [...]} with the databases to make with them
@@ -816,8 +839,147 @@ def set_settings(args):
     if not isinstance(changes, dict) or not changes:
         raise Problem("the file should hold a JSON object with the settings that change", "fix the file", EXIT_OTHER)
     reminder = check_settings_proxy(changes, args.json)
+    check_body_reach(changes, args.json, patch=True)
     patch_workload(args.id, changes, token())
     out({"changed": args.id, **({"delete": reminder} if reminder else {})})
+
+
+# --- inside the workspace: who may reach a resource -------------------------
+
+WHOLE = "*"  # reachableFrom ["*"]: every resource in the workspace, also ones made later
+
+
+def check_reach(value, where):
+    """Refuse a reachableFrom the API would refuse for its shape: a list of
+    resource ids, or ["*"] alone. Names are left to the API (422 for one that
+    isn't in the workspace)."""
+    if not isinstance(value, list) or not all(isinstance(x, str) and x.strip() for x in value):
+        raise Problem(f"{where}: reachableFrom should be a list of resource ids, or [\"*\"] for the whole workspace",
+                      "fix the file; [] means nothing reaches it", EXIT_OTHER)
+    if WHOLE in value and len(value) > 1:
+        raise Problem(f'{where}: reachableFrom: "*" (the whole workspace) goes alone',
+                      'send ["*"], or only the resources that may reach it', EXIT_OTHER)
+    twice = sorted({x for x in value if value.count(x) > 1})
+    if twice:
+        raise Problem(f"{where}: reachableFrom lists {', '.join(twice)} twice", "name each resource once", EXIT_OTHER)
+
+
+def check_body_reach(body, where, patch=False):
+    """A create or set file keeps its reachableFrom as written (every entry of
+    a create apps file too); only its shape is checked here. In a set, null
+    closes the resource like []."""
+    entries = []
+    if isinstance(body, list):
+        entries = body
+    elif isinstance(body, dict):
+        entries = [body] + [e for k in ("apps", "databases") for e in (body.get(k) or []) if isinstance(body.get(k), list)]
+    for e in entries:
+        if isinstance(e, dict) and "reachableFrom" in e:
+            if patch and e["reachableFrom"] is None:
+                continue
+            check_reach(e["reachableFrom"], f"{where} ({e.get('id', 'the resource')})")
+
+
+def split_names(text):
+    return [x.strip() for x in (text or "").split(",") if x.strip()]
+
+
+def implicit_callers(spec_workloads, target):
+    """Who reaches a resource whatever its setting, read from the settings:
+    apps that link it or wait for it, a Browser API that drives it, the other
+    services of its own Composable App. Only for an API whose connect answer
+    has no inside block."""
+    stack = ((target.get("pod") or {}).get("stack") or "").strip()
+    tid, found = target.get("id"), []
+    for w in spec_workloads:
+        wid = w.get("id")
+        if wid == tid:
+            continue
+        pod = w.get("pod") or {}
+        if stack and (pod.get("stack") or "").strip() == stack:
+            found.append({"id": wid, "why": "same app"})
+            continue
+        if tid in [d.get("id") for d in pod.get("databases") or [] if isinstance(d, dict)]:
+            found.append({"id": wid, "why": "links it"})
+        elif tid in (pod.get("dependsOn") or []):
+            found.append({"id": wid, "why": "waits for it"})
+        c = w.get("controller") or {}
+        if w.get("type") == BROWSER_API and target.get("type") == "browser" and (c.get("autodiscover") or tid in (c.get("browsers") or [])):
+            found.append({"id": wid, "why": "drives it", "through": w.get("reachableFrom", [WHOLE])})
+    return found
+
+
+def reach(args):
+    """Who may reach a resource from inside the workspace; with --from, --none,
+    --add or --remove, change it (only what the user agreed to)."""
+    tok = token()
+    workloads = workspace_workloads(tok)
+    w = next((x for x in workloads if x.get("id") == args.id), None)
+    if w is None:
+        raise Problem(f"no resource {args.id}", "run: llc.py ls, the id is probably wrong", EXIT_OTHER)
+    current = w.get("reachableFrom")  # None: set before this setting existed, so the whole workspace reaches it
+    adds, removes = split_names(args.add), split_names(args.remove)
+    whole_list = args.source is not None or args.none
+    if args.source is not None and args.none:
+        raise Problem("--from and --none are one or the other", "--none means nothing reaches it", EXIT_OTHER)
+    if whole_list and (adds or removes):
+        raise Problem("--from and --none set the whole list; --add and --remove change one entry",
+                      "use one way or the other", EXIT_OTHER)
+    if not whole_list and not adds and not removes:
+        out(reach_view(w, workloads, current, tok))
+        return
+    if not args.yes:
+        raise Problem("changing who reaches a resource needs --yes",
+                      "who may reach a resource is the user's call: ask the user and wait for their agreement "
+                      "(SKILL.md rule 11), then pass --yes", EXIT_OTHER)
+    if args.none:
+        new = []
+    elif args.source is not None:
+        new = split_names(args.source)
+        if not new:
+            raise Problem("--from needs resource ids, or '*' for the whole workspace", "--none means nothing reaches it", EXIT_OTHER)
+    else:
+        base = [WHOLE] if current is None else list(current)
+        if base == [WHOLE]:
+            if removes:
+                raise Problem(f"{args.id} lets the whole workspace in, so there is nothing to take out",
+                              "pass --from with the resources that should keep reaching it, or --none", EXIT_OTHER)
+            out({"id": args.id, "reachableFrom": [WHOLE], "already": "the whole workspace reaches it"})
+            return
+        new = [x for x in base if x not in removes] + [a for a in adds if a not in base]
+    check_reach(new, args.id)
+    if current is not None and new == current:
+        out({"id": args.id, "reachableFrom": current, "already": "nothing changes"})
+        return
+    patch_workload(args.id, {"reachableFrom": new}, tok)
+    answer = {"id": args.id, "reachableFrom": new, "before": [WHOLE] if current is None else current}
+    stack = ((w.get("pod") or {}).get("stack") or "").strip()
+    if stack:
+        answer["note"] = f"every service of the Composable App {stack} takes it"
+    out(answer)
+
+
+def reach_view(w, workloads, current, tok):
+    """The setting, who else reaches the resource and its inside addresses, as
+    the connect answer's inside block says; read from the settings when the
+    connect answer has none. The connect token itself is never printed."""
+    view = {"id": w.get("id"), "type": w.get("type")}
+    inside = None
+    try:
+        info = request("POST", f"{workload_path(w['id'])}/connect", {}, token=tok)
+        inside = info.get("inside") if isinstance(info, dict) else None
+    except Problem as p:
+        if p.status in (401, 404) or p.status is None:
+            raise
+    if isinstance(inside, dict):
+        for k in ("reachableFrom", "alsoFrom", "addresses"):
+            if k in inside:
+                view[k] = inside[k]
+        return view
+    view["reachableFrom"] = [WHOLE] if current is None else current
+    view["alsoFrom"] = implicit_callers(workloads, w)
+    view["note"] = f"read from the settings; llc.py connect {w.get('id')} shows its addresses"
+    return view
 
 
 # A Browser API is one address over several browsers; its type is "controller".
@@ -1861,6 +2023,15 @@ def main():
     set_p.add_argument("--json", required=True)
     set_p.add_argument("--yes", action="store_true", required=True, help="the user agreed to this change")
     set_p.set_defaults(fn=set_settings)
+
+    reach_p = sub.add_parser("reach", help="who may reach a resource from inside the workspace; change it with the user's agreement")
+    reach_p.add_argument("id")
+    reach_p.add_argument("--from", dest="source", help="exactly these resources, comma-separated, or '*' for the whole workspace")
+    reach_p.add_argument("--none", action="store_true", help="nothing in the workspace reaches it")
+    reach_p.add_argument("--add", help="these resources too, comma-separated; the rest kept")
+    reach_p.add_argument("--remove", help="not these resources any more, comma-separated")
+    reach_p.add_argument("--yes", action="store_true", help="any change: the user agreed to it")
+    reach_p.set_defaults(fn=reach)
 
     bapi_p = sub.add_parser("browser-api", help="one address over several browsers: create, show, add, remove")
     bapi_p.add_argument("action", choices=["create", "show", "add", "remove"])

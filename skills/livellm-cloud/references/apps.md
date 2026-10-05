@@ -81,9 +81,11 @@ each other by plain name:
 - `stack` groups them; `hostname` is the name the others use (`db:5432`). Names
   belong to the stack, so two stacks can both have a `db`. Any port works
   between them, declared or not.
-- `"internal": true` on a port means no public address: it answers inside the
-  workspace only, and may be any TCP protocol. Give every database, cache and
-  queue an internal port — never a public one. `connect` shows where it answers.
+- `"internal": true` on a port means no public address: it answers only
+  inside the workspace, to its own stack and the resources the app's
+  `reachableFrom` names, and may be any TCP protocol. Give every database,
+  cache and queue an internal port — never a public one. `connect` shows where
+  it answers.
 - `dependsOn` lists what an app needs first. It starts once each one's first
   port accepts a connection, and none of them can be deleted while it is listed
   (delete the dependent app first). Apps that wait for each other in a loop are
@@ -94,7 +96,13 @@ each other by plain name:
 - To add a service to an app that is already there, add `--join <app>`: the
   new services take its stack, and an app on its own gets a stack named after
   itself (its name inside stays its id, and it restarts once as it joins —
-  tell the user first).
+  tell the user first). The new services take the app's `reachableFrom` and
+  reach what it reaches. An agent may add services only to an app it created
+  (403 otherwise: ask the user).
+- A Composable App is one resource to the rest of the workspace: other
+  resources reach none of its services until its `reachableFrom` names them,
+  and all its services share that one setting
+  (`references/inside-access.md`).
 
 For a database the user cares about, prefer a managed one over a `postgres`
 image in a stack: it has backups. Make it with the app, as below.
@@ -105,7 +113,8 @@ Most software needs a database, often a cache too. Make the app and its
 managed databases in one step, all of it or none, with the app linked to them
 (`references/databases.md`, "Link it to an app"). Leave the databases'
 passwords out: the platform makes them and gives them to the app through the
-links, so no password passes through you.
+links, so no password passes through you. A link also lets the app reach the
+database; nothing else reaches it unless you say so.
 
 A Nextcloud, for example. `cloud.json`:
 

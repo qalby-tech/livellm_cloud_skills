@@ -18,7 +18,11 @@ never your call.
 **403.** Either the resource belongs to someone else, or the agent lacks the
 permission. Say which: "this agent can't run commands; turn on Run commands for
 it on the Agents page", or "this is your resource; turn on Manage everything
-for this agent, or do it in the console".
+for this agent, or do it in the console". A 403 naming Network ("can't let web
+reach db inside the workspace") means letting one resource reach another:
+tell the user what would reach what and why; they turn on Network (Agents
+page, or Keys page for an API key) or set Reachable from in the console
+(`references/inside-access.md`).
 
 **404.** The id doesn't exist in this workspace. Run `ls`; ids are often close
 but not exact.
@@ -97,6 +101,10 @@ repository and run `build <id>`. If the new build is worse than the old one,
 
 **A public address answers 404 or 502.** The app may still be starting, or the
 port in its settings doesn't match what the program listens on.
+
+**An app can't reach another resource.** Resources are closed to each other
+unless allowed. `reach ID` on the one it calls shows who may; ask the user
+before opening it.
 
 **Something runs but misbehaves.** `logs <id>` prints the last log lines and
 each container's state, restarts and resource use. Read it before guessing, and

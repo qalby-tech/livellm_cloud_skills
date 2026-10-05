@@ -27,6 +27,9 @@ python3 scripts/llc.py wait scrapers
 A Browser API always has browsers; create the browsers first. A workspace
 browser belongs to at most one Browser API. When one is already in another,
 the answer is a 422 naming it: ask the user before taking it out there.
+Whatever reaches a Browser API drives its browsers, so putting a browser in
+one (`--browsers`, `add`, `--all`) lets in everything that reaches the Browser
+API (below).
 
 ## Chrome and Camoufox browsers
 
@@ -94,6 +97,25 @@ same.
 | `POST /search`, `/search_news`, `/search_images`, `/search_videos` | search results |
 | `POST /start_session`, `DELETE /end_session` | keep one tab across calls |
 | `GET /browsers` | its browsers and their open tabs |
+
+## From inside the workspace
+
+Another resource of the workspace (a machine, an app) calls the Browser API's
+inside address with no key and no token: `connect scrapers` lists it under
+`inside.addresses`. Only the resources its `reachableFrom` names, or the whole
+workspace with `["*"]`, reach it; a new Browser API is reached by none
+(it always reaches its own browsers).
+
+```
+python3 scripts/llc.py reach scrapers --add crawler --yes
+```
+
+Because no key is asked inside, whatever reaches a Browser API drives every
+browser in it and what those browsers are signed in to. Letting a resource
+reach a Browser API, and putting a browser in one that something reaches, are
+both openings: ask the user first (rule 11, `references/inside-access.md`).
+An API key or an agent without the Network permission gets a 403 for them,
+unless it made every resource involved.
 
 ## Which browser answers
 
