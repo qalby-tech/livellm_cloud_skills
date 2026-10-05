@@ -21,8 +21,9 @@ it on the Agents page", or "this is your resource; turn on Manage everything
 for this agent, or do it in the console". A 403 naming Network ("can't let web
 reach db inside the workspace") means letting one resource reach another:
 tell the user what would reach what and why; they turn on Network (Agents
-page, or Keys page for an API key) or set Reachable from in the console
-(`references/inside-access.md`).
+page, or Keys page for an API key) or make the opening in the console:
+Reachable from on the resource, or, for a database (it has none), a link on
+what uses it (`references/inside-access.md`).
 
 **404.** The id doesn't exist in this workspace. Run `ls`; ids are often close
 but not exact.

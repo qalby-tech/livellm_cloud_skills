@@ -100,9 +100,9 @@ each other by plain name:
   tell the user first). The new services take the app's `reachableFrom` and
   reach what it reaches. Adding a service to a Composable App is letting it
   in: it and every service of the app reach each other. Ask the user first
-  unless you made the app (rule 11); for an app someone else made, an agent or
-  key also needs the Network permission (403 `network_permission`), and an
-  agent may add services only to an app it created unless a person allowed
+  unless you made the app and every service already in it (rule 11);
+  otherwise an agent or key also needs the Network permission (403
+  `network_permission`), and an agent may add services only to an app it created unless a person allowed
   more (403 otherwise: ask the user).
 - A Composable App is one resource to the rest of the workspace: other
   resources reach none of its services until its `reachableFrom` names them,

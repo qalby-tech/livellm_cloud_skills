@@ -74,7 +74,9 @@ connection details go into which environment variables:
 - A link with no variables, `{ "id": "cache" }`, only lets the app reach the
   database: no variable, no wait, and adding or taking it out never restarts
   the app. `python3 scripts/llc.py link web cache --yes` makes one on an app
-  that exists, keeping its other links; `--remove` takes such links out.
+  that exists, keeping its other links; `--remove` takes links out (one with variables
+  too: they leave the app and it restarts, so say so when you ask). Its
+  answer says when the app still reaches the database another way.
 - A link is the only way anything reaches a database: it lets the app (its
   whole Composable App) in. A link is letting a resource in unless this agent
   or key made both the app and the database (now or earlier). Otherwise ask
@@ -88,6 +90,11 @@ connection details go into which environment variables:
 - To change the variables of an app that exists, `set web --json links.json
   --yes` with `{"pod": {"databases": [...]}}`. The list you send replaces the
   whole list, so copy the links `ls` shows and change what the user asked.
+- **"set a new password for db to link its URL"** (422): the database's
+  password was set before links existed, so it can't give `url` yet. Link its
+  other details instead (`host`, `port`, `password`, and on PostgreSQL
+  `database` and `username`), or, if the user agrees, set a new password once
+  (see Care).
 
 ## Link it to a machine or a Desktop App
 
@@ -101,11 +108,6 @@ python3 scripts/llc.py link runner db --yes
 
 In a create file: `"databases": [{ "id": "db" }]` (at most 8). Ask the user
 first unless you made both (rule 11).
-- **"set a new password for db to link its URL"** (422): the database's
-  password was set before links existed, so it can't give `url` yet. Link its
-  other details instead (`host`, `port`, `password`, and on PostgreSQL
-  `database` and `username`), or, if the user agrees, set a new password once
-  (see Care).
 
 ## Connecting
 

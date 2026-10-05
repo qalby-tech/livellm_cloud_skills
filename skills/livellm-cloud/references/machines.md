@@ -235,8 +235,8 @@ backups (a count, 1 to 100):
 
 ## Inside the workspace
 
-A new machine or Desktop App is closed to the rest of the workspace: no other
-resource there can connect to it until its `reachableFrom` names them. Machines
+A machine or Desktop App, new or made before this setting existed, is closed
+to the rest of the workspace: no other resource there can connect to it until its `reachableFrom` names them. Machines
 that must talk to each other (cluster nodes, a database on one and its app on
 another, a job runner and its workers) each need a `reachableFrom` that names
 the others, set in the create file or later with `reach`:

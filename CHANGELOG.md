@@ -17,16 +17,19 @@ everything still reaches everything and `reach` shows no setting.
   setting: its services reach each other. Links, `dependsOn` and a Browser
   API's browsers are reached without it.
 - A database has no `reachableFrom`: it is reached only by what links it.
-  `create` refuses one on a database before sending (`[]` and `null` pass, the
-  API drops them), `reach DB` shows what links it and refuses every change,
-  and the API's 422 points at `link`.
+  `create` and `set` refuse one on a database before sending (`[]` and `null`
+  pass, the API drops them), `reach DB` shows what links it and refuses every
+  change, and the API's 422 points at `link`.
 - `llc.py link ID DB... [--remove] --yes`: an app, a machine or a Desktop App
   links databases with no variables, which only lets it reach them (nothing
-  restarts; links with variables already there are kept, and `--remove` leaves them to `set`). An app's link may
-  name no variables (`{"id": "cache"}`); a machine's or a Desktop App's link
-  never does (`"databases": [{"id": "db"}]` in its create file, `env` refused
-  before sending). `ls` shows their links, and `reach` lists them as `links
-  it`.
+  restarts; links with variables already there are kept). `--remove` takes
+  links out, one with variables too (its variables leave and the app
+  restarts, as with the CLI), and says when the resource still reaches the
+  database through its `dependsOn` or another service of its Composable App.
+  An app's link may name no variables (`{"id": "cache"}`); a machine's or a
+  Desktop App's link never does (`"databases": [{"id": "db"}]` in its create
+  file, `env` refused before sending by `create` and `set`). `ls` shows their
+  links, and `reach` lists them as `links it`.
 - `llc.py reach ID` shows who reaches a resource and its inside addresses,
   read from the workspace's settings only (it never connects, so it holds no
   machine and makes no link or token); a Composable App's name works too.

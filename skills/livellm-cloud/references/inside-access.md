@@ -80,7 +80,7 @@ reached from inside the workspace: use its own address.
 ```
 python3 scripts/llc.py link web shop-db --yes             # web, with its whole Composable App, reaches shop-db
 python3 scripts/llc.py link runner shop-db cache --yes    # a machine or a Desktop App links the same way
-python3 scripts/llc.py link web shop-db --remove --yes    # web no longer reaches it
+python3 scripts/llc.py link web shop-db --remove --yes    # the link is gone; the note says if web still reaches it
 ```
 
 - `link` makes a link with no variables: it only lets the resource reach the
@@ -88,9 +88,13 @@ python3 scripts/llc.py link web shop-db --remove --yes    # web no longer reache
   never restarts anything. Links already there are kept as they are.
 - A link with variables (`env`) also hands the app the database's connection
   details and makes it wait for the database when it starts
-  (`references/databases.md`, "Link it to an app"). `link --remove` never
-  takes such a link out: that changes the app's variables (`set`, with the
-  user's agreement; the app restarts once).
+  (`references/databases.md`, "Link it to an app"). `link --remove` takes
+  such a link out too: its variables leave the app and it restarts once, so
+  tell the user that when you ask.
+- After `link --remove` the resource may still reach the database: through
+  its own `dependsOn`, or because another service of its Composable App links
+  it or waits for it (the whole app reaches it). The answer's note says so
+  (`stillReaches`).
 - A machine or a Desktop App takes no variables from a link (422): it only
   reaches the database. In a create file, `"databases": [{"id": "shop-db"}]`.
 - At most 8 links per resource. A database something links can't be deleted
@@ -186,7 +190,7 @@ it to connect, not to look.)
 
 | Answer | Means | Do |
 |---|---|---|
-| 403 "This agent can't let web reach shop-db inside the workspace. A person can turn on Network for it on the Agents page." (`network_permission`) | This agent (or key, "Keys page") lacks Network | Tell the user what would reach what and why. They turn on Network, or set Reachable from themselves in the console. Never work around it |
+| 403 "This agent can't let web reach shop-db inside the workspace. A person can turn on Network for it on the Agents page." (`network_permission`) | This agent (or key, "Keys page") lacks Network | Tell the user what would reach what and why. They turn on Network, or make the opening themselves in the console (Reachable from on the resource; for a database, a link on what uses it: a database has no Reachable from). Never work around it |
 | 403 "This API key can't add worker to Composable App shop inside the workspace. A person can turn on Network for it on the Keys page." (`network_permission`) | Adding a service to a Composable App this key or agent didn't make | As above: ask the user, saying which app it joins and why |
 | 403 "This agent can add services only to an app it created." | Joining someone else's Composable App | Ask the user; a person allows more on the Agents page |
 | 422 `reachableFrom: a database is reached only by what links it: …` | `reachableFrom` sent for a database | Leave it out; with the user's agreement, `link APP DB --yes` |
