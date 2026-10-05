@@ -221,7 +221,13 @@ def browser_problem(status, code, message):
     if status == 422 and (said("engine_unavailable") or "doesn't offer camoufox" in low):
         return Problem(message, "this LiveLLM makes no Camoufox browsers (llc.py engines lists what it offers): tell the user, "
                        "and make a Chrome browser only if they agree", EXIT_USER, status)
-    if status == 422 and (said("engine_fixed") or "engine can't change" in low):
+    # Known by the code or by naming a browser or a Browser API: a database's
+    # "engine can't change" is a different refusal and keeps the plain answer.
+    if status == 422 and ("browser api's engine can't change" in low or (code == "engine_fixed" and "browser api" in low)):
+        return Problem(message, "a Browser API's engine is set when it is made: leave engine out of the change. For the other "
+                       "engine, ask the user, then make a new Browser API (llc.py browser-api create NAME --engine ENGINE)",
+                       EXIT_OTHER, status)
+    if status == 422 and (said("engine_fixed") or "browser's engine can't change" in low):
         return Problem(message, "a browser's engine is set when it is made: leave engine out of the change. For the other engine, "
                        "ask the user, then make a new browser and add this one's cookies to it (llc.py cookies)", EXIT_OTHER, status)
     if status == 422 and (said("extensions_unsupported") or "take no extensions" in low):
@@ -237,9 +243,15 @@ def browser_problem(status, code, message):
         return Problem(message, "profiles move only between browsers of one engine: add the sign-ins as cookies instead "
                        "(llc.py cookies ID --json FILE --yes); a cookie the browser can't take is counted in dropped",
                        EXIT_OTHER, status)
-    if status == 422 and (said("not_livellm_profile") or "only profiles exported from livellm" in low) and "camoufox" in low:
-        return Problem(message, "only files exported from a LiveLLM Camoufox browser import into this one: for sign-ins from "
-                       "another browser, add its cookies instead (llc.py cookies ID --json FILE --yes)", EXIT_OTHER, status)
+    # Worded by the browser's engine, so a Camoufox file into a Chrome browser
+    # is refused this way too. A LiveLLM from before engines names neither
+    # and keeps the plain answer.
+    if status == 422 and (said("not_livellm_profile") or "only profiles exported from livellm" in low) \
+            and ("camoufox" in low or "chrome" in low):
+        engine = "Camoufox" if "camoufox" in low else "Chrome"
+        return Problem(message, f"only files exported from a LiveLLM {engine} browser import into this one: for sign-ins from "
+                       "another browser, or a browser of the other engine, add its cookies instead "
+                       "(llc.py cookies ID --json FILE --yes)", EXIT_OTHER, status)
     if status == 507:
         return Problem(message, "the browser's storage is full: ask the user to grow it (llc.py set) or to pick a snapshot to delete",
                        EXIT_USER, status)
@@ -1364,15 +1376,28 @@ def cookies(args):
 
 
 def engines(_args):
-    """The browser engines this LiveLLM offers: Chrome, and Camoufox where it is offered."""
+    """The browser engines this LiveLLM offers: Chrome, and Camoufox where it is offered.
+    Asked with the sign-in or key when there is one, since an engine offered
+    to some people only is listed to them alone; without one, the public list."""
+    path = "/v1/browsers/engines"
     try:
-        out(request("GET", "/v1/browsers/engines"))
+        tok = token()
+    except Problem:
+        tok = None  # not signed in: the public list
+    try:
+        try:
+            answer = request("GET", path, token=tok)
+        except Problem as p:
+            if not tok or p.status not in (401, 403):
+                raise
+            answer = request("GET", path)  # a sign-in this list won't take: the public list
     except Problem as p:
         if p.status != 404:
             raise
         # a LiveLLM from before engines: its browsers are all Chrome
-        out({"engines": [{"id": "chrome", "name": "Chrome", "protocol": "cdp", "default": True}],
-             "note": "this LiveLLM offers only Chrome browsers"})
+        answer = {"engines": [{"id": "chrome", "name": "Chrome", "protocol": "cdp", "default": True}],
+                  "note": "this LiveLLM offers only Chrome browsers"}
+    out(answer)
 
 
 def locales(_args):

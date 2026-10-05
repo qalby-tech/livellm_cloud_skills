@@ -183,10 +183,10 @@ the browser there; one pinned to a host waits while that host is down.
 - **The page looks logged out.** The site ended the session. Ask the user to log
   in again on the live view.
 - **A site blocks automation.** Slow down, and drive the page the way a person
-  would. Don't try to hide what you are. A site that blocks Chrome outright
-  ("you use a VPN", a bot page) may let a Camoufox browser through, often with
-  a CAPTCHA for the user to solve on the live view: ask the user before making
-  one.
+  would. Never try to get past a block or a CAPTCHA on your own. A site that
+  blocks Chrome outright ("you use a VPN", a bot page) may let a Camoufox
+  browser through, often with a CAPTCHA for the user to solve on the live
+  view: that is the user's call, so ask before making one.
 - **`cdp_connect` says "This browser runs Camoufox".** Use
   `assets/playwright_connect.py`. A 428 from the address is the wrong
   Playwright version: install the one `playwright.version` names.

@@ -38,8 +38,14 @@ Claude Code users get the update only when the version changes.
   goes around the browser's proxies.
 - `llc.py` answers the new refusals with what to do: 422
   `engine_unavailable`, `engine_fixed`, `extensions_unsupported`,
-  `engine_mismatch`, `profile_engine`, a Camoufox `not_livellm_profile`, and a
-  409 `profile_newer` from a newer Camoufox. Chrome's answers are unchanged.
+  `engine_mismatch`, `profile_engine`, a `not_livellm_profile` that names an
+  engine (a profile from the other engine: add its cookies), and a 409
+  `profile_newer` from a newer Camoufox. A Browser API's `engine_fixed` is
+  told to make a new Browser API, and a database's engine refusal keeps its
+  own answer. Chrome's answers from a LiveLLM without engines are unchanged.
+- `llc.py engines` asks with the sign-in or key when there is one (an engine
+  offered to some people only is listed to them alone), and without one, or
+  with one the list won't take, reads the public list.
 
 ## 1.10.1
 

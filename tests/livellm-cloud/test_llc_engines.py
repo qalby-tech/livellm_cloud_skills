@@ -50,7 +50,8 @@ CAMOUFOX_CONNECT = {"tool": "cdp", "engine": "camoufox", "token": "llt_fox", "ex
 
 
 class FakeAPI:
-    """Answers `routes` ("METHOD path" -> (status, payload)), 202 {} for any
+    """Answers `routes` ("METHOD path" -> (status, payload), or a function of
+    the request headers giving one), 202 {} for any
     other write and 200 {} for any other read; records (method, path,
     headers, body) of every call."""
 
@@ -66,8 +67,9 @@ class FakeAPI:
                 n = int(self.headers.get("content-length", 0))
                 raw = self.rfile.read(n) if n else b""
                 fake.calls.append((self.command, self.path, dict(self.headers), json.loads(raw) if raw else None))
-                status, payload = fake.routes.get(f"{self.command} {self.path}",
-                                                  (200 if self.command == "GET" else 202, {}))
+                route = fake.routes.get(f"{self.command} {self.path}",
+                                        (200 if self.command == "GET" else 202, {}))
+                status, payload = route(self.headers) if callable(route) else route
                 data = json.dumps(payload).encode()
                 self.send_response(status)
                 self.send_header("content-type", "application/json")
@@ -131,6 +133,8 @@ class EngineTest(unittest.TestCase):
             (422, "engine_unavailable", "This platform doesn't offer Camoufox browsers.", "llc.py engines", llc.EXIT_USER),
             (422, "engine_fixed", "A browser's engine can't change after creation — make a new browser "
                                   "(its cookies can be imported into it).", "leave engine out", llc.EXIT_OTHER),
+            (422, "engine_fixed", "A Browser API's engine can't change after creation — make a new Browser API.",
+             "make a new Browser API (llc.py browser-api create", llc.EXIT_OTHER),
             (422, "extensions_unsupported", "Camoufox browsers take no extensions yet.", "leave extensions out", llc.EXIT_OTHER),
             (422, "engine_mismatch", "Browser API scrapers drives Camoufox browsers; agent-1 runs Chrome",
              "browsers of the same engine", llc.EXIT_OTHER),
@@ -148,9 +152,20 @@ class EngineTest(unittest.TestCase):
                 problem = llc.status_problem(status, payload)
                 self.assertIn(words, problem.next, payload)
                 self.assertEqual(problem.code, exit_code, payload)
-            if code not in ("not_livellm_profile", "profile_newer"):
+            if code not in ("not_livellm_profile", "profile_newer") and "Browser API's" not in message:
                 problem = llc.status_problem(status, {"error": "refused", "code": code})
                 self.assertIn(words, problem.next, code)
+        # a Browser API's refusal never gets the browser's advice (cookies)
+        for payload in ({"error": "A Browser API's engine can't change after creation — make a new Browser API.",
+                         "code": "engine_fixed"},
+                        {"error": "A Browser API's engine can't change after creation — make a new Browser API."}):
+            self.assertNotIn("cookies", llc.status_problem(422, payload).next, payload)
+
+    def test_a_database_engine_refusal_is_not_a_browser_one(self):
+        # tenant-api's own refusal for a database (no code): the plain 422 answer, as before engines
+        problem = llc.status_problem(422, {"error": "workloads[0] (pg): a database's engine can't change after creation"})
+        self.assertEqual(problem.next, "fix the field the message names; do not retry unchanged")
+        self.assertEqual(problem.code, llc.EXIT_OTHER)
 
     def test_chrome_refusals_answer_as_before(self):
         newer = llc.status_problem(409, {"error": "This profile is from Chrome 155; this browser runs 154. Import anyway?",
@@ -158,10 +173,18 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(newer.next, "the profile comes from a newer Chrome: ask the user, and only if they agree run the "
                                      "same import with --force")
         self.assertEqual(newer.code, llc.EXIT_USER)
-        for message in ("Only profiles exported from LiveLLM browsers can be imported. Import cookies instead.",
-                        "Only profiles exported from LiveLLM Chrome browsers can be imported into this browser. Import cookies instead."):
-            other = llc.status_problem(422, {"error": message, "code": "not_livellm_profile"})
-            self.assertEqual(other.next, "fix the field the message names; do not retry unchanged")
+        # a LiveLLM from before engines: the plain answer, as before
+        other = llc.status_problem(422, {"error": "Only profiles exported from LiveLLM browsers can be imported. "
+                                                  "Import cookies instead.", "code": "not_livellm_profile"})
+        self.assertEqual(other.next, "fix the field the message names; do not retry unchanged")
+        # worded by the browser's engine: a Camoufox file into a Chrome browser is refused so too, and the
+        # answer is to move the sign-ins as cookies
+        chrome = "Only profiles exported from LiveLLM Chrome browsers can be imported into this browser. Import cookies instead."
+        for payload in ({"error": chrome, "code": "not_livellm_profile"}, {"error": chrome}):
+            other = llc.status_problem(422, payload)
+            self.assertIn("LiveLLM Chrome browser", other.next, payload)
+            self.assertIn("llc.py cookies", other.next, payload)
+            self.assertEqual(other.code, llc.EXIT_OTHER)
         # a Browser API refusal of today keeps its own answer
         taken = llc.status_problem(422, {"error": "agent-1 is already in Browser API scrapers"})
         self.assertEqual(taken.next, "fix the field the message names; do not retry unchanged")
@@ -249,16 +272,38 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(by_id["fox"]["engine"], "camoufox")
         self.assertEqual(by_id["foxes"]["engine"], "camoufox")
 
-    def test_engines_is_one_public_read(self):
+    def test_engines_is_one_read_with_the_sign_in_when_there_is_one(self):
+        # An engine in preview is listed only to whom it is offered, so the
+        # key (or sign-in) goes with the read; without one, the public list.
         answer = {"engines": [{"id": "chrome", "name": "Chrome", "protocol": "cdp", "default": True},
                               {"id": "camoufox", "name": "Camoufox", "protocol": "playwright", "playwright": "1.62",
-                               "preview": False}]}
+                               "preview": True}]}
         self.fake.routes["GET /v1/browsers/engines"] = (200, answer)
         res, problem = self.run_json(llc.engines)
         self.assertIsNone(problem)
         self.assertEqual(res, answer)
         self.assertEqual([c[:2] for c in self.fake.calls], [("GET", "/v1/browsers/engines")])
+        self.assertEqual(self.fake.calls[0][2].get("Authorization"), "Bearer llc_test")
+        # not signed in: one read without a token
+        saved = llc.CREDENTIALS
+        self.addCleanup(setattr, llc, "CREDENTIALS", saved)
+        llc.API_KEY, llc.CREDENTIALS = "", self.tmp / "no-credentials.json"
+        self.fake.calls.clear()
+        res, problem = self.run_json(llc.engines)
+        self.assertIsNone(problem)
+        self.assertEqual(res, answer)
+        self.assertEqual(len(self.fake.calls), 1)
         self.assertNotIn("Authorization", self.fake.calls[0][2])
+        # a key the list won't take: the public list, once more without it
+        llc.API_KEY = "llc_revoked"
+        public = {"engines": answer["engines"][:1]}
+        self.fake.routes["GET /v1/browsers/engines"] = (
+            lambda h: (401, {"error": "invalid API key"}) if h.get("Authorization") else (200, public))
+        self.fake.calls.clear()
+        res, problem = self.run_json(llc.engines)
+        self.assertIsNone(problem)
+        self.assertEqual(res, public)
+        self.assertEqual([c[2].get("Authorization") for c in self.fake.calls], ["Bearer llc_revoked", None])
         # a LiveLLM from before engines: Chrome only, not "the id is wrong"
         self.fake.routes["GET /v1/browsers/engines"] = (404, {"error": "404 page not found"})
         res, problem = self.run_json(llc.engines)

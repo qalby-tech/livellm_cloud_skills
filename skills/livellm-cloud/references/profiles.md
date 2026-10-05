@@ -91,9 +91,10 @@ python3 scripts/llc.py profile import shop --file shop.llcprofile.age --password
 - A profile from a newer Chrome (or Camoufox) answers 409 "Import anyway?":
   pass `--force` only if the user agrees.
 - **Profiles move only between browsers of one engine.** A Chrome profile into
-  a Camoufox browser, or the other way, is refused (422 `profile_engine`);
-  so is a copy across engines (422 `engine_mismatch`). Add the sign-ins as
-  cookies instead (below).
+  a Camoufox browser is refused (422 `profile_engine`), a Camoufox profile
+  into a Chrome browser too (422 `not_livellm_profile`, "Only profiles
+  exported from LiveLLM Chrome browsers…"), and so is a copy across engines
+  (422 `engine_mismatch`). Add the sign-ins as cookies instead (below).
 - Language and time zone stay as the browser's settings say, whatever the
   file had.
 
