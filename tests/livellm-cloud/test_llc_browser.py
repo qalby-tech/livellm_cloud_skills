@@ -243,7 +243,7 @@ class BrowserTest(unittest.TestCase):
             self.assertEqual(problem.code, code, payload)
 
     def test_the_apis_own_refusals(self):
-        # Word for word as tenant-api 0.48.1 answers them.
+        # Word for word as tenant-api 0.48.1 answers them (password_required: 0.48.2).
         cases = [
             # the helper starting up: wait, no restart
             (409, {"error": "The browser's profiles are still starting — try again in a moment.", "code": "needs_restart"},
@@ -261,6 +261,8 @@ class BrowserTest(unittest.TestCase):
             (429, {"error": "This proxy's IP was changed moments ago. Wait for its shortest interval and try again.",
                    "code": "change_ip_too_soon"}, "wait", llc.EXIT_BUSY),
             (422, {"error": "The password doesn't open this file.", "code": "wrong_password"}, "--password-env", llc.EXIT_USER),
+            (422, {"error": "This file is password protected. Give its password to import it.", "code": "password_required"},
+             "--password-env", llc.EXIT_USER),
             (403, {"error": "This API key can't export or import browser profiles. A person can give it the profiles permission on the Keys page."},
              "profiles permission", llc.EXIT_USER),
             (403, {"error": "Profiles hold sign-ins. Only the workspace's people can export them."}, "no permission changes that", llc.EXIT_USER),
@@ -360,6 +362,26 @@ class BrowserTest(unittest.TestCase):
         _, problem, _ = self.run_llc(llc.profile, action="import", id="shop", file=str(src), yes=True)
         self.assertIn("--force", problem.next)
         self.assertEqual(problem.code, llc.EXIT_USER)
+
+    def test_a_password_protected_file_sent_without_its_password_asks_for_it(self):
+        # tenant-api 0.48.2: an import without the file's password is refused
+        # with password_required; it is answered like wrong_password.
+        src = self.tmp / "in.llcprofile.age"
+        src.write_bytes(ARCHIVE)
+        for payload in ({"error": "This file is password protected. Give its password to import it.", "code": "password_required"},
+                        {"error": "This file is password protected. Give its password to import it."},
+                        {"error": "password_required"}):
+            self.fake.refuse = {"POST /v1/workloads/shop/profile/import": (422, payload)}
+            _, problem, _ = self.run_llc(llc.profile, action="import", id="shop", file=str(src), yes=True)
+            self.assertIsNotNone(problem, payload)
+            self.assertEqual(problem.status, 422, payload)
+            self.assertEqual(problem.code, llc.EXIT_USER, payload)
+            self.assertIn("ask the user for this file's password", problem.next, payload)
+            self.assertIn("--password-env", problem.next, payload)
+            self.assertIn("never guess", problem.next, payload)
+            self.assertNotIn("fix the field", problem.next, payload)
+            lower = {k.lower(): v for k, v in self.fake.calls[-1][2].items()}
+            self.assertNotIn("x-profile-password", lower, payload)
 
     def test_refusal_codes_are_known_from_the_message_too(self):
         for payload in ({"error": "snapshot_key_changed"}, {"error": "x", "code": "snapshot_key_changed"}):

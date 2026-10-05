@@ -82,8 +82,11 @@ python3 scripts/llc.py profile import shop --file shop.llcprofile.age --password
   user wants a way back.
 - Only files exported from a LiveLLM browser are taken (422 otherwise). For
   sign-ins from another browser, import cookies instead.
-- A file with a password needs it: a 422 "The password doesn't open this
-  file." means ask the user for the right one.
+- A file with a password needs it: a 422 "This file is password protected."
+  (sent without one) or "The password doesn't open this file." (a wrong one)
+  means ask the user for the file's password, put it in an environment
+  variable and pass `--password-env VAR`. Never guess one, never type it on
+  the command line.
 - A profile from a newer Chrome answers 409 "Import anyway?": pass `--force`
   only if the user agrees.
 - Language and time zone stay as the browser's settings say, whatever the

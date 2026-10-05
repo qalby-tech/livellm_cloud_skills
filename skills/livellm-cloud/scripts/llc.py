@@ -207,9 +207,10 @@ def browser_problem(status, code, message):
     if status == 429 and (said("change_ip_too_soon") or "too soon" in low):
         return Problem(message, "the mobile proxy's shortest time between IP changes hasn't passed: wait that long, then rotate again",
                        EXIT_BUSY, status)
-    if status == 422 and (said("wrong_password") or "password doesn't open" in low):
-        return Problem(message, "ask the user for this file's password, put it in an environment variable and pass --password-env VAR; "
-                       "never guess one", EXIT_USER, status)
+    if status == 422 and (said("wrong_password") or "password doesn't open" in low
+                          or said("password_required") or "password protected" in low):
+        return Problem(message, "ask the user for this file's password, put it in an environment variable and pass --password-env VAR "
+                       "(never on the command line); never guess one", EXIT_USER, status)
     if status == 507:
         return Problem(message, "the browser's storage is full: ask the user to grow it (llc.py set) or to pick a snapshot to delete",
                        EXIT_USER, status)

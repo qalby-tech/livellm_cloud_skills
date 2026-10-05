@@ -5,6 +5,14 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.10.1
+
+- A profile import of a password-protected file sent without its password
+  (422 `password_required`, "This file is password protected.") now gets the
+  same answer as a wrong password: ask the user for the file's password, put it
+  in an environment variable and pass `--password-env VAR`; never guess one,
+  never put it on the command line. `profiles.md` names both refusals.
+
 ## 1.10.0
 
 - A browser's language and time zone: `locale`, `timezone`, `languages` and
