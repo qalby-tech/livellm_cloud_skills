@@ -1,5 +1,5 @@
 # Prompts for trigger testing. The skill should load for the first list and
-# stay out of the second. Target: at least 27 of 30, and 0 of 10.
+# stay out of the second. Target: at least 28 of 31, and 0 of 10.
 should_trigger:
   - Log into our supplier portal and download last month's invoices.
   - Open a real browser and check whether our checkout page works.
@@ -31,6 +31,7 @@ should_trigger:
   - This store blocks our Chrome browser as a bot; make a LiveLLM Camoufox browser and try it there.
   - Let my LiveLLM app reach the Postgres database another app uses.
   - Which of my LiveLLM machines can reach the Browser API inside the workspace?
+  - Link the LiveLLM build machine to our Postgres so its import job can reach it.
 should_not_trigger:
   - Set up LiteLLM as a proxy for OpenAI and Anthropic models.
   - Launch an EC2 instance on AWS.

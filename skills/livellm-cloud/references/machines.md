@@ -254,6 +254,13 @@ whole workspace) always needs their agreement. `reach ID` lists the names a
 machine answers on inside: `<res>` for SSH and raw ports, `<res>-http`,
 `<res>-internal` and `<res>-rdp`. See `references/inside-access.md`.
 
+A database is reached only by what links it. A machine or a Desktop App that
+uses one links it, `"databases": [{"id": "db"}]` in the create file or
+`link ci-box db --yes` later: it reaches the database and nothing restarts. It
+gets no variables from the link (`env` is refused); `reach db` lists the
+address. Linking is letting it in too: ask the user first unless you made both
+(rule 11, `references/databases.md`).
+
 ## Where it runs
 
 Leave `placement` out and LiveLLM picks the host. To choose, put

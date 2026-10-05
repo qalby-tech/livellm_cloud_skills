@@ -11,10 +11,22 @@ Needs LiveLLM with inside access (api 0.51); against an earlier one
 everything still reaches everything and `reach` shows no setting.
 
 - Inside the workspace (`references/inside-access.md`): resources don't reach
-  each other unless the user allows it. A new resource is closed; its
-  `reachableFrom` names who may reach it (`[]` nothing, ids, `["*"]` the whole
-  workspace). A Composable App is one resource with one setting. Links,
-  `dependsOn` and a Browser API's browsers are reached without it.
+  each other unless the user allows it. Every resource is closed, ones made
+  earlier too; its `reachableFrom` names who may reach it (`[]` nothing, ids,
+  `["*"]` the whole workspace). A Composable App is one resource with one
+  setting: its services reach each other. Links, `dependsOn` and a Browser
+  API's browsers are reached without it.
+- A database has no `reachableFrom`: it is reached only by what links it.
+  `create` refuses one on a database before sending (`[]` and `null` pass, the
+  API drops them), `reach DB` shows what links it and refuses every change,
+  and the API's 422 points at `link`.
+- `llc.py link ID DB... [--remove] --yes`: an app, a machine or a Desktop App
+  links databases with no variables, which only lets it reach them (nothing
+  restarts; links with variables already there are kept). An app's link may
+  name no variables (`{"id": "cache"}`); a machine's or a Desktop App's link
+  never does (`"databases": [{"id": "db"}]` in its create file, `env` refused
+  before sending). `ls` shows their links, and `reach` lists them as `links
+  it`.
 - `llc.py reach ID` shows who reaches a resource and its inside addresses,
   read from the workspace's settings only (it never connects, so it holds no
   machine and makes no link or token); a Composable App's name works too.
@@ -25,21 +37,25 @@ everything still reaches everything and `reach` shows no setting.
   as written and refuse a malformed one before sending; `ls` shows it.
 - The Network permission: an agent or a key needs it to let one resource
   reach another, unless it made both or the one reached already lets the
-  whole workspace in. A 403 `network_permission` says: ask the user; a person
-  turns on Network on the Agents page or the Keys page.
+  whole workspace in with `["*"]` (never a database). Linking a database it
+  didn't make and adding a service to a Composable App it didn't make need it
+  too. A 403 `network_permission` says: ask the user; a person turns on
+  Network on the Agents page or the Keys page.
 - `SKILL.md`: new rule 11 says, word for word, to ask the user and wait for
-  their agreement before letting a resource reach another, beside rule 10's two
-  sentences from 1.11.1. `tools/validate.py` fails when any of the three
-  sentences is missing. A "Pick the tool" row for `reach`, and a 403 row for
-  Network.
+  their agreement before letting a resource reach another (a Composable App is
+  one resource, a database is reached only by what links it, and a service
+  added to a Composable App counts); rule 10's two sentences are 1.11.1's.
+  `tools/validate.py` fails when any of the three sentences is missing. A
+  "Pick the tool" row for `reach`, and a 403 row for Network.
 - `apps.md`, `databases.md`, `browsers.md`, `browser-api.md` and
   `troubleshooting.md`: an internal port and a database's private address
   answer only the resources allowed; joining an app takes its setting (an
   agent joins only apps it created); the Browser API asks no key inside, so
-  putting a browser in one is an opening; a restored database starts with the
-  original's setting. `machines.md`: machines that talk to each other each
-  need a `reachableFrom`. A public address given so that another resource can
-  reach it counts as letting it in (rule 11).
+  putting a browser in one is an opening; a restored database is reached by
+  nothing until it is linked; adding a service to a Composable App is an
+  opening. `machines.md`: machines that talk to each other each need a
+  `reachableFrom`, and a machine or a Desktop App links the database it uses. A public address given so that another resource
+  can reach it counts as letting it in (rule 11).
 
 ## 1.11.1
 

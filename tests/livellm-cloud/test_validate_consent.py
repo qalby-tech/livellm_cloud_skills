@@ -38,6 +38,19 @@ class ConsentSentencesTest(unittest.TestCase):
                                 "you may tell the user afterwards: it changes")
         self.assertEqual(validate.missing_consent_sentences(reworded), ["S1 (proxies)"])
 
+    def test_the_older_inside_sentence_no_longer_passes(self):
+        # 1.12.0's first wording: no database rule, no service added to a Composable App
+        flat = " ".join(SKILL.read_text(encoding="utf-8").split())
+        s3 = " ".join(validate.CONSENT_SENTENCES["S3 (inside access)"].split())
+        old = ("Resources in a workspace can't reach each other unless the user allows it (a Composable App counts as one "
+               "resource). Before you let a resource reach another (reachableFrom, a database link, dependsOn, or a "
+               "browser put in a Browser API), ask the user and wait for their agreement, unless you created both or the "
+               "one reached already lets the whole workspace in. Letting the whole workspace in always needs their "
+               "agreement. An API key or an agent also needs the Network permission for this, which only a person turns on.")
+        self.assertEqual(validate.missing_consent_sentences(flat.replace(s3, old)), ["S3 (inside access)"])
+        for part in ("a database is reached only by what links it", "a service added to a Composable App"):
+            self.assertIn(part, s3)
+
     def test_no_permission_of_their_own_is_named_for_proxies_or_profiles(self):
         flat = " ".join(SKILL.read_text(encoding="utf-8").split())
         self.assertNotIn("(Proxies, Profiles)", flat)

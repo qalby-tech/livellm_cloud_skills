@@ -48,11 +48,13 @@ Everything goes through `scripts/llc.py`, which talks to the API and prints JSON
     where the browser's traffic goes and the address sites see. `proxy
     remove`, and a create or set carrying proxy settings, count too. Proxy
     logins and change-IP addresses go in a file you delete after sending.
-11. Resources in a workspace can't reach each other unless the user allows it
-    (a Composable App counts as one resource). Before you let a resource
-    reach another (reachableFrom, a database link, dependsOn, or a browser
-    put in a Browser API), ask the user and wait for their agreement, unless
-    you created both or the one reached already lets the whole workspace in.
+11. Resources in a workspace can't reach each other unless the user allows
+    it. A Composable App counts as one resource, and a database is reached
+    only by what links it. Before you let a resource reach another
+    (reachableFrom, a database link, dependsOn, a service added to a
+    Composable App, or a browser put in a Browser API), ask the user and wait
+    for their agreement, unless you created both or the one reached already
+    lets the whole workspace in.
     Letting the whole workspace in always needs their agreement. An API key
     or an agent also needs the Network permission for this, which only a
     person turns on. Giving a resource a public address so that another
@@ -100,7 +102,7 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 | A browser through the user's proxies; rotating IPs, mobile proxies | `proxy set`, `proxy rotate` | `references/proxies.md` |
 | A browser's sign-ins kept as a snapshot, switched back, exported, imported, moved; cookies added | `profile`, `cookies` | `references/profiles.md` |
 | Many pages fetched or scraped at once through one address; several browsers behind one API | Browser API (`browser-api create`) | `references/browser-api.md` |
-| One resource talks to another inside the workspace: an app to a database, a machine to a Browser API | `reach` | `references/inside-access.md` |
+| One resource talks to another inside the workspace: a machine to a Browser API; an app, a machine or a Desktop App to a database | `reach`; a database: `link` | `references/inside-access.md` |
 | A database | PostgreSQL (`storage`, `"engine": "postgres"`) | `references/databases.md` |
 | A cache or a queue | Redis (`storage`, `"engine": "redis"`) | `references/databases.md` |
 | Cost, limits, what is running, alerts, what happened, templates, signed-in agents, held machines | Workspace | `references/workspace.md` |
@@ -116,7 +118,8 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 3. **Create only what was asked for.** `create <type> --json body.json --yes`.
    Leave `placement` out unless the user wants a region or a host (`hosts`
    lists them). A new resource is closed to the rest of the workspace: what
-   should reach it goes in `reachableFrom` (rule 11).
+   should reach it goes in `reachableFrom`, and a database is reached by what
+   links it (rule 11).
 4. **Wait.** `wait <id>` until it is ready. On a timeout, tell the user what the
    status said. Never guess.
 5. **Connect.** `connect <id>` prints the address and a token that opens it for
@@ -217,7 +220,7 @@ answers a Playwright address (follow its `how`). `browser_proxy` reads a
 browser's proxies and sets, clears or rotates them (ask first, rule 10), and
 `browser_profile` lists, takes, restores and deletes its profile snapshots and
 copies another browser's profile into it (ask first, rule 10); exporting or
-importing a profile file stays with this script. `create_resource` and
-`update_resource` take `reachableFrom` (rule 11), and `connect_resource`
-answers the inside addresses under `inside`. A tool you lack permission for is
-not listed at all.
+importing a profile file stays with this script. `create_resource` and `update_resource`
+take `reachableFrom` and database links (rule 11; a database takes no
+`reachableFrom`), and `connect_resource` answers the inside
+addresses under `inside`. A tool you lack permission for is not listed at all.

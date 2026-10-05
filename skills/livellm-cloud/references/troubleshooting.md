@@ -104,7 +104,8 @@ port in its settings doesn't match what the program listens on.
 
 **An app can't reach another resource.** Resources are closed to each other
 unless allowed. `reach ID` on the one it calls shows who may; ask the user
-before opening it.
+before opening it. A database is reached only by what links it: with the
+user's agreement, `link APP DB --yes`.
 
 **Something runs but misbehaves.** `logs <id>` prints the last log lines and
 each container's state, restarts and resource use. Read it before guessing, and

@@ -66,24 +66,41 @@ connection details go into which environment variables:
   the app starts. They are never in the app's settings, in an answer, or
   anywhere you can read them: don't copy a password into `env` or
   `secretEnv` when a link gives it.
-- At most 8 databases per app and 12 variables per database. A variable name
-  is letters, digits and `_`, not starting with a digit, and is used once in
-  the app, across `env`, `secretEnv` and every link.
-- The app starts once its databases accept connections; no `dependsOn`
-  needed for them.
-- A link lets the app (its whole Composable App) reach the database. A link
-  is letting a resource in unless this agent or key made both the app and the
-  database (now or earlier), or the database already lets the whole workspace
-  in. Otherwise ask the user first (rule 11): an agent or key without the
-  Network permission gets a 403. Linking a database you made from an app you
-  didn't make counts too.
-- `ls` shows each app's links as its settings hold them, and on a database,
-  `usedBy`: the apps that link it or wait for it.
-- A linked database can't be deleted (409 names the app): take the link out,
-  or delete the app, first.
-- On an app that exists, `set web --json links.json --yes` with
-  `{"pod": {"databases": [...]}}`. The list you send replaces the whole
-  list, so copy the links `ls` shows and add the new one.
+- At most 8 databases per app and 0 to 12 variables per database. A variable
+  name is letters, digits and `_`, not starting with a digit, and is used once
+  in the app, across `env`, `secretEnv` and every link.
+- The app starts once the databases it takes variables from accept
+  connections; no `dependsOn` needed for them.
+- A link with no variables, `{ "id": "cache" }`, only lets the app reach the
+  database: no variable, no wait, and adding or taking it out never restarts
+  the app. `python3 scripts/llc.py link web cache --yes` makes one on an app
+  that exists, keeping its other links; `--remove` takes links out.
+- A link is the only way anything reaches a database: it lets the app (its
+  whole Composable App) in. A link is letting a resource in unless this agent
+  or key made both the app and the database (now or earlier). Otherwise ask
+  the user first (rule 11): an agent or key without the Network permission
+  gets a 403. Linking a database you made from an app you didn't make counts
+  too.
+- `ls` shows each app's, machine's and Desktop App's links as its settings
+  hold them, and on a database, `usedBy`: what links it or waits for it.
+- A linked database can't be deleted (409 names what links it): take the link
+  out, or delete what links it, first.
+- To change the variables of an app that exists, `set web --json links.json
+  --yes` with `{"pod": {"databases": [...]}}`. The list you send replaces the
+  whole list, so copy the links `ls` shows and change what the user asked.
+
+## Link it to a machine or a Desktop App
+
+A machine or a Desktop App that needs a database (a job that loads data, a
+desktop tool that opens it) links it too, to reach it. It gets no variables:
+give the program on it the address `reach db` lists and a login.
+
+```
+python3 scripts/llc.py link runner db --yes
+```
+
+In a create file: `"databases": [{ "id": "db" }]` (at most 8). Ask the user
+first unless you made both (rule 11).
 - **"set a new password for db to link its URL"** (422): the database's
   password was set before links existed, so it can't give `url` yet. Link its
   other details instead (`host`, `port`, `password`, and on PostgreSQL
@@ -94,10 +111,10 @@ connection details go into which environment variables:
 
 `connect db` prints the addresses. Apps in the same workspace use the private
 one, which never leaves the platform; a link gives it to them. It answers only
-the resources allowed to reach the database: the apps that link it, and what
-its `reachableFrom` names (`reach db` shows them; a new
-database is reached by nothing else). Ask for the public address only when the
-user needs to reach the database from outside:
+what links the database: apps, machines and Desktop Apps (`reach db` shows
+them); nothing else in the workspace reaches it, and a database takes no
+`reachableFrom`. Ask for the public address only when the user needs to reach
+the database from outside:
 
 ```json
 "network": { "expose": true }
@@ -144,8 +161,9 @@ running untouched. `--at` picks a minute after the backup ended, with
 continuous backups. The new database keeps the original's login name and
 takes the new password you generate (pass it through an environment
 variable, never on the command line). It counts toward the plan like any new
-database. It starts with the original's `reachableFrom`. Point the app at
-it only when the user says so, and restore only when the user asked for it.
+database. Nothing reaches it until something links it. Point the app at it
+(link it in place of the original) only when the user says so, and restore
+only when the user asked for it.
 
 ## Care
 
@@ -182,8 +200,8 @@ A restore runs where `--host` or `--region` says, automatic without them (never 
   it again (or run the restore again from the same backup).
 - **The app can't connect.** Check its links in `ls`, and that the app reads
   the variable names you gave them. An address typed by hand must be the
-  private one, and the app must be allowed to reach the database: linked, or
-  named in its `reachableFrom` (`reach db`). From outside, the database must be
+  private one, and the app must link the database (`reach db` lists what
+  does; `link web db --yes`, with the user's agreement). From outside, the database must be
   exposed and the connection must use TLS.
 - **Password refused.** It was set at creation and can't be read back. The user
   can set a new one; every app then needs the new value.

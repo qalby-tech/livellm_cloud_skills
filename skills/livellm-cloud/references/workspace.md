@@ -130,7 +130,8 @@ The permissions are Connect (browsers, apps, databases), Use desktops, Run
 commands, Create, and Manage everything; the user turns each on or off there,
 and it applies on the agent's next call. One more is never part of any access
 level and only a person turns it on: Network (let resources in the workspace
-reach each other, `references/inside-access.md`). It is off on a new API key
+reach each other: reachableFrom, database links, services added to a
+Composable App, `references/inside-access.md`). It is off on a new API key
 too, until the user turns it on on the Keys page. Changing a browser's proxies
 or moving its profile needs no permission of its own, only the user's
 agreement each time (rule 10). The page also shows which machines

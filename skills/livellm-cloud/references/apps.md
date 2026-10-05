@@ -98,8 +98,12 @@ each other by plain name:
   new services take its stack, and an app on its own gets a stack named after
   itself (its name inside stays its id, and it restarts once as it joins —
   tell the user first). The new services take the app's `reachableFrom` and
-  reach what it reaches. An agent may add services only to an app it created
-  (403 otherwise: ask the user).
+  reach what it reaches. Adding a service to a Composable App is letting it
+  in: it and every service of the app reach each other. Ask the user first
+  unless you made the app (rule 11); for an app someone else made, an agent or
+  key also needs the Network permission (403 `network_permission`), and an
+  agent may add services only to an app it created unless a person allowed
+  more (403 otherwise: ask the user).
 - A Composable App is one resource to the rest of the workspace: other
   resources reach none of its services until its `reachableFrom` names them,
   and all its services share that one setting
@@ -115,7 +119,8 @@ managed databases in one step, all of it or none, with the app linked to them
 (`references/databases.md`, "Link it to an app"). Leave the databases'
 passwords out: the platform makes them and gives them to the app through the
 links, so no password passes through you. A link also lets the app reach the
-database; nothing else reaches it unless you say so.
+database, and nothing else does: a database is reached only by what links it.
+A link with no variables (`{"id": "cache"}`) only lets the app reach it.
 
 A Nextcloud, for example. `cloud.json`:
 

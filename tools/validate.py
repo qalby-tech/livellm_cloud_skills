@@ -38,12 +38,13 @@ CONSENT_SENTENCES = {
                     "agreement: it changes where the browser's traffic goes and the address sites see.",
     "S2 (profiles)": "A profile holds the user's sign-ins. Before you export, import or copy one, or add cookies, ask the "
                      "user and wait for their agreement. Never upload an exported file.",
-    "S3 (inside access)": "Resources in a workspace can't reach each other unless the user allows it (a Composable App "
-                          "counts as one resource). Before you let a resource reach another (reachableFrom, a database "
-                          "link, dependsOn, or a browser put in a Browser API), ask the user and wait for their agreement, "
-                          "unless you created both or the one reached already lets the whole workspace in. Letting the "
-                          "whole workspace in always needs their agreement. An API key or an agent also needs the Network "
-                          "permission for this, which only a person turns on.",
+    "S3 (inside access)": "Resources in a workspace can't reach each other unless the user allows it. A Composable App "
+                          "counts as one resource, and a database is reached only by what links it. Before you let a "
+                          "resource reach another (reachableFrom, a database link, dependsOn, a service added to a "
+                          "Composable App, or a browser put in a Browser API), ask the user and wait for their "
+                          "agreement, unless you created both or the one reached already lets the whole workspace in. "
+                          "Letting the whole workspace in always needs their agreement. An API key or an agent also "
+                          "needs the Network permission for this, which only a person turns on.",
 }
 
 problems: list[str] = []
