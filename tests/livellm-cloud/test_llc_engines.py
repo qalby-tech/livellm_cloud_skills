@@ -259,6 +259,11 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(res, answer)
         self.assertEqual([c[:2] for c in self.fake.calls], [("GET", "/v1/browsers/engines")])
         self.assertNotIn("Authorization", self.fake.calls[0][2])
+        # a LiveLLM from before engines: Chrome only, not "the id is wrong"
+        self.fake.routes["GET /v1/browsers/engines"] = (404, {"error": "404 page not found"})
+        res, problem = self.run_json(llc.engines)
+        self.assertIsNone(problem)
+        self.assertEqual([e["id"] for e in res["engines"]], ["chrome"])
 
     def test_cookies_a_camoufox_browser_left_out(self):
         items = [{"name": "sid", "value": "cookie-secret-77", "domain": ".example.com", "path": "/"},
@@ -540,6 +545,16 @@ class NodeExampleTest(unittest.TestCase):
         self.assertIn("This browser takes Playwright 1.62; 1.63.0 is installed.", err)
         self.assertIn("Run: npm i playwright@1.62", err)
         self.assertEqual(calls, [])
+
+    def test_playwright_connect_mjs_without_playwright_says_where_it_looked(self):
+        for name in ("playwright_connect.mjs",):
+            shutil.copy(SKILL / "assets" / name, self.tmp / name)
+        (self.tmp / "connect.json").write_text(json.dumps(CAMOUFOX_CONNECT))
+        r = subprocess.run(["node", str(self.tmp / "playwright_connect.mjs"), str(self.tmp / "connect.json"), "https://example.com"],
+                           capture_output=True, text=True, timeout=60, cwd=self.tmp)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("none is installed where this script can see it.", r.stderr)
+        self.assertIn("Run: npm i playwright@1.62 in this script's folder", r.stderr)
 
     def test_playwright_connect_mjs_points_a_chrome_answer_elsewhere(self):
         code, _, err, calls = self.run_node("playwright_connect.mjs", CHROME_CONNECT)

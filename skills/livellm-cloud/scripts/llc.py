@@ -1365,7 +1365,14 @@ def cookies(args):
 
 def engines(_args):
     """The browser engines this LiveLLM offers: Chrome, and Camoufox where it is offered."""
-    out(request("GET", "/v1/browsers/engines"))
+    try:
+        out(request("GET", "/v1/browsers/engines"))
+    except Problem as p:
+        if p.status != 404:
+            raise
+        # a LiveLLM from before engines: its browsers are all Chrome
+        out({"engines": [{"id": "chrome", "name": "Chrome", "protocol": "cdp", "default": True}],
+             "note": "this LiveLLM offers only Chrome browsers"})
 
 
 def locales(_args):

@@ -45,8 +45,9 @@ const want = String(pw.version ?? "");
 const have = installedPlaywright();
 const sameMinor = (a, b) => a.split(".").slice(0, 2).join(".") === b.split(".").slice(0, 2).join(".");
 if (want && (!have || !sameMinor(have, want))) {
-  console.error(`This browser takes Playwright ${want}; ${have ? `${have} is installed.` : "none is installed."}`);
-  console.error(`Run: npm i playwright@${want}`);
+  console.error(`This browser takes Playwright ${want}; ${have ? `${have} is installed.` : "none is installed where this script can see it."}`);
+  // Node looks for playwright next to this script, not in the folder you run it from.
+  console.error(`Run: npm i playwright@${want}` + (have ? "" : " in this script's folder, or copy the script into your project"));
   process.exit(2);
 }
 
