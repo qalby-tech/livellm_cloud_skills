@@ -22,8 +22,17 @@ Claude Code users get the update only when the version changes.
   `tools/validate.py` fails when `SKILL.md` lacks either sentence.
 - `proxies.md` ("Ask first"), `profiles.md` (the permission table is gone),
   `browsers.md` and `workspace.md` say the same. `llc.py` no longer points a
-  403 at a Proxies or Profiles permission, and `proxy`'s `--yes` refusal says
-  to ask the user and wait for their agreement.
+  403 at a Proxies or Profiles permission. The `--yes` refusals and help of
+  `proxy`, `profile` and `cookies` say to ask the user and wait for their
+  agreement, and so do the cookie hints in `browsers.md` and
+  `troubleshooting.md`. A plain 403 names the Keys page for an API key, beside
+  the Agents page for an agent.
+- A workspace that keeps profiles to its own people also refuses an import or a
+  copy by an agent or an API key that isn't the workspace owner's, not only an
+  export: `profiles.md` and `llc.py`'s hint for that 403 say so.
+- Needs LiveLLM API 0.50.0 or newer, which drops the two permissions. An older
+  one still refuses without them, and its 403 then gets the generic hint: tag
+  this release only once that API is live.
 
 ## 1.11.0
 

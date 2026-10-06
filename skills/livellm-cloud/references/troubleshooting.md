@@ -58,11 +58,12 @@ keeps working.
 
 **A browser refuses an engine.** 422 `engine_unavailable`: this LiveLLM
 doesn't offer Camoufox (`llc.py engines`); tell the user. `engine_fixed`: a
-browser's engine can't change; make a new one and add the cookies.
-`extensions_unsupported`: Camoufox takes no extensions. `engine_mismatch`: a
-profile copies only between browsers of one engine; add the cookies instead.
-`profile_engine` (or `not_livellm_profile` naming Chrome): a profile from the
-other engine; add its cookies instead. A Browser API has no engine: it holds
+browser's engine can't change; make a new one and, once the user agrees, add
+the cookies (rule 10). `extensions_unsupported`: Camoufox takes no extensions.
+`engine_mismatch`: a profile copies only between browsers of one engine; add
+the cookies instead, once the user agrees. `profile_engine` (or
+`not_livellm_profile` naming Chrome): a profile from the other engine; add its
+cookies instead, once the user agrees. A Browser API has no engine: it holds
 both.
 
 **A Camoufox browser's address refuses Playwright (428).** The installed

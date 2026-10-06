@@ -45,8 +45,9 @@ python3 scripts/llc.py create browser --json browser.json --engine camoufox --ye
 ```
 
 (or `"engine": "camoufox"` in the file). **The engine can't change later**: a
-422 `engine_fixed` says so. For the other engine, make a new browser and add
-the old one's cookies to it (`references/profiles.md`); profiles themselves
+422 `engine_fixed` says so. For the other engine, make a new browser and,
+once the user agrees (rule 10), add the old one's cookies to it
+(`references/profiles.md`); profiles themselves
 move only between browsers of one engine. `ls` shows `"engine": "camoufox"`
 on a Camoufox browser; a browser without it is Chrome.
 
@@ -88,8 +89,9 @@ A proxy's country doesn't set these: set them to match it yourself.
 - Snapshots to switch back to, a profile exported to a file or imported from
   one, copied to another browser, or cookies added: `references/profiles.md`.
 - Ask the user and wait for their agreement before you change a browser's
-  proxies, or export, import or copy its profile, or add cookies: the profile
-  holds their sign-ins (rule 10).
+  proxies (it changes where its traffic goes and the address sites see), and
+  before you export, import or copy its profile or add cookies (the profile
+  holds their sign-ins): rule 10.
 
 ## Drive it
 

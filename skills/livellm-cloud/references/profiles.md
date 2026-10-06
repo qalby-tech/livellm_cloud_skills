@@ -21,10 +21,11 @@ this agent made) or Manage everything for the browser that receives it; a
 is involved: asking the user first (above) is what stands between you and a
 profile.
 
-A workspace can also keep exports to its own people: then a 403 "Profiles hold
-sign-ins. Only the workspace's people can export them." refuses an export, or a
-copy out of it, whatever permissions you have. Tell the user; asking for a
-permission won't change it.
+A workspace can also keep profiles to its own people: then a 403 "Profiles
+hold sign-ins. Only the workspace's people can export them." refuses an export,
+an import or a copy by an agent or an API key that isn't the workspace owner's,
+whatever permissions it has. Tell the user; asking for a permission won't
+change it.
 
 A browser made before profiles were offered answers 409 "Restart this browser
 once to turn on profiles". Ask the user, then `llc.py restart ID --yes`: its

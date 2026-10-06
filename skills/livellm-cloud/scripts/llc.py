@@ -151,7 +151,8 @@ def status_problem(status, payload):
     if status == 402:
         return Problem(message, "the plan is full: show the user their usage and stop; never delete to make room", EXIT_USER, status)
     if status == 403:
-        return Problem(message, "tell the user which permission this needs; they can turn it on for this agent on the console's Agents page", EXIT_USER, status)
+        return Problem(message, "tell the user which permission this needs; they can turn it on for this agent on the console's Agents page "
+                       "(for an API key, on the Keys page)", EXIT_USER, status)
     if status == 404:
         return Problem(message, "run: llc.py ls, the id is probably wrong", EXIT_OTHER, status)
     if status == 409 and "location can't change" in message:
@@ -178,8 +179,9 @@ def browser_problem(status, code, message):
         return code == token or token in low
 
     if status == 403 and "profiles hold sign-ins" in low:
-        return Problem(message, "only the workspace's own people can export a profile or copy it out of this workspace, and no "
-                       "permission changes that: tell the user, and stop", EXIT_USER, status)
+        return Problem(message, "this workspace keeps profiles to its own people: an export, an import or a copy by an agent or an "
+                       "API key is refused unless it is the workspace owner's, and no permission changes that: tell the user, and stop",
+                       EXIT_USER, status)
     if status == 409 and ("profiles are still starting" in low or "proxies are still starting" in low):
         return Problem(message, "the browser's helper is still starting: wait half a minute and run the same command again; "
                        "no restart is needed", EXIT_NOT_READY, status)
@@ -1284,7 +1286,7 @@ def may_place_profile():
         if p.status == 403 and "profile" not in p.message.lower():
             p.next = ("putting a profile in a browser needs Manage, or Create on a browser this agent made (a copy also needs "
                       "Connect on the browser it copies from): tell the user; a person changes what this agent may do on the "
-                      "console's Agents page")
+                      "console's Agents page (for an API key, on the Keys page)")
         raise
 
 
@@ -1300,7 +1302,9 @@ def profile(args):
                "export": "the file holds the browser's sign-ins",
                "import": "it replaces the browser's profile",
                "copy": "it replaces this browser's profile with the other's"}[args.action]
-        raise Problem(f"profile {args.action} needs --yes", f"{why}: ask the user first, then pass --yes", EXIT_OTHER)
+        rule = " (SKILL.md rule 10)" if args.action in ("export", "import", "copy") else ""
+        raise Problem(f"profile {args.action} needs --yes", f"{why}: ask the user and wait for their agreement{rule}, then pass --yes",
+                      EXIT_OTHER)
     if args.action in ("restore", "rm") and not args.snapshot:
         raise Problem("which snapshot?", f"llc.py profile show {args.id} lists them; pass --snapshot ID", EXIT_OTHER)
     snap = f"{profile_path(args.id)}/snapshots"
@@ -1331,7 +1335,8 @@ def profile(args):
 def cookies(args):
     """Add cookies to a running browser. The values are never printed."""
     if not args.yes:
-        raise Problem("cookies needs --yes", "cookies are sign-ins: add only the ones the user gave you, then pass --yes", EXIT_OTHER)
+        raise Problem("cookies needs --yes", "cookies are sign-ins: add only the ones the user gave you, ask the user and wait for "
+                      "their agreement (SKILL.md rule 10), then pass --yes", EXIT_OTHER)
     items = read_json_file(args.json, "the cookies")
     if isinstance(items, dict) and isinstance(items.get("cookies"), list):
         items = items["cookies"]
@@ -1877,7 +1882,7 @@ def main():
     proxy_p.add_argument("id", help="the browser")
     proxy_p.add_argument("--json", help="set: a file with the proxy settings (logins in it are kept and never shown)")
     proxy_p.add_argument("--to", help="rotate: go to this proxy, by its name")
-    proxy_p.add_argument("--yes", action="store_true", help="set, rotate, clear, remove: the user asked for this change")
+    proxy_p.add_argument("--yes", action="store_true", help="set, rotate, clear, remove: only once the user agreed to this change (SKILL.md rule 10)")
     proxy_p.set_defaults(fn=proxy)
 
     prof_p = sub.add_parser("profile", help="a browser's profile: show, snapshot, restore, rm, export, import, copy")
@@ -1891,13 +1896,13 @@ def main():
     prof_p.add_argument("--password-env", help="export, import: the environment variable holding the file's password")
     prof_p.add_argument("--force", action="store_true", help="import: take a profile from a newer Chrome or Camoufox (only if the user agreed)")
     prof_p.add_argument("--from", dest="source", help="copy: the browser whose profile to copy")
-    prof_p.add_argument("--yes", action="store_true", help="every change: the user asked for it")
+    prof_p.add_argument("--yes", action="store_true", help="every change: only once the user agreed to it (export, import, copy: SKILL.md rule 10)")
     prof_p.set_defaults(fn=profile)
 
     cookies_p = sub.add_parser("cookies", help="add cookies to a running browser from a JSON file")
     cookies_p.add_argument("id")
     cookies_p.add_argument("--json", required=True, help="a JSON list of cookies: name, value, domain, path, ...")
-    cookies_p.add_argument("--yes", action="store_true", help="the user gave these cookies and asked for them to be added")
+    cookies_p.add_argument("--yes", action="store_true", help="only once the user gave these cookies and agreed to add them (SKILL.md rule 10)")
     cookies_p.set_defaults(fn=cookies)
 
     sub.add_parser("templates", help="the workspace's saved templates").set_defaults(

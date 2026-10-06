@@ -195,7 +195,8 @@ run, and `release_machine` lets a machine go. To hand the user a screen (rule
 6), `share_screen` with mode control gives a link to a machine or a Desktop
 App and `stop_sharing` closes it; for a browser, `connect_resource`
 with tool view gives its live view; with tool cdp, a Camoufox browser
-answers a Playwright address (follow its `how`). `browser_proxy` reads, sets and rotates a
-browser's proxies, and `browser_profile` lists, takes, restores, deletes and
-copies its profile snapshots (ask first, rule 10); exporting or importing a
-profile file stays with this script. A tool you lack permission for is not listed at all.
+answers a Playwright address (follow its `how`). `browser_proxy` reads a
+browser's proxies and sets, clears or rotates them (ask first, rule 10), and
+`browser_profile` lists, takes, restores and deletes its profile snapshots and
+copies another browser's profile into it (ask first, rule 10); exporting or
+importing a profile file stays with this script. A tool you lack permission for is not listed at all.

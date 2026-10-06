@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 import threading
@@ -214,7 +215,17 @@ class BrowserTest(unittest.TestCase):
         for action in ("set", "rotate", "clear", "remove"):
             _, problem, _ = self.run_llc(llc.proxy, action=action, id="shop", json=self.file("p.json", {}))
             self.assertIsNotNone(problem, action)
+            self.assertIn("wait for their agreement (SKILL.md rule 10)", problem.next, action)
         self.assertEqual(self.fake.calls, [])
+
+    def test_the_yes_flags_say_the_user_agreed(self):
+        # what an agent reads in --help says agreement, as rule 10 does
+        for cmd in ("proxy", "profile", "cookies"):
+            text = subprocess.run([sys.executable, str(SCRIPT), cmd, "--help"], capture_output=True, text=True,
+                                  env={**os.environ, "COLUMNS": "400"}).stdout
+            self.assertIn("agreed", text, cmd)
+            self.assertIn("SKILL.md rule 10", text, cmd)
+            self.assertNotIn("asked for", text, cmd)
 
     def test_proxy_clear_goes_direct_and_remove_drops_the_block(self):
         self.run_llc(llc.proxy, action="clear", id="shop", yes=True)
@@ -226,6 +237,7 @@ class BrowserTest(unittest.TestCase):
         cases = [
             # proxies need no permission of their own: a 403 is the right to change the browser
             ("POST /v1/workloads/shop/proxy/rotate", 403, {"error": "This agent can't change shop."}, "Agents page", llc.EXIT_USER),
+            ("POST /v1/workloads/shop/proxy/rotate", 403, {"error": "This API key can't change shop."}, "Keys page", llc.EXIT_USER),
             ("POST /v1/workloads/shop/proxy/rotate", 409,
              {"error": "Restart this browser once to turn on profiles.", "code": "needs_restart"}, "llc.py restart", llc.EXIT_USER),
             ("POST /v1/workloads/shop/proxy/rotate", 429,
@@ -278,7 +290,9 @@ class BrowserTest(unittest.TestCase):
         for action in ("snapshot", "restore", "rm", "export", "import", "copy"):
             _, problem, _ = self.run_llc(llc.profile, action=action, id="shop", snapshot="s1")
             self.assertIsNotNone(problem, action)
-            self.assertIn("ask the user", problem.next)
+            self.assertIn("ask the user and wait for their agreement", problem.next, action)
+            if action in ("export", "import", "copy"):
+                self.assertIn("SKILL.md rule 10", problem.next, action)
         self.assertEqual(self.fake.calls, [])
 
     def test_snapshot_restore_rm_copy(self):
@@ -325,6 +339,8 @@ class BrowserTest(unittest.TestCase):
         _, problem, _ = self.run_llc(llc.profile, action="export", id="shop", out=str(target), yes=True)
         self.assertEqual(problem.status, 403)
         self.assertIn("Agents page", problem.next)
+        self.assertIn("Keys page", problem.next)
+        self.assertNotIn("profiles permission", problem.next.lower())
         self.assertEqual(list(self.tmp.iterdir()), [])
 
     def test_an_empty_password_variable_is_refused(self):
@@ -393,6 +409,8 @@ class BrowserTest(unittest.TestCase):
         p = llc.status_problem(403, {"error": "Profiles hold sign-ins. Only the workspace's people can export them."})
         self.assertIn("no permission changes that", p.next)
         self.assertNotIn("Agents page", p.next)
+        # it refuses an agent's or a key's import and copy too, not only an export
+        self.assertIn("an export, an import or a copy", p.next)
 
     def test_proxies_and_profiles_name_no_permission_of_their_own(self):
         # the API has no Proxies or Profiles permission any more; the old refusals
@@ -424,6 +442,8 @@ class BrowserTest(unittest.TestCase):
         self.assertIsNotNone(problem)
         self.assertEqual(problem.status, 403)
         self.assertIn("Manage", problem.next)
+        self.assertIn("Keys page", problem.next)
+        self.assertNotIn("profiles permission", problem.next.lower())
         self.assertNotIn("network", problem.next)
         # after reading only the start of the file (its first entry)
         self.fake.early = {"POST /v1/workloads/shop/profile/import": (
@@ -495,6 +515,7 @@ class BrowserTest(unittest.TestCase):
         items = [{"name": "sid", "value": "cookie-secret-77", "domain": ".example.com", "path": "/"}]
         _, problem, _ = self.run_llc(llc.cookies, id="shop", json=self.file("c.json", items))
         self.assertIn("--yes", problem.message)
+        self.assertIn("wait for their agreement (SKILL.md rule 10)", problem.next)
         self.assertEqual(self.fake.calls, [])
         res, problem, text = self.run_llc(llc.cookies, id="shop", json=self.file("c.json", items), yes=True)
         self.assertIsNone(problem)

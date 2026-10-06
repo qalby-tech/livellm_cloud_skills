@@ -122,8 +122,8 @@ Say this to the user plainly when it matters:
   A session started right after `proxy set` keeps the first exit.
 - **It covers the browser as LiveLLM starts it.** A tool connected to the
   browser (Chrome or Camoufox) can open its own context with a proxy of its own, and an extension
-  with proxy permissions can change it. The proxy settings are the browser's,
-  not what a connected tool does.
+  with proxy permissions can change it. These settings reach only the browser
+  as LiveLLM starts it, not a context or an extension a connected tool opens.
 
 ## Go direct, or drop the settings
 
