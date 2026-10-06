@@ -385,6 +385,16 @@ class ReachTest(unittest.TestCase):
             p = llc.status_problem(status, payload)
             self.assertNotIn("Network permission", p.next, payload)
 
+    def test_a_livellm_without_inside_access_says_there_is_nothing_to_open(self):
+        # an API from before inside access refuses reachableFrom as a field no resource has
+        p = llc.status_problem(422, {"error": "unknown field: reachableFrom (a change names the resource's fields: pod, …)"})
+        self.assertIn("no inside access yet", p.next)
+        self.assertIn("without reachableFrom", p.next)
+        self.assertEqual(p.code, llc.EXIT_USER)
+        # any other unknown field keeps the plain 422 answer
+        p = llc.status_problem(422, {"error": "unknown field: colour (a change names the resource's fields: pod, …)"})
+        self.assertNotIn("inside access", p.next)
+
     # --- a database is reached only by what links it ---
 
     def test_a_database_shows_no_setting_only_what_links_it(self):

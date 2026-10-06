@@ -220,7 +220,7 @@ answers a Playwright address (follow its `how`). `browser_proxy` reads a
 browser's proxies and sets, clears or rotates them (ask first, rule 10), and
 `browser_profile` lists, takes, restores and deletes its profile snapshots and
 copies another browser's profile into it (ask first, rule 10); exporting or
-importing a profile file stays with this script. `create_resource` and `update_resource`
-take `reachableFrom` and database links (rule 11; a database takes no
-`reachableFrom`), and `connect_resource` answers the inside
-addresses under `inside`. A tool you lack permission for is not listed at all.
+importing a profile file stays with this script. `create_resource` and
+`update_resource` take `reachableFrom` and database links (rule 11; a database
+takes no `reachableFrom`), and `connect_resource` answers the inside addresses
+under `inside`. A tool you lack permission for is not listed at all.

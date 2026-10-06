@@ -183,6 +183,11 @@ NETWORK_NEXT = ("letting one resource reach another inside the workspace needs t
                 "agent on the Agents page, or sets Reachable from (or links the database) in the console. Never work around "
                 "it, a public address included")
 
+# A LiveLLM from before inside access refuses reachableFrom as a field no
+# resource has (422): there, everything in a workspace already reaches everything.
+NO_INSIDE_NEXT = ("this LiveLLM has no inside access yet: every resource in the workspace already reaches every other, "
+                  "so there is nothing to open: tell the user (a set with other changes can go again without reachableFrom)")
+
 # The API's words when reachableFrom is sent for a database (422).
 DB_REACH = "a database is reached only by what links it"
 
@@ -194,6 +199,8 @@ def inside_problem(status, code, message):
     low = message.lower()
     if status == 403 and (code == "network_permission" or "turn on network" in low or "network permission" in low):
         return Problem(message, NETWORK_NEXT, EXIT_USER, status)
+    if status == 422 and "unknown field" in low and "reachablefrom" in low:
+        return Problem(message, NO_INSIDE_NEXT, EXIT_USER, status)
     return None
 
 

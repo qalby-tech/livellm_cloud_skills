@@ -8,7 +8,9 @@ Claude Code users get the update only when the version changes.
 ## 1.12.0
 
 Needs LiveLLM with inside access (api 0.51); against an earlier one
-everything still reaches everything and `reach` shows no setting.
+everything still reaches everything, `reach` shows no setting, and a change
+carrying `reachableFrom` is refused as an unknown field: `llc.py` then says
+there is nothing to open (a `set` with other changes can go again without it).
 
 - Inside the workspace (`references/inside-access.md`): resources don't reach
   each other unless the user allows it. Every resource is closed, ones made
@@ -36,8 +38,9 @@ everything still reaches everything and `reach` shows no setting.
   `--from a,b`, `--from '*'`, `--none`, `--add`, `--remove` change it (with
   `--yes`, after the user agreed); `--add` and `--remove` are refused on a
   resource with no setting yet. `browser-api add` needs `--yes` now: putting a
-  browser in a Browser API lets in whatever reaches it. `create` and `set` keep `reachableFrom`
-  as written and refuse a malformed one before sending; `ls` shows it.
+  browser in a Browser API lets in whatever reaches it. `create` and `set`
+  keep `reachableFrom` as written and refuse a malformed one before sending;
+  `ls` shows it.
 - The Network permission: an agent or a key needs it to let one resource
   reach another, unless it made both or the one reached already lets the
   whole workspace in with `["*"]` (never a database). Linking a database it
@@ -57,8 +60,9 @@ everything still reaches everything and `reach` shows no setting.
   putting a browser in one is an opening; a restored database is reached by
   nothing until it is linked; adding a service to a Composable App is an
   opening. `machines.md`: machines that talk to each other each need a
-  `reachableFrom`, and a machine or a Desktop App links the database it uses. A public address given so that another resource
-  can reach it counts as letting it in (rule 11).
+  `reachableFrom`, and a machine or a Desktop App links the database it uses.
+  A public address given so that another resource can reach it counts as
+  letting it in (rule 11).
 
 ## 1.11.1
 
