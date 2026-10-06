@@ -180,14 +180,6 @@ def browser_problem(status, code, message):
     if status == 403 and "profiles hold sign-ins" in low:
         return Problem(message, "only the workspace's own people can export a profile or copy it out of this workspace, and no "
                        "permission changes that: tell the user, and stop", EXIT_USER, status)
-    if status == 403 and ("proxies permission" in low or "browser proxies" in low):
-        return Problem(message, "changing a browser's proxy needs the proxies permission: ask the user; a person turns it on "
-                       "for this agent on the console's Agents page (for an API key, on the Keys page). Never work around it",
-                       EXIT_USER, status)
-    if status == 403 and ("profiles permission" in low or "browser profiles" in low):
-        return Problem(message, "exporting, importing or copying a profile needs the profiles permission: ask the user; a person "
-                       "turns it on for this agent on the console's Agents page (for an API key, on the Keys page)",
-                       EXIT_USER, status)
     if status == 409 and ("profiles are still starting" in low or "proxies are still starting" in low):
         return Problem(message, "the browser's helper is still starting: wait half a minute and run the same command again; "
                        "no restart is needed", EXIT_NOT_READY, status)
@@ -1004,7 +996,7 @@ def proxy(args):
         why = ("it drops open connections and changes the exit for everyone on the browser, a person in the live view included"
                if args.action == "rotate" else "it changes how the browser goes out")
         raise Problem(f"proxy {args.action} needs --yes",
-                      f"{why}: do it only when the user asked for it, then pass --yes", EXIT_OTHER)
+                      f"{why}: ask the user and wait for their agreement (SKILL.md rule 10), then pass --yes", EXIT_OTHER)
     if args.action == "rotate":
         body = {"to": args.to} if args.to else {}
         out(request("POST", f"{proxy_path(args.id)}/rotate", body, token=tok, timeout=ROTATE_TIMEOUT))
@@ -1284,15 +1276,15 @@ def import_profile(args, tok):
 
 @contextlib.contextmanager
 def may_place_profile():
-    """Import and copy put a profile in a browser: a 403 that isn't about the
-    Profiles permission is the other half of what they need."""
+    """Import and copy put a profile in a browser: a plain 403 is the right to
+    change that browser (a copy also reads the one it copies from)."""
     try:
         yield
     except Problem as p:
         if p.status == 403 and "profile" not in p.message.lower():
-            p.next = ("putting a profile in a browser needs the profiles permission and also Manage, or Create on a browser "
-                      "this agent made: tell the user; a person changes what this agent may do on the console's Agents page "
-                      "(for an API key, on the Keys page)")
+            p.next = ("putting a profile in a browser needs Manage, or Create on a browser this agent made (a copy also needs "
+                      "Connect on the browser it copies from): tell the user; a person changes what this agent may do on the "
+                      "console's Agents page")
         raise
 
 

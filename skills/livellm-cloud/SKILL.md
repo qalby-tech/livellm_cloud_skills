@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.11.0
+  version: 1.11.1
   documentation: https://docs.live-llm.com
 ---
 
@@ -41,11 +41,13 @@ Everything goes through `scripts/llc.py`, which talks to the API and prints JSON
    Playwright. Nothing else needs to run.
 9. When you are done with a machine you ran commands on or worked the screen
    of, `release` it so other agents can use it.
-10. A browser profile holds the user's sign-ins. Export, import or copy one,
-    or add cookies, only when the user asked for exactly that; never upload an
-    exported file. Proxy logins and change-IP addresses go in a file you
-    delete after sending. Both need a permission only a person gives
-    (Proxies, Profiles): ask, never work around a 403.
+10. A profile holds the user's sign-ins. Before you export, import or copy
+    one, or add cookies, ask the user and wait for their agreement. Never
+    upload an exported file. Before you change a browser's proxies (set,
+    clear or rotate), ask the user and wait for their agreement: it changes
+    where the browser's traffic goes and the address sites see. `proxy
+    remove`, and a create or set carrying proxy settings, count too. Proxy
+    logins and change-IP addresses go in a file you delete after sending.
 
 ## Signing in
 
@@ -195,5 +197,5 @@ App and `stop_sharing` closes it; for a browser, `connect_resource`
 with tool view gives its live view; with tool cdp, a Camoufox browser
 answers a Playwright address (follow its `how`). `browser_proxy` reads, sets and rotates a
 browser's proxies, and `browser_profile` lists, takes, restores, deletes and
-copies its profile snapshots; exporting or importing a profile file stays with
-this script. A tool you lack permission for is not listed at all.
+copies its profile snapshots (ask first, rule 10); exporting or importing a
+profile file stays with this script. A tool you lack permission for is not listed at all.

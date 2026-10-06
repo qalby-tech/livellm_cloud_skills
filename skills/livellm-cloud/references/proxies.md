@@ -4,17 +4,18 @@ A browser can send its traffic through proxies the user brings: HTTP, HTTPS or
 SOCKS5, with or without a login, mobile proxies included. It can switch between
 them by hand, on a timer, or each time a Browser API session starts.
 
-## The permission comes first
+## Ask first
 
-Changing a browser's proxies needs the **Proxies** permission. No sign-in has it
-on its own, not even full access. A person turns it on for this agent on the
-console's Agents page (for an API key, on the Keys page). Without it, `set`,
-`clear`, `remove`, `rotate`, and a create or `set` that carries proxy settings,
-answer 403: tell the user that, and never work around it. Reading how a browser
-goes out (`proxy show`) needs no extra permission.
+Before you change a browser's proxies (set, clear or rotate), ask the user and
+wait for their agreement: it changes where the browser's traffic goes and the
+address sites see. `proxy remove`, and a create or `set` that carries proxy
+settings, count too. Use a proxy only when the user asked for one, with the
+addresses and logins the user gave you.
 
-Use a proxy only when the user asked for one, with the addresses and logins the
-user gave you.
+`set`, `clear`, `remove` and `rotate`, and a create or `set` that carries proxy
+settings, need what any change to the browser needs: Create (on a browser this
+agent made) or Manage everything. Reading how a browser goes out (`proxy show`)
+needs nothing extra.
 
 ## Set the proxies
 
@@ -121,8 +122,8 @@ Say this to the user plainly when it matters:
   A session started right after `proxy set` keeps the first exit.
 - **It covers the browser as LiveLLM starts it.** A tool connected to the
   browser (Chrome or Camoufox) can open its own context with a proxy of its own, and an extension
-  with proxy permissions can change it. The Proxies permission controls the
-  browser's settings, not what a connected tool does.
+  with proxy permissions can change it. The proxy settings are the browser's,
+  not what a connected tool does.
 
 ## Go direct, or drop the settings
 
@@ -137,4 +138,5 @@ only when the user asked.
 ## With the LiveLLM tools
 
 The `browser_proxy` tool does the same: `status` reads it, `set`, `clear` and
-`rotate` change it and need the Proxies permission.
+`rotate` change it (Create on a browser this agent made, or Manage
+everything). Ask the user first, as above.

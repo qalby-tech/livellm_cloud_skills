@@ -27,6 +27,17 @@ RESERVED = ("claude", "anthropic")
 INTERNAL_WORDS = ("tenant", "namespace", "kubernetes", "k8s", "kubectl", "helm", "kubevirt")
 TEXT_SUFFIXES = {".md", ".py", ".sh", ".mjs", ".js", ".ts", ".txt", ".yaml", ".yml", ".json"}
 MAX_BODY_WORDS = 5000
+# What an agent must ask the person before doing, word for word in the
+# livellm-cloud skill's SKILL.md (line breaks and indents don't count). The
+# platform no longer stops an agent from changing proxies or moving profiles,
+# so these sentences are what does.
+CONSENT_SKILL = "livellm-cloud"
+CONSENT_SENTENCES = {
+    "S1 (proxies)": "Before you change a browser's proxies (set, clear or rotate), ask the user and wait for their "
+                    "agreement: it changes where the browser's traffic goes and the address sites see.",
+    "S2 (profiles)": "A profile holds the user's sign-ins. Before you export, import or copy one, or add cookies, ask the "
+                     "user and wait for their agreement. Never upload an exported file.",
+}
 
 problems: list[str] = []
 
@@ -42,6 +53,13 @@ def split_frontmatter(text: str):
     if end == -1:
         return None, text
     return text[4:end], text[end + 5 :]
+
+
+def missing_consent_sentences(body: str) -> list[str]:
+    """The consent sentences a SKILL.md body lacks, by label; whitespace is
+    compared as single spaces, so wrapped lines and list indents still match."""
+    flat = " ".join(body.split())
+    return [label for label, sentence in CONSENT_SENTENCES.items() if " ".join(sentence.split()) not in flat]
 
 
 def check_skill(folder: Path) -> str | None:
@@ -94,6 +112,10 @@ def check_skill(folder: Path) -> str | None:
     version = (fm.get("metadata") or {}).get("version")
     if not version:
         problem(where, "metadata.version is required so releases can be tracked")
+
+    if folder.name == CONSENT_SKILL:
+        for label in missing_consent_sentences(body):
+            problem(where, f"SKILL.md lacks the consent sentence {label} word for word (tools/validate.py CONSENT_SENTENCES)")
 
     words = len(body.split())
     if words > MAX_BODY_WORDS:

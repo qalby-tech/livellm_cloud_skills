@@ -5,6 +5,26 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.11.1
+
+- Changing a browser's proxies and exporting, importing or copying its
+  profile need no permission of their own any more: the Proxies and Profiles
+  permissions are gone from the Keys and Agents pages. An agent still needs
+  what any change to the browser needs (Create on a browser it made, or Manage
+  everything); an export needs Connect, and a copy needs Connect on the
+  browser it copies from.
+- What stands in their place is the user's agreement, every time. Rule 10 now
+  says it word for word: "Before you change a browser's proxies (set, clear or
+  rotate), ask the user and wait for their agreement: it changes where the
+  browser's traffic goes and the address sites see." and "A profile holds the
+  user's sign-ins. Before you export, import or copy one, or add cookies, ask
+  the user and wait for their agreement. Never upload an exported file."
+  `tools/validate.py` fails when `SKILL.md` lacks either sentence.
+- `proxies.md` ("Ask first"), `profiles.md` (the permission table is gone),
+  `browsers.md` and `workspace.md` say the same. `llc.py` no longer points a
+  403 at a Proxies or Profiles permission, and `proxy`'s `--yes` refusal says
+  to ask the user and wait for their agreement.
+
 ## 1.11.0
 
 - Camoufox browsers: a second browser engine, Firefox-based, beside Chrome

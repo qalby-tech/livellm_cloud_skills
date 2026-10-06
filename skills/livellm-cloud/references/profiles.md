@@ -6,23 +6,20 @@ fingerprint, so an imported or copied profile brings that along). It is kept bet
 snapshots of it and switch back, export it to a file, import one, copy it to
 another browser, or add cookies to it.
 
-**A profile holds sign-ins.** Whoever has an exported file can be signed in as
-the user on those sites. Never export, copy or import a profile unless the user
-asked for exactly that, and never upload an exported file anywhere.
+**A profile holds the user's sign-ins.** Before you export, import or copy
+one, or add cookies, ask the user and wait for their agreement. Never upload
+an exported file. Whoever has an exported file can be signed in as the user on
+those sites.
 
 ## What it needs
 
-| Action | Needs |
-|---|---|
-| `profile show` | nothing extra |
-| `snapshot`, `restore`, `rm` | Create (on a browser you made) or Manage everything |
-| `export` | the **Profiles** permission |
-| `import`, `copy` | the **Profiles** permission, and Create (on a browser you made) or Manage everything for the browser that receives it |
-| `cookies` | Connect |
-
-No sign-in has the Profiles permission on its own, not even full access: a
-person turns it on for this agent on the console's Agents page (for an API key,
-on the Keys page). Without it you get a 403: tell the user.
+`profile show` needs nothing extra. `export` and `cookies` need Connect
+(whatever drives the browser can read its sign-ins anyway). `snapshot`,
+`restore`, `rm`, `import` and `copy` change the browser: Create (on a browser
+this agent made) or Manage everything for the browser that receives it; a
+`copy` also needs Connect on the browser it copies from. No other permission
+is involved: asking the user first (above) is what stands between you and a
+profile.
 
 A workspace can also keep exports to its own people: then a 403 "Profiles hold
 sign-ins. Only the workspace's people can export them." refuses an export, or a
@@ -134,5 +131,6 @@ you, and delete the file afterwards.
 ## With the LiveLLM tools
 
 The `browser_profile` tool does the same within the tools: `list` shows the
-snapshots, `snapshot`, `restore` and `delete` change them, and `copy` needs the
-Profiles permission. Export and import are files: use `scripts/llc.py`.
+snapshots, `snapshot`, `restore` and `delete` change them, and `copy` copies
+one browser's profile into another (ask the user first). Export and import are
+files: use `scripts/llc.py`.

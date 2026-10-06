@@ -224,8 +224,8 @@ class BrowserTest(unittest.TestCase):
 
     def test_refusals_say_what_to_do(self):
         cases = [
-            ("POST /v1/workloads/shop/proxy/rotate", 403,
-             {"error": "This agent can't change browser proxies. A person can allow it on the Agents page."}, "Agents page", llc.EXIT_USER),
+            # proxies need no permission of their own: a 403 is the right to change the browser
+            ("POST /v1/workloads/shop/proxy/rotate", 403, {"error": "This agent can't change shop."}, "Agents page", llc.EXIT_USER),
             ("POST /v1/workloads/shop/proxy/rotate", 409,
              {"error": "Restart this browser once to turn on profiles.", "code": "needs_restart"}, "llc.py restart", llc.EXIT_USER),
             ("POST /v1/workloads/shop/proxy/rotate", 429,
@@ -263,8 +263,6 @@ class BrowserTest(unittest.TestCase):
             (422, {"error": "The password doesn't open this file.", "code": "wrong_password"}, "--password-env", llc.EXIT_USER),
             (422, {"error": "This file is password protected. Give its password to import it.", "code": "password_required"},
              "--password-env", llc.EXIT_USER),
-            (403, {"error": "This API key can't export or import browser profiles. A person can give it the profiles permission on the Keys page."},
-             "profiles permission", llc.EXIT_USER),
             (403, {"error": "Profiles hold sign-ins. Only the workspace's people can export them."}, "no permission changes that", llc.EXIT_USER),
             # a database's refusal keeps its own answer
             (409, {"error": "pg is still starting, so its location can't change"}, "ask the user before deleting it", llc.EXIT_USER),
@@ -322,11 +320,11 @@ class BrowserTest(unittest.TestCase):
         self.assertEqual(self.fake.calls[-1][3], {"snapshot": "s1"})
 
     def test_a_refused_export_leaves_no_file(self):
-        self.fake.refuse = {"POST /v1/workloads/shop/profile/export": (
-            403, {"error": "This agent can't export or import browser profiles. A person can allow it on the Agents page."})}
+        self.fake.refuse = {"POST /v1/workloads/shop/profile/export": (403, {"error": "This agent can't connect to shop."})}
         target = self.tmp / "x.llcprofile"
         _, problem, _ = self.run_llc(llc.profile, action="export", id="shop", out=str(target), yes=True)
-        self.assertIn("profiles permission", problem.next)
+        self.assertEqual(problem.status, 403)
+        self.assertIn("Agents page", problem.next)
         self.assertEqual(list(self.tmp.iterdir()), [])
 
     def test_an_empty_password_variable_is_refused(self):
@@ -395,9 +393,17 @@ class BrowserTest(unittest.TestCase):
         p = llc.status_problem(403, {"error": "Profiles hold sign-ins. Only the workspace's people can export them."})
         self.assertIn("no permission changes that", p.next)
         self.assertNotIn("Agents page", p.next)
-        p = llc.status_problem(403, {"error": "This API key can't export or import browser profiles. "
-                                              "A person can give it the profiles permission on the Keys page."})
-        self.assertIn("profiles permission", p.next)
+
+    def test_proxies_and_profiles_name_no_permission_of_their_own(self):
+        # the API has no Proxies or Profiles permission any more; the old refusals
+        # are never answered, and nothing in the script points at them.
+        for payload in ({"error": "This agent can't change shop."}, {"error": "This API key can't change shop."}):
+            p = llc.status_problem(403, payload)
+            self.assertNotIn("proxies permission", p.next.lower())
+            self.assertNotIn("profiles permission", p.next.lower())
+        src = SCRIPT.read_text().lower()
+        self.assertNotIn("proxies permission", src)
+        self.assertNotIn("profiles permission", src)
 
     def test_import_and_copy_name_manage_when_that_is_what_was_refused(self):
         src = self.tmp / "in.llcprofile"
@@ -412,12 +418,12 @@ class BrowserTest(unittest.TestCase):
     def test_an_import_refused_before_the_file_is_read_says_why(self):
         src = self.tmp / "big.llcprofile"
         src.write_bytes(os.urandom(8 << 20))  # more than the socket buffers take: the send gets cut
-        refusal = {"error": "This agent can't export or import browser profiles. A person can allow it on the Agents page."}
+        refusal = {"error": "This agent can't change shop."}
         self.fake.early = {"POST /v1/workloads/shop/profile/import": (403, refusal)}
         _, problem, _ = self.run_llc(llc.profile, action="import", id="shop", file=str(src), yes=True)
         self.assertIsNotNone(problem)
         self.assertEqual(problem.status, 403)
-        self.assertIn("profiles permission", problem.next)
+        self.assertIn("Manage", problem.next)
         self.assertNotIn("network", problem.next)
         # after reading only the start of the file (its first entry)
         self.fake.early = {"POST /v1/workloads/shop/profile/import": (

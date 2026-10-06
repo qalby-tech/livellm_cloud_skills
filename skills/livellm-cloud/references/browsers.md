@@ -87,6 +87,9 @@ A proxy's country doesn't set these: set them to match it yourself.
   timer or per session: `references/proxies.md`.
 - Snapshots to switch back to, a profile exported to a file or imported from
   one, copied to another browser, or cookies added: `references/profiles.md`.
+- Ask the user and wait for their agreement before you change a browser's
+  proxies, or export, import or copy its profile, or add cookies: the profile
+  holds their sign-ins (rule 10).
 
 ## Drive it
 
