@@ -131,7 +131,7 @@ page = b.contexts[0].new_page()
 
 `assets/playwright_connect.py` and `assets/playwright_connect.mjs` are working
 examples; they check the Playwright version first and print the line to
-install the right one. `connect --env` exports `LIVELLM_PLAYWRIGHT_URL` and
+install the right one. `connect ID --tool cdp --env` exports `LIVELLM_PLAYWRIGHT_URL` and
 `LIVELLM_PLAYWRIGHT_VERSION` for a Camoufox browser.
 
 A session that is already open keeps working after the 15 minutes are up.
