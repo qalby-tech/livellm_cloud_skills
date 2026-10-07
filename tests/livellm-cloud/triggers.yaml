@@ -1,5 +1,5 @@
 # Prompts for trigger testing. The skill should load for the first list and
-# stay out of the second. Target: at least 28 of 31, and 0 of 10.
+# stay out of the second. Target: at least 31 of 34, and 0 of 11.
 should_trigger:
   - Log into our supplier portal and download last month's invoices.
   - Open a real browser and check whether our checkout page works.
@@ -32,6 +32,9 @@ should_trigger:
   - Let my LiveLLM app reach the Postgres database another app uses.
   - Which of my LiveLLM machines can reach the Browser API inside the workspace?
   - Link the LiveLLM build machine to our Postgres so its import job can reach it.
+  - Give my LiveLLM app S3 object storage for its uploads.
+  - I need a bucket for file storage next to my app in LiveLLM.
+  - Turn on the RustFS console for our LiveLLM object storage so I can browse the files.
 should_not_trigger:
   - Set up LiteLLM as a proxy for OpenAI and Anthropic models.
   - Launch an EC2 instance on AWS.
@@ -42,4 +45,5 @@ should_not_trigger:
   - Create a Postgres table for users.
   - Write a Playwright test for my local dev server.
   - Summarize this PDF.
+  - Create an S3 bucket in my AWS account with boto3.
   - What's the weather in Berlin?

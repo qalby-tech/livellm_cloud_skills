@@ -27,7 +27,7 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py stop ID --yes | start ID | set ID --json CHANGES --yes
     llc.py reach ID                            (who reaches it inside the workspace; ID or a Composable App's name)
     llc.py reach ID (--from a,b | --from '*' | --none | --add X | --remove X) --yes   (not a database)
-    llc.py link ID DB [DB...] [--remove] --yes (an app, machine or Desktop App reaches a database; no variables)
+    llc.py link ID DB [DB...] [--remove] --yes (an app, machine or Desktop App reaches a database or an object storage; no variables)
     llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS]
                    [--host H | --region R] --yes
     llc.py browser-api show NAME | (add | remove) NAME BROWSER --yes
@@ -152,6 +152,9 @@ def status_problem(status, payload):
     browser = browser_problem(status, code, message)
     if browser:
         return browser
+    storage = object_storage_problem(status, message)
+    if storage:
+        return storage
     if status == 401:
         return Problem(message, "run: llc.py login, give the user the link it prints, and run login again once they press Allow", EXIT_USER, status)
     if status == 402:
@@ -201,6 +204,44 @@ def inside_problem(status, code, message):
         return Problem(message, NETWORK_NEXT, EXIT_USER, status)
     if status == 422 and "unknown field" in low and "reachablefrom" in low:
         return Problem(message, NO_INSIDE_NEXT, EXIT_USER, status)
+    return None
+
+
+# What an object storage's link gives an app, and what a database's does.
+S3_LINK_FIELDS = ("endpoint", "host", "port", "region", "bucket", "accessKey", "secretKey")
+S3_ONLY_FIELDS = ("endpoint", "region", "bucket", "accesskey", "secretkey")
+S3_PRESET = ("AWS_ENDPOINT_URL_S3: endpoint, AWS_ACCESS_KEY_ID: accessKey, AWS_SECRET_ACCESS_KEY: secretKey, "
+             "AWS_REGION: region, S3_BUCKET: bucket")
+NO_S3_BACKUPS = ("object storage keeps one copy of its files and has no backups: leave backup out, don't back it up "
+                 "or restore it, and tell the user if they wanted backups (references/databases.md)")
+
+
+def object_storage_problem(status, message):
+    """An object storage's refusals (engine s3), and a database's for an
+    object storage's link fields, with what to do; None for any other answer.
+    Known by the API's words."""
+    low = message.lower()
+    if status in (400, 409, 422) and "object storage has no backups" in low:
+        return Problem(message, NO_S3_BACKUPS, EXIT_OTHER, status)
+    if status != 422:
+        return None
+    if "object storage runs as one server" in low:
+        return Problem(message, "leave instances out (or 1): object storage runs as one server, one copy", EXIT_OTHER, status)
+    if "object storage runs version" in low:
+        return Problem(message, 'leave version out (or "1"): object storage has one version', EXIT_OTHER, status)
+    if "turning on the admin console needs" in low:
+        return Problem(message, "send the password in the same set as adminConsole: true, with the username llc.py ls shows "
+                       '({"storage": {"adminConsole": true, "credentials": {"username": U, "password": P}}}); for an object '
+                       "storage the password is its secret key. One the platform made is known to no one: agree a new one "
+                       "with the user first (it restarts an object storage, and apps linked to it need a restart)",
+                       EXIT_USER, status)
+    if "an object storage has no " in low:
+        return Problem(message, "an object storage's link gives " + ", ".join(S3_LINK_FIELDS) + " (for example "
+                       + S3_PRESET + "); fix the variables and send again", EXIT_OTHER, status)
+    if " database has no " in low and any(f"has no {f}" in low for f in S3_ONLY_FIELDS):
+        return Problem(message, "endpoint, region, bucket, accessKey and secretKey are an object storage's: link a "
+                       "PostgreSQL database with host, port, database, username, password or url, a Redis one with "
+                       "host, port, password or url", EXIT_OTHER, status)
     return None
 
 
@@ -548,9 +589,11 @@ def resources(tok):
             **({"usedBy": live["usedBy"]} if live.get("usedBy") else {}),
             # a Camoufox browser says so; a Chrome one carries no engine (a Browser API has none)
             **({"engine": "camoufox"} if (w.get("browser") or {}).get("engine") == "camoufox" else {}),
+            # a database's engine: postgres (when its settings name none), redis, or s3 (object storage)
+            **({"engine": (w.get("storage") or {}).get("engine") or "postgres"} if w.get("type") == "storage" else {}),
             # who else in the workspace may reach it, as its settings hold it
             **({"reachableFrom": w["reachableFrom"]} if "reachableFrom" in w else {}),
-            # a database's login name (its password is never shown)
+            # a database's login name, an object storage's access key (a password or secret key is never shown)
             **({"username": w["storage"]["credentials"]["username"]}
                if ((w.get("storage") or {}).get("credentials") or {}).get("username") else {}),
         }
@@ -1104,8 +1147,12 @@ def inside_addresses(res, w):
             found.append(hp(f"{res}-rdp", 3389, name="rdp"))
         return found
     if t == "storage":
-        if (w.get("storage") or {}).get("engine") == "redis":
+        engine = (w.get("storage") or {}).get("engine")
+        if engine == "redis":
             return [hp(res, 6379)]
+        if engine == "s3":
+            # an object storage answers S3 on 9000 (its console only from outside)
+            return [hp(res, 9000)]
         return [hp(f"{res}-rw", 5432)]
     if t == "browser":
         return [hp(res, 9222), hp(res, 9000)]
@@ -1917,6 +1964,9 @@ def restore(args):
         return
     if kind != "storage":
         raise Problem(f"{args.id} has no backups", "only machines and databases have backups", EXIT_OTHER)
+    if (w.get("storage") or {}).get("engine") == "s3":
+        raise Problem(f"{args.id} is an object storage: it has no backups yet, it keeps one copy of its files",
+                      NO_S3_BACKUPS, EXIT_OTHER)
     if not args.as_id:
         raise Problem(f"a database restores into a new one; {args.id} keeps running as it is",
                       f"pass --as NEW-ID, e.g. --as {args.id}-restored", EXIT_OTHER)

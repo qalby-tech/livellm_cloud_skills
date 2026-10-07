@@ -5,6 +5,31 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.13.0
+
+Object storage needs a LiveLLM that offers it; an earlier one refuses
+`"engine": "s3"` (422), and everything else works as before.
+
+- Object storage (`references/databases.md`, "Object storage (S3)"): a
+  third database engine, `"engine": "s3"`. An S3 server of the workspace's
+  own with a bucket `app`, keys instead of a login (`credentials.username`
+  the access key, made when left out; `credentials.password` the secret key,
+  write-only), an optional RustFS console and an optional HTTPS S3 address,
+  both limited by `network.allowlist`. One copy, no backups.
+- Links: an app links it like a database with the variables `endpoint`,
+  `host`, `port`, `region`, `bucket`, `accessKey` and `secretKey` (the
+  secret key comes from the stored login). Machines and Desktop Apps link it
+  to reach it. Inside the workspace it answers on 9000 only, to what links
+  it; `reach` lists that address.
+- `ls` names every database's engine (`postgres`, `redis`, `s3`).
+- `llc.py` says what to do for an object storage's refusals (backups, a
+  second copy, a version, a link variable it doesn't have, a console turned
+  on without the secret key), and for a database asked for an object
+  storage's variables. `restore` on an object storage stops before asking
+  for a password. Turning any database's admin console on takes its password
+  in the same `set`.
+- Apps: prefer a managed object storage over an S3 image in a stack.
+
 ## 1.12.2
 
 - Same content as 1.12.1, whose tag carried a mismatched version in SKILL.md; use 1.12.2.

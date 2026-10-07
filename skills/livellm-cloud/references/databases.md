@@ -1,8 +1,11 @@
 # Databases
 
-Postgres for data an app keeps, Redis for caches and queues. Both are managed:
-the platform keeps them running and takes the backups you ask for. You can
-back up now, restore a backup into a new database, and restart one.
+Postgres for data an app keeps, Redis for caches and queues, and object
+storage (S3) for files: uploads, media, exports, anything an app keeps in
+buckets. All three are managed: the platform keeps them running. Postgres
+takes the backups you ask for; you can back up now, restore a backup into a
+new database, and restart one. Object storage keeps one copy and has no
+backups yet ("Object storage (S3)", below).
 
 A database for an app you are making is best made WITH the app, in one step,
 and linked to it: the platform makes the password and hands it to the app, so
@@ -32,7 +35,9 @@ python3 scripts/llc.py wait db
 python3 scripts/llc.py connect db
 ```
 
-Redis is the same with `"engine": "redis"`.
+Redis is the same with `"engine": "redis"`. Object storage is
+`"engine": "s3"`, with keys instead of a login ("Object storage (S3)",
+below).
 
 The id, the engine and the login are required when you create it. The password
 is required too, is stored write-only, and can never
@@ -53,17 +58,24 @@ connection details go into which environment variables:
 ]
 ```
 
-| Detail | PostgreSQL | Redis |
-|---|---|---|
-| `host` | its private address | its private address |
-| `port` | `5432` | `6379` |
-| `database` | `app` | — |
-| `username` | the login's name | — |
-| `password` | the password | the password |
-| `url` | `postgres://user:password@host:5432/app` | `redis://:password@host:6379` |
+| Detail | PostgreSQL | Redis | Object storage (S3) |
+|---|---|---|---|
+| `host` | its private address | its private address | its private address |
+| `port` | `5432` | `6379` | `9000` |
+| `database` | `app` | — | — |
+| `username` | the login's name | — | — |
+| `password` | the password | the password | — |
+| `url` | `postgres://user:password@host:5432/app` | `redis://:password@host:6379` | — |
+| `endpoint` | — | — | `http://<private address>:9000` |
+| `region` | — | — | `us-east-1` |
+| `bucket` | — | — | `app` |
+| `accessKey` | — | — | the access key |
+| `secretKey` | — | — | the secret key |
 
-- The password and the URL are read from the database's stored login when
-  the app starts. They are never in the app's settings, in an answer, or
+A detail a database doesn't have is refused (422, "… has no url").
+
+- The password, the URL and an object storage's secret key are read from the
+  database's stored login when the app starts. They are never in the app's settings, in an answer, or
   anywhere you can read them: don't copy a password into `env` or
   `secretEnv` when a link gives it.
 - At most 8 databases per app and 0 to 12 variables per database. A variable
@@ -167,6 +179,98 @@ database. Nothing reaches it until something links it. Point the app at it
 (link it in place of the original) only when the user says so, and restore
 only when the user asked for it.
 
+## Object storage (S3)
+
+An S3 server of the workspace's own, on its own disk that can grow. It starts
+with one bucket, `app`. Apps use it like any S3 service, with path-style
+addressing (an SDK setting: `forcePathStyle`, `addressing_style: path`).
+
+`files.json`:
+
+```json
+{
+  "id": "files",
+  "engine": "s3",
+  "storageSize": "20Gi",
+  "cpu": "500m",
+  "memory": "1Gi",
+  "credentials": { "username": "filesapp", "password": "GENERATE-A-STRONG-ONE" }
+}
+```
+
+```
+python3 scripts/llc.py create storage --json files.json --yes
+python3 scripts/llc.py wait files
+python3 scripts/llc.py connect files
+```
+
+- `credentials.username` is the access key (3 to 31 lowercase letters, digits
+  or `_`); leave it out and one is made. `credentials.password` is the secret
+  key: 8 to 128 characters, no space at either end, stored write-only like a
+  database password. It can never be read back: generate it, hand it to what
+  needs it, and show the user once.
+- `storageSize` is at least `1Gi` (default `5Gi`); it can grow, never shrink.
+  `instances` stays `1` and `version` stays `"1"` (422 otherwise).
+- Region `us-east-1`. More buckets: make them in the RustFS console or with
+  any S3 tool (`aws s3 mb s3://reports --endpoint-url ENDPOINT`, path-style).
+- `connect files` prints the access key, the region, the bucket, the private
+  endpoint, and the public and console addresses when they are on (never the
+  secret key). `ls` names its engine (`s3`).
+
+**Link it to an app.** The usual variables:
+
+```json
+"databases": [
+  { "id": "files", "env": { "AWS_ENDPOINT_URL_S3": "endpoint", "AWS_ACCESS_KEY_ID": "accessKey",
+                            "AWS_SECRET_ACCESS_KEY": "secretKey", "AWS_REGION": "region",
+                            "S3_BUCKET": "bucket" } }
+]
+```
+
+The secret key reaches the app from the stored login, never through you. An
+object storage made with its app (`create apps`, `"databases": [{"id":
+"files", "engine": "s3"}]`) gets keys nobody sees. Machines and Desktop Apps
+link it with no variables, to reach it: give the program there the address
+`reach files` lists (port `9000`) and keys the user hands it. A link is the
+only way anything in the workspace reaches it (rule 11), on 9000 only.
+
+**Links carry the server's own keys** (full control: every bucket, every
+file, its users). For an app the user trusts less, make it a key of its own
+in the RustFS console, limited to one bucket, and give it as `secretEnv`
+instead of a link's `accessKey`/`secretKey` (the app still links it to reach
+it). A new secret key doesn't remove users or keys made in the console:
+check them there after one.
+
+**From outside.** `"network": { "expose": true }` gives an HTTPS S3 address,
+`https://<id>-<workspace>.cloud.live-llm.com` (port 443, path-style).
+`"adminConsole": true` turns on the RustFS console at
+`https://<id>-admin-<workspace>.cloud.live-llm.com/rustfs/console/`: it signs
+in with the access key and the secret key, and manages buckets, files, keys
+and policies. Its address also answers S3 to anyone holding the keys, even
+without `expose`. `"network": { "allowlist": ["203.0.113.0/24"] }` limits
+both addresses; it is the only address gate (a bucket policy's
+`aws:SourceIp` isn't supported). Turning the console on takes the secret key
+in the same `set` (the current one or a new one); a key nobody saw means
+agreeing a new one with the user.
+
+**One copy, no backups.** Deleting a file, a bucket or the object storage is
+final. A `backup` that is on is refused (422); `backups`, `backup` and
+`restore` are refused too. Keep in it only what the user accepts losing, or
+copies of files kept elsewhere, and say so when you make one.
+
+**Care.**
+- Never print, log or paste the secret key outside the one-time handover.
+- Ask the user before deleting a bucket or files you didn't make.
+- A new secret key (`set files --json` with
+  `{"storage": {"credentials": {"username": "filesapp", "password": "..."}}}`)
+  restarts the server for a few seconds; the old key stops working, and apps
+  in `usedBy` need a `restart` to read the new one. Changing its size or
+  placement restarts it too; turning the console off restarts nothing.
+- It makes no connection out: bucket notifications, replication or tiering
+  to somewhere else don't work.
+- A LiveLLM without object storage refuses `"engine": "s3"` (422): tell the
+  user.
+
 ## Care
 
 - Never put a password in `env`, a repository, a log line or a chat message that
@@ -179,6 +283,8 @@ only when the user asked for it.
   password by hand needs the new value too.
 - Deleting a database deletes its data. Only ever delete one you created, and
   say so first.
+- Turning a database's admin console on (`"adminConsole": true`) takes the
+  password in the same `set`: the console signs in with it.
 - Redis keeps its keys on disk across restarts, but it has no backups: keep
   in it only what the app can rebuild.
 - `restart db --yes` restarts a database. Apps lose their connections for a

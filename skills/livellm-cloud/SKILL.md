@@ -1,17 +1,18 @@
 ---
 name: livellm-cloud
-description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP, or a Firefox-based Camoufox browser with Playwright for sites that block Chrome, while a person watches the live view, give it a language, a time zone and the user's own proxies (rotating, mobile ones too), save, restore, export or import its profile, put several browsers behind one Browser API address, run commands on Linux (Ubuntu, Debian or Fedora) and Windows machines, work on Ubuntu or Windows desktops and Desktop Apps by screenshot and click, share a screen with the user by link, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
+description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP, or a Firefox-based Camoufox browser with Playwright for sites that block Chrome, while a person watches the live view, give it a language, a time zone and the user's own proxies (rotating, mobile ones too), save, restore, export or import its profile, put several browsers behind one Browser API address, run commands on Linux (Ubuntu, Debian or Fedora) and Windows machines, work on Ubuntu or Windows desktops and Desktop Apps by screenshot and click, share a screen with the user by link, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases and S3 object storage. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database or S3 bucket storage, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
 license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.12.2
+  version: 1.13.0
   documentation: https://docs.live-llm.com
 ---
 
 # LiveLLM Cloud
 
-Real computers the user owns: browsers, machines, desktops, apps and databases.
+Real computers the user owns: browsers, machines, desktops, apps, databases
+and object storage.
 Everything goes through `scripts/llc.py`, which talks to the API and prints JSON.
 
 ## Rules
@@ -32,9 +33,10 @@ Everything goes through `scripts/llc.py`, which talks to the API and prints JSON
    Desktop App (`share ID --control`). Then wait until they say they are done.
    Never try to solve or get around them, never ask the user to send you a
    code, and never tell them to find the screen in the console.
-7. Generate strong passwords for databases and ports, pass them to the app that
-   needs them, and show the user once. They can't be read back later. A
-   database made with its app and linked to it needs none from you. For a
+7. Generate strong passwords for databases and ports (an object storage's
+   secret key too), pass them to the app that needs them, and show the user
+   once. They can't be read back later. A database made with its app and
+   linked to it needs none from you. For a
    machine you create, log in with an SSH key of your own rather than the
    password, and give it a stop time when the work has an end.
 8. Use only `scripts/llc.py`, plain SSH, and a browser library such as
@@ -105,6 +107,7 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 | One resource talks to another inside the workspace: a machine to a Browser API; an app, a machine or a Desktop App to a database | `reach`; a database: `link` | `references/inside-access.md` |
 | A database | PostgreSQL (`storage`, `"engine": "postgres"`) | `references/databases.md` |
 | A cache or a queue | Redis (`storage`, `"engine": "redis"`) | `references/databases.md` |
+| Files, uploads, buckets; S3 storage for an app | Object storage (`storage`, `"engine": "s3"`) | `references/databases.md` |
 | Cost, limits, what is running, alerts, what happened, templates, signed-in agents, held machines | Workspace | `references/workspace.md` |
 
 ## The loop
@@ -183,7 +186,7 @@ repository, then `build web --wait`: it builds again and waits until the app
 is live, or prints why not. To go back to what worked: `builds web`, then
 `deploy web <build> --yes`.
 
-Machines and Postgres databases have backups: `backups <id>` lists them,
+Machines and Postgres databases have backups (object storage keeps one copy and has none): `backups <id>` lists them,
 `backup <id>` takes one now. A database restores into a new one
 (`restore db <backup> --as db-restored --password-env VAR --yes`); a machine is put back in place
 and must be stopped first. Restore only when the user asked for it.

@@ -156,6 +156,67 @@ class DatabasesAndTemplatesTest(unittest.TestCase):
         self.assertNotIn("usedBy", by["web"])
         self.assertEqual(by["db"]["username"], "shop")
 
+    # --- object storage (engine s3) ---
+
+    def test_ls_names_every_databases_engine(self):
+        self.use({
+            "GET /v1/workspace": (200, {"spec": {"workloads": [
+                {"id": "db", "type": "storage", "storage": {"credentials": {"username": "shop"}}},
+                {"id": "pg", "type": "storage", "storage": {"engine": "postgres"}},
+                {"id": "cache", "type": "storage", "storage": {"engine": "redis"}},
+                {"id": "files", "type": "storage", "storage": {"engine": "s3", "credentials": {"username": "filesapp"}}},
+                {"id": "web", "type": "pod", "pod": {"databases": [{"id": "files", "env": {"S3_BUCKET": "bucket"}}]}},
+                {"id": "b", "type": "browser", "browser": {"engine": "camoufox"}},
+                {"id": "c", "type": "browser"}]}}),
+            "GET /v1/status": (200, {"workloads": []}),
+        })
+        out, _ = self.run_llc(llc.ls, type=None)
+        by = {r["id"]: r for r in out["resources"]}
+        # a database whose settings name no engine is PostgreSQL
+        self.assertEqual({i: by[i].get("engine") for i in by},
+                         {"db": "postgres", "pg": "postgres", "cache": "redis", "files": "s3", "web": None,
+                          "b": "camoufox", "c": None})
+        # an object storage's access key shows as its username; the secret key never does
+        self.assertEqual(by["files"]["username"], "filesapp")
+        self.assertNotIn("password", json.dumps(out))
+
+    def test_object_storage_refusals_say_what_to_do(self):
+        cases = {
+            "workloads[0] (files): object storage has no backups yet — it keeps one copy of your files": "has no backups",
+            "workloads[0] (files): object storage runs as one server — a second copy isn't offered yet": "leave instances out",
+            "workloads[0] (files): object storage runs version 1": "leave version out",
+            "workloads[0] (files): turning on the admin console needs the password in the same save — it signs in with it":
+                "secret key",
+            "workloads[0] (db): turning on the admin console needs the password in the same save — it signs in with it":
+                "same set as adminConsole",
+            "workloads[1] (web).pod.databases[0].env.FILES_URL: an object storage has no url": "AWS_ACCESS_KEY_ID: accessKey",
+            "workloads[1] (web).pod.databases[0].env.BUCKET: a PostgreSQL database has no bucket": "are an object storage's",
+            "workloads[1] (web).pod.databases[0].env.R: a Redis database has no region": "are an object storage's",
+        }
+        for message, want in cases.items():
+            p = llc.status_problem(422, {"error": message})
+            self.assertIn(want, p.next, message)
+            self.assertEqual(p.message, message)
+        # the backups routes answer 400 for an object storage
+        p = llc.status_problem(400, {"error": "object storage has no backups yet: it keeps one copy of your files"})
+        self.assertIn("one copy", p.next)
+        self.assertIn("don't back it up", p.next)
+        # a database's own field refusal and other 422s keep the plain answer
+        for message in ("workloads[1] (web).pod.databases[0].env.D: a Redis database has no database",
+                        "workloads[0] (db): a database's disk can grow but never shrink (it is 10Gi)"):
+            self.assertIn("fix the field", llc.status_problem(422, {"error": message}).next, message)
+
+    def test_an_object_storage_has_no_restore_and_nothing_is_sent(self):
+        fake = self.use({"GET /v1/workspace": (200, {"spec": {"workloads": [
+            {"id": "files", "type": "storage", "storage": {"engine": "s3"}}]}})})
+        os.environ["LLC_TEST_NEW_KEY"] = "a-new-secret-key"
+        self.addCleanup(os.environ.pop, "LLC_TEST_NEW_KEY", None)
+        _, problem = self.run_llc(llc.restore, id="files", backup="b1", as_id="files-2", at=None,
+                                  password_env="LLC_TEST_NEW_KEY", host=None, region=None, yes=True)
+        self.assertIn("no backups", problem.message)
+        self.assertIn("one copy", problem.next)
+        self.assertEqual(fake.writes(), [])
+
     def test_rm_when_the_answer_is_lost(self):
         before = {"spec": {"workloads": [{"id": "web", "type": "pod"},
                                          {"id": "db", "type": "storage", "storage": {"createdWith": ["web"]}},

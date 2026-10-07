@@ -417,6 +417,28 @@ class ReachTest(unittest.TestCase):
         self.assertNotIn("addresses", out)
         self.assertNotIn("reachableFrom", out)
 
+    def test_an_object_storage_answers_s3_on_9000_to_what_links_it(self):
+        workloads = WORKLOADS + [
+            {"id": "files", "type": "storage", "storage": {"engine": "s3"}},
+            {"id": "uploader", "type": "pod", "reachableFrom": [],
+             "pod": {"databases": [{"id": "files", "env": {"AWS_ENDPOINT_URL_S3": "endpoint"}}]}},
+            {"id": "runner", "type": "vm-ubuntu", "reachableFrom": [], "vm": {"databases": [{"id": "files"}]}},
+        ]
+        self.use(workloads=workloads)
+        out, problem, _ = self.run_llc(llc.reach, **reach_args(id="files"))
+        self.assertIsNone(problem)
+        self.assertNotIn("reachableFrom", out)
+        self.assertIn("reached only by what links it", out["note"])
+        self.assertEqual(out["alsoFrom"], [{"id": "uploader", "why": "links it"}, {"id": "runner", "why": "links it"}])
+        # S3 only, on 9000; never the PostgreSQL address, never its console's port
+        self.assertEqual(out["addresses"], [{"host": "acme-files", "port": 9000}])
+        self.assertEqual(llc.inside_addresses("acme-files", {"type": "storage", "storage": {"engine": "s3"}}),
+                         [{"host": "acme-files", "port": 9000}])
+        # its setting can't change either: what links it reaches it
+        for kw in ({"source": "uploader"}, {"none": True}):
+            _, problem, _ = self.run_llc(llc.reach, **reach_args(id="files", yes=True, **kw))
+            self.assertIn("llc.py link APP files --yes", problem.next, kw)
+
     def test_a_databases_setting_is_never_changed_and_the_answer_points_at_link(self):
         fake = self.use()
         for kw in ({"source": "web"}, {"source": "*"}, {"none": True}, {"add": "api"}, {"remove": "web"}):

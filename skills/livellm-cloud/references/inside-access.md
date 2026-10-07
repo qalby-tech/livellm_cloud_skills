@@ -74,7 +74,8 @@ browser in a Browser API, `--all`, and letting something reach a Browser API
 all let resources in, and rule 11 applies to each. A service added to a
 Composable App reaches, and is reached by, every service of it, and takes
 what the app reaches and what reaches it. A database's admin console is never
-reached from inside the workspace: use its own address.
+reached from inside the workspace: use its own address. An object storage is
+reached on its S3 port, 9000, only.
 
 ## A database: link it
 

@@ -2,7 +2,7 @@
 
 Skills that let your AI agent use [LiveLLM Cloud](https://live-llm.com): open a real
 browser and log into sites while you watch, run jobs on Linux and Windows machines,
-work in Ubuntu or Windows desktops, deploy apps and create databases. You stay in
+work in Ubuntu or Windows desktops, deploy apps and create databases and S3 object storage. You stay in
 charge: every agent signs in with your approval, and you can sign it out at any time.
 
 This repo holds the **skill** an AI assistant loads. The command line for a
@@ -23,7 +23,7 @@ Read https://docs.live-llm.com/SKILL.md and set up LiveLLM for me
 
 | Skill | What it does |
 |---|---|
-| [`livellm-cloud`](skills/livellm-cloud) | Browsers, machines, desktops, apps and databases on LiveLLM Cloud |
+| [`livellm-cloud`](skills/livellm-cloud) | Browsers, machines, desktops, apps, databases and object storage on LiveLLM Cloud |
 
 ## Install
 

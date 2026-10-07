@@ -110,7 +110,9 @@ each other by plain name:
   (`references/inside-access.md`).
 
 For a database the user cares about, prefer a managed one over a `postgres`
-image in a stack: it has backups. Make it with the app, as below.
+image in a stack: it has backups. Make it with the app, as below. For files
+and buckets, prefer a managed object storage (`references/databases.md`,
+"Object storage (S3)") over a MinIO or other S3 image in a stack.
 
 ## An app with its databases
 
