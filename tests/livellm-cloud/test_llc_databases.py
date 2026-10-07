@@ -69,6 +69,8 @@ class FakeAPI:
             def do_POST(self):
                 self.answer(json.loads(self.rfile.read(int(self.headers.get("content-length", 0))) or b"null"))
 
+            do_PATCH = do_POST
+
             def do_GET(self):
                 self.answer()
 
@@ -224,6 +226,36 @@ class DatabasesAndTemplatesTest(unittest.TestCase):
         for message in ("workloads[1] (web).pod.databases[0].env.D: a Redis database has no database",
                         "workloads[0] (db): a database's disk can grow but never shrink (it is 10Gi)"):
             self.assertIn("fix the field", llc.status_problem(422, {"error": message}).next, message)
+
+    def test_a_livellm_without_object_storage_says_tell_the_user(self):
+        # a LiveLLM from before object storage: not "fix the field" (which reads as "change the engine")
+        p = llc.status_problem(422, {"error": 'workloads[0].storage.engine "s3" must be postgres or redis'})
+        self.assertIn("no object storage", p.next)
+        self.assertIn("tell the user", p.next)
+        self.assertNotIn("fix the field", p.next)
+        self.assertEqual(p.code, llc.EXIT_USER)
+        # a mistyped engine on either LiveLLM keeps the plain answer
+        for message in ('workloads[0].storage.engine "postgresql" must be postgres or redis',
+                        'workloads[0].storage.engine "s4" must be postgres, redis or s3'):
+            self.assertIn("fix the field", llc.status_problem(422, {"error": message}).next, message)
+
+    def test_a_file_holding_a_secret_key_is_to_be_deleted(self):
+        self.use({"POST /v1/workloads/storage": (202, {})})
+        f = self.file({"id": "files", "engine": "s3", "credentials": {"username": "filesapp", "password": "k" * 20}})
+        out, problem = self.run_llc(llc.create, type="storage", json=f, yes=True)
+        self.assertIsNone(problem)
+        self.assertIn(f"delete {f}", out["delete"])
+        self.assertNotIn("k" * 20, json.dumps(out))
+        f = self.file({"storage": {"adminConsole": True, "credentials": {"username": "filesapp", "password": "k" * 20}}})
+        out, problem = self.run_llc(llc.set_settings, id="files", json=f, yes=True)
+        self.assertIsNone(problem)
+        self.assertIn(f"delete {f}", out["delete"])
+        # no secret in the file, no reminder
+        for body in ({"storage": {"adminConsole": False}}, {"storage": {"credentials": {"username": "filesapp"}}}):
+            out, _ = self.run_llc(llc.set_settings, id="files", json=self.file(body), yes=True)
+            self.assertNotIn("delete", out)
+        out, _ = self.run_llc(llc.create, type="storage", json=self.file({"id": "files", "engine": "s3"}), yes=True)
+        self.assertNotIn("delete", out)
 
     def test_an_object_storage_has_no_restore_and_nothing_is_sent(self):
         fake = self.use({"GET /v1/workspace": (200, {"spec": {"workloads": [

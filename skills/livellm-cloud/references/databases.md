@@ -39,12 +39,12 @@ Redis is the same with `"engine": "redis"`. Object storage is
 `"engine": "s3"`, with keys instead of a login ("Object storage (S3)",
 below).
 
-The id, the engine and the login are required when you create it. The password
-is required too, is stored write-only, and can never
-be read back. Generate it, put it straight into the app that needs it, and show
-the user once. `"instances": 3` runs Postgres with two standby copies that take
-over if the main one fails; `1` is enough for development. Redis runs as one
-instance only.
+The id, the engine and the login are required when you create it (an object
+storage may leave the username out). The password is required too, is stored
+write-only, and can never be read back. Generate it, put it straight into the
+app that needs it, and show the user once. `"instances": 3` runs Postgres with
+two standby copies that take over if the main one fails; `1` is enough for
+development. Redis runs as one instance only.
 
 ## Link it to an app
 
@@ -205,10 +205,10 @@ python3 scripts/llc.py connect files
 ```
 
 - `credentials.username` is the access key (3 to 31 lowercase letters, digits
-  or `_`); leave it out and one is made. `credentials.password` is the secret
-  key: 8 to 128 characters, no space at either end, stored write-only like a
-  database password. It can never be read back: generate it, hand it to what
-  needs it, and show the user once.
+  or `_`, starting with a letter or `_`); leave it out and one is made.
+  `credentials.password` is the secret key: 8 to 128 characters, no space at
+  either end, stored write-only like a database password. It can never be
+  read back: generate it, hand it to what needs it, and show the user once.
 - `storageSize` is at least `1Gi` (default `5Gi`); it can grow, never shrink.
   `instances` stays `1` and `version` stays `"1"` (422 otherwise).
 - Region `us-east-1`. More buckets: make them in the RustFS console or with
@@ -235,11 +235,14 @@ link it with no variables, to reach it: give the program there the address
 only way anything in the workspace reaches it (rule 11), on 9000 only.
 
 **Links carry the server's own keys** (full control: every bucket, every
-file, its users). For an app the user trusts less, make it a key of its own
-in the RustFS console, limited to one bucket, and give it as `secretEnv`
-instead of a link's `accessKey`/`secretKey` (the app still links it to reach
-it). A new secret key doesn't remove users or keys made in the console:
-check them there after one.
+file, its users). For an app the user trusts less, a key of its own limited
+to one bucket is made in the RustFS console. The console is a public sign-in
+page (below): turn it on only if the user agrees, or have them make the key
+with a MinIO admin client (`mc admin user add`) on a machine that links the
+object storage. Give the key as `secretEnv` instead of a link's
+`accessKey`/`secretKey` (the app still links it to reach it). A new secret
+key doesn't remove users or keys made in the console: check them there after
+one.
 
 **From outside.** Turn on either address only when the user asks to reach
 the object storage from outside the workspace.
@@ -263,6 +266,8 @@ copies of files kept elsewhere, and say so when you make one.
 
 **Care.**
 - Never print, log or paste the secret key outside the one-time handover.
+  Delete the file you wrote it into once the save succeeds (`create` and
+  `set` remind you); keep it only to resend after a 502.
 - Ask the user before deleting a bucket or files you didn't make.
 - A new secret key (`set files --json` with
   `{"storage": {"credentials": {"username": "filesapp", "password": "..."}}}`)
@@ -278,7 +283,8 @@ copies of files kept elsewhere, and say so when you make one.
 ## Care
 
 - Never put a password in `env`, a repository, a log line or a chat message that
-  isn't the one-time handover.
+  isn't the one-time handover. Delete the file you wrote it into once it is
+  sent.
 - Changing the password: send a new one with the username `ls` shows
   (`set db --json` with
   `{"storage": {"credentials": {"username": "app", "password": "..."}}}`).

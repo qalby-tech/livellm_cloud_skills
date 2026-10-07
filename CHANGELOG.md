@@ -25,10 +25,13 @@ Object storage needs a LiveLLM that offers it; an earlier one refuses
 - `llc.py` says what to do for an object storage's refusals (backups, a
   second copy, a version, a link variable it doesn't have, a console turned
   on without the secret key, a new secret key that wasn't stored and must be
-  sent again), and for a database asked for an object
-  storage's variables. `restore` on an object storage stops before asking
-  for a password. Turning any database's admin console on takes its password
-  in the same `set`.
+  sent again, a LiveLLM that offers no object storage yet), and for a
+  database asked for an object storage's variables. `restore` on an object
+  storage stops before asking for a password. Turning any database's admin
+  console on takes its password in the same `set`.
+- `create` and `set` remind you to delete a file that holds a database's
+  password or an object storage's secret key, as they do for a proxy's
+  login.
 - Apps: prefer a managed object storage over an S3 image in a stack.
 
 ## 1.12.2

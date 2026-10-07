@@ -230,6 +230,10 @@ def object_storage_problem(status, message):
                        "(the other changes are already in place); after two failures tell the user", EXIT_OTHER, status)
     if status != 422:
         return None
+    # A LiveLLM from before object storage knows only postgres and redis.
+    if "must be postgres or redis" in low and "s3" in low:
+        return Problem(message, "this LiveLLM offers no object storage yet: tell the user, and don't make a database in its place "
+                       "unless they ask", EXIT_USER, status)
     if "object storage runs as one server" in low:
         return Problem(message, "leave instances out (or 1): object storage runs as one server, one copy", EXIT_OTHER, status)
     if "object storage runs version" in low:
@@ -1518,13 +1522,28 @@ def settings_proxy(body):
 
 def check_settings_proxy(body, path):
     """A create or set file: check its proxy block like proxy set does; the
-    reminder to delete the file when it holds a login, else None."""
+    reminder to delete the file when it holds a proxy's login or a
+    database's password (an object storage's secret key), else None."""
     block = settings_proxy(body)
-    if block is None or (isinstance(block, dict) and block.get("remove") is True):
-        return None
-    if check_proxy_block(block, f"the proxy settings in {path}"):
-        return f"delete {path}: it holds the proxy's login, which LiveLLM keeps and never shows again"
+    if block is not None and not (isinstance(block, dict) and block.get("remove") is True):
+        if check_proxy_block(block, f"the proxy settings in {path}"):
+            return f"delete {path}: it holds the proxy's login, which LiveLLM keeps and never shows again"
+    if settings_storage_password(body):
+        return f"delete {path}: it holds a password or secret key, which LiveLLM keeps and never shows again"
     return None
+
+
+def settings_storage_password(body):
+    """Whether a create or set file holds a database's password or an object
+    storage's secret key: credentials.password at the top (create storage)
+    or under "storage" (set)."""
+    if not isinstance(body, dict):
+        return False
+    for block in (body, body.get("storage")):
+        creds = block.get("credentials") if isinstance(block, dict) else None
+        if isinstance(creds, dict) and creds.get("password"):
+            return True
+    return False
 
 
 def proxy_body(path):

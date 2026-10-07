@@ -36,9 +36,9 @@ Everything goes through `scripts/llc.py`, which talks to the API and prints JSON
 7. Generate strong passwords for databases and ports (an object storage's
    secret key too), pass them to the app that needs them, and show the user
    once. They can't be read back later. A database made with its app and
-   linked to it needs none from you. For a
-   machine you create, log in with an SSH key of your own rather than the
-   password, and give it a stop time when the work has an end.
+   linked to it needs none from you. For a machine you create, log in with
+   an SSH key of your own rather than the password, and give it a stop time
+   when the work has an end.
 8. Use only `scripts/llc.py`, plain SSH, and a browser library such as
    Playwright. Nothing else needs to run.
 9. When you are done with a machine you ran commands on or worked the screen
