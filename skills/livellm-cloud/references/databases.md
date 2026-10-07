@@ -241,7 +241,9 @@ instead of a link's `accessKey`/`secretKey` (the app still links it to reach
 it). A new secret key doesn't remove users or keys made in the console:
 check them there after one.
 
-**From outside.** `"network": { "expose": true }` gives an HTTPS S3 address,
+**From outside.** Turn on either address only when the user asks to reach
+the object storage from outside the workspace.
+`"network": { "expose": true }` gives an HTTPS S3 address,
 `https://<id>-<workspace>.cloud.live-llm.com` (port 443, path-style).
 `"adminConsole": true` turns on the RustFS console at
 `https://<id>-admin-<workspace>.cloud.live-llm.com/rustfs/console/`: it signs
@@ -251,7 +253,8 @@ without `expose`. `"network": { "allowlist": ["203.0.113.0/24"] }` limits
 both addresses; it is the only address gate (a bucket policy's
 `aws:SourceIp` isn't supported). Turning the console on takes the secret key
 in the same `set` (the current one or a new one); a key nobody saw means
-agreeing a new one with the user.
+agreeing a new one with the user. That save restarts the server for a few
+seconds, even with the current key: tell the user first.
 
 **One copy, no backups.** Deleting a file, a bucket or the object storage is
 final. A `backup` that is on is refused (422); `backups`, `backup` and
@@ -264,8 +267,9 @@ copies of files kept elsewhere, and say so when you make one.
 - A new secret key (`set files --json` with
   `{"storage": {"credentials": {"username": "filesapp", "password": "..."}}}`)
   restarts the server for a few seconds; the old key stops working, and apps
-  in `usedBy` need a `restart` to read the new one. Changing its size or
-  placement restarts it too; turning the console off restarts nothing.
+  in `usedBy` need a `restart` to read the new one. Changing its CPU, memory,
+  placement or plan restarts it too, and so does turning the console on (even
+  with the current key); turning the console off restarts nothing.
 - It makes no connection out: bucket notifications, replication or tiering
   to somewhere else don't work.
 - A LiveLLM without object storage refuses `"engine": "s3"` (422): tell the

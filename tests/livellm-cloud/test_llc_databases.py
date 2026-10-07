@@ -164,7 +164,8 @@ class DatabasesAndTemplatesTest(unittest.TestCase):
                 {"id": "db", "type": "storage", "storage": {"credentials": {"username": "shop"}}},
                 {"id": "pg", "type": "storage", "storage": {"engine": "postgres"}},
                 {"id": "cache", "type": "storage", "storage": {"engine": "redis"}},
-                {"id": "files", "type": "storage", "storage": {"engine": "s3", "credentials": {"username": "filesapp"}}},
+                {"id": "files", "type": "storage", "storage": {"engine": "s3",
+                                                                "credentials": {"username": "filesapp", "password": "s3cr3t-k3y"}}},
                 {"id": "web", "type": "pod", "pod": {"databases": [{"id": "files", "env": {"S3_BUCKET": "bucket"}}]}},
                 {"id": "b", "type": "browser", "browser": {"engine": "camoufox"}},
                 {"id": "c", "type": "browser"}]}}),
@@ -178,6 +179,7 @@ class DatabasesAndTemplatesTest(unittest.TestCase):
                           "b": "camoufox", "c": None})
         # an object storage's access key shows as its username; the secret key never does
         self.assertEqual(by["files"]["username"], "filesapp")
+        self.assertNotIn("s3cr3t-k3y", json.dumps(out))
         self.assertNotIn("password", json.dumps(out))
 
     def test_object_storage_refusals_say_what_to_do(self):
@@ -185,10 +187,10 @@ class DatabasesAndTemplatesTest(unittest.TestCase):
             "workloads[0] (files): object storage has no backups yet — it keeps one copy of your files": "has no backups",
             "workloads[0] (files): object storage runs as one server — a second copy isn't offered yet": "leave instances out",
             "workloads[0] (files): object storage runs version 1": "leave version out",
-            "workloads[0] (files): turning on the admin console needs the password in the same save — it signs in with it":
-                "secret key",
+            "workloads[0] (files): turning on the admin console needs the secret key in the same save — it signs in with it":
+                "access key llc.py ls shows",
             "workloads[0] (db): turning on the admin console needs the password in the same save — it signs in with it":
-                "same set as adminConsole",
+                "leave username out when it shows none",
             "workloads[1] (web).pod.databases[0].env.FILES_URL: an object storage has no url": "AWS_ACCESS_KEY_ID: accessKey",
             "workloads[1] (web).pod.databases[0].env.BUCKET: a PostgreSQL database has no bucket": "are an object storage's",
             "workloads[1] (web).pod.databases[0].env.R: a Redis database has no region": "are an object storage's",
@@ -197,6 +199,14 @@ class DatabasesAndTemplatesTest(unittest.TestCase):
             p = llc.status_problem(422, {"error": message})
             self.assertIn(want, p.next, message)
             self.assertEqual(p.message, message)
+        # the object storage's console hint warns of the restart; a database's never names a secret key
+        s3 = llc.status_problem(422, {"error": "workloads[0] (files): turning on the admin console needs the secret key "
+                                               "in the same save — it signs in with it"}).next
+        self.assertIn("even with the current key", s3)
+        pg = llc.status_problem(422, {"error": "workloads[0] (db): turning on the admin console needs the password "
+                                               "in the same save — it signs in with it"}).next
+        self.assertNotIn("secret key", pg)
+        self.assertNotIn("object storage", pg)
         # the backups routes answer 400 for an object storage
         p = llc.status_problem(400, {"error": "object storage has no backups yet: it keeps one copy of your files"})
         self.assertIn("one copy", p.next)

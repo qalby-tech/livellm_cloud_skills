@@ -229,11 +229,17 @@ def object_storage_problem(status, message):
         return Problem(message, "leave instances out (or 1): object storage runs as one server, one copy", EXIT_OTHER, status)
     if "object storage runs version" in low:
         return Problem(message, 'leave version out (or "1"): object storage has one version', EXIT_OTHER, status)
+    if "turning on the admin console needs the secret key" in low:
+        return Problem(message, "send the secret key in the same set as adminConsole: true, with the access key llc.py ls shows "
+                       'as username ({"storage": {"adminConsole": true, "credentials": {"username": ACCESS_KEY, "password": '
+                       "SECRET_KEY}}}). One the platform made is known to no one: agree a new one with the user first. The save "
+                       "restarts the object storage for a few seconds, even with the current key; after a new key, restart the "
+                       "apps linked to it", EXIT_USER, status)
     if "turning on the admin console needs" in low:
-        return Problem(message, "send the password in the same set as adminConsole: true, with the username llc.py ls shows "
-                       '({"storage": {"adminConsole": true, "credentials": {"username": U, "password": P}}}); for an object '
-                       "storage the password is its secret key. One the platform made is known to no one: agree a new one "
-                       "with the user first (it restarts an object storage, and apps linked to it need a restart)",
+        return Problem(message, "send the password in the same set as adminConsole: true "
+                       '({"storage": {"adminConsole": true, "credentials": {"username": U, "password": P}}}, U the username '
+                       "llc.py ls shows; leave username out when it shows none, as for Redis). One the platform made is known "
+                       "to no one: agree a new one with the user first (apps linked to it need a restart to read a new one)",
                        EXIT_USER, status)
     if "an object storage has no " in low:
         return Problem(message, "an object storage's link gives " + ", ".join(S3_LINK_FIELDS) + " (for example "
