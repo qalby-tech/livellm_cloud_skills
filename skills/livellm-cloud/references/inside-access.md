@@ -3,9 +3,10 @@
 Resources in one workspace don't reach each other unless the user allows it.
 An app, machine, Desktop App, browser or Browser API is closed to the rest of
 the workspace, new or made before this setting existed: no other resource there
-can connect to it until its `reachableFrom` names them. In the console this is
-**Reachable from**, on the resource's create form and at the top of its Network
-settings.
+can connect to it until its `reachableFrom` names them. In the console these
+are the resource entries of its **Allowed** list, on its create form and its
+Network tab (a Desktop App's Settings); the same list holds the internet
+addresses that may reach a machine or an app.
 
 A database has no `reachableFrom`: it is reached only by what links it, an
 app, a machine or a Desktop App (see "A database: link it").
@@ -190,7 +191,7 @@ it to connect, not to look.)
 
 | Answer | Means | Do |
 |---|---|---|
-| 403 "This agent can't let web reach shop-db inside the workspace. A person can turn on Network for it on the Agents page." (`network_permission`) | This agent (or key, "Keys page") lacks Network | Tell the user what would reach what and why. They turn on Network, or make the opening themselves in the console (Reachable from on the resource; for a database, a link on what uses it: a database has no Reachable from). Never work around it |
+| 403 "This agent can't let web reach shop-db inside the workspace. A person can turn on Network for it on the Agents page." (`network_permission`) | This agent (or key, "Keys page") lacks Network | Tell the user what would reach what and why. They turn on Network, or make the opening themselves in the console (Allowed on the resource; for a database, a link on what uses it: a database has no Allowed list). Never work around it |
 | 403 "This API key can't add worker to Composable App shop inside the workspace. A person can turn on Network for it on the Keys page." (`network_permission`) | Adding a service to a Composable App this key or agent didn't make | As above: ask the user, saying which app it joins and why |
 | 403 "This agent can add services only to an app it created." | Joining someone else's Composable App | Ask the user; a person allows more on the Agents page |
 | 422 `reachableFrom: a database is reached only by what links it: …` | `reachableFrom` sent for a database | Leave it out; with the user's agreement, `link APP DB --yes` |

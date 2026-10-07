@@ -180,7 +180,7 @@ def status_problem(status, payload):
 
 NETWORK_NEXT = ("letting one resource reach another inside the workspace needs the Network permission: ask the user, "
                 "saying what would reach what and why; a person turns on Network for this key on the Keys page, or for this "
-                "agent on the Agents page, or sets Reachable from (or links the database) in the console. Never work around "
+                "agent on the Agents page, or adds it to the Allowed list (or links the database) in the console. Never work around "
                 "it, a public address included")
 
 # A LiveLLM from before inside access refuses reachableFrom as a field no
