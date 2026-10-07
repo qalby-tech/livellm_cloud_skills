@@ -207,6 +207,15 @@ class DatabasesAndTemplatesTest(unittest.TestCase):
                                                "in the same save — it signs in with it"}).next
         self.assertNotIn("secret key", pg)
         self.assertNotIn("object storage", pg)
+        # one made with its apps and a console but no secret key
+        p = llc.status_problem(422, {"error": "databases[0] (files): an admin console signs in with the object storage's keys "
+                                              "— send credentials.password (the secret key) to have one"})
+        self.assertIn("leave adminConsole out", p.next)
+        # a new secret key that wasn't stored after the save: send it again, not "platform trouble"
+        p = llc.status_problem(502, {"error": "files: the other settings in this save were applied, but the new secret key "
+                                              "wasn't stored — send it again"})
+        self.assertIn("still uses its old secret key", p.next)
+        self.assertNotIn("platform trouble", p.next)
         # the backups routes answer 400 for an object storage
         p = llc.status_problem(400, {"error": "object storage has no backups yet: it keeps one copy of your files"})
         self.assertIn("one copy", p.next)

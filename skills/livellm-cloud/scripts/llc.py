@@ -223,6 +223,11 @@ def object_storage_problem(status, message):
     low = message.lower()
     if status in (400, 409, 422) and "object storage has no backups" in low:
         return Problem(message, NO_S3_BACKUPS, EXIT_OTHER, status)
+    # A running object storage's new secret key is stored after the save:
+    # when that fails, the server and its apps keep the old key.
+    if status == 502 and "new secret key wasn't stored" in low:
+        return Problem(message, "the object storage still uses its old secret key: send the same set again with the new one "
+                       "(the other changes are already in place); after two failures tell the user", EXIT_OTHER, status)
     if status != 422:
         return None
     if "object storage runs as one server" in low:
@@ -241,6 +246,10 @@ def object_storage_problem(status, message):
                        "llc.py ls shows; leave username out when it shows none, as for Redis). One the platform made is known "
                        "to no one: agree a new one with the user first (apps linked to it need a restart to read a new one)",
                        EXIT_USER, status)
+    if "an admin console signs in with the object storage's keys" in low:
+        return Problem(message, "an object storage made with its apps gets keys nobody sees: leave adminConsole out, or send "
+                       "credentials.password (a secret key you generate and show the user once) to have the console",
+                       EXIT_OTHER, status)
     if "an object storage has no " in low:
         return Problem(message, "an object storage's link gives " + ", ".join(S3_LINK_FIELDS) + " (for example "
                        + S3_PRESET + "); fix the variables and send again", EXIT_OTHER, status)

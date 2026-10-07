@@ -186,8 +186,8 @@ repository, then `build web --wait`: it builds again and waits until the app
 is live, or prints why not. To go back to what worked: `builds web`, then
 `deploy web <build> --yes`.
 
-Machines and Postgres databases have backups (object storage keeps one copy and has none): `backups <id>` lists them,
-`backup <id>` takes one now. A database restores into a new one
+Machines and Postgres databases have backups (object storage keeps one copy
+and has none): `backups <id>` lists them, `backup <id>` takes one now. A database restores into a new one
 (`restore db <backup> --as db-restored --password-env VAR --yes`); a machine is put back in place
 and must be stopped first. Restore only when the user asked for it.
 

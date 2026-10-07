@@ -24,7 +24,8 @@ Object storage needs a LiveLLM that offers it; an earlier one refuses
 - `ls` names every database's engine (`postgres`, `redis`, `s3`).
 - `llc.py` says what to do for an object storage's refusals (backups, a
   second copy, a version, a link variable it doesn't have, a console turned
-  on without the secret key), and for a database asked for an object
+  on without the secret key, a new secret key that wasn't stored and must be
+  sent again), and for a database asked for an object
   storage's variables. `restore` on an object storage stops before asking
   for a password. Turning any database's admin console on takes its password
   in the same `set`.
