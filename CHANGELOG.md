@@ -5,6 +5,10 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.12.1
+
+- The console's control for who may reach a resource is now one "Allowed" list (resources, address ranges, the LAN or any address); references and hints say Allowed instead of "Reachable from". No behaviour change.
+
 ## 1.12.0
 
 Needs LiveLLM with inside access (api 0.51); against an earlier one
