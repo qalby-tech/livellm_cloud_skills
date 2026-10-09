@@ -50,7 +50,7 @@ boot takes a few minutes; `wait` covers it.
 
 **Log in with a key, not a password.** Generate a keypair, put the public half
 in `credentials.sshKeys`, keep the private half where you run — never on the
-machine, never in a file the user might commit. The keys the workspace's owner
+machine, never in a file the user might commit. The keys the workspace's people
 added are installed alongside yours, so they can get in without asking you, and
 neither set removes the other.
 
@@ -279,9 +279,9 @@ Changing it (`set` with `{"vm": {"placement": …}}`, a Desktop App `{"desktop":
   machine in a minute or two — but only one that started with at least one key
   of its own or of the workspace's. A machine that booted with none takes its
   first key after a restart, and one whose login the platform never recorded
-  needs its owner to save that once in the console. The console's Keys page
-  names both after a change. This is also why the machines you create should
-  carry a key from the start.
+  needs one of the workspace's people to save that once in the console. The
+  console's Keys page names both after a change. This is also why the machines
+  you create should carry a key from the start.
 - **A key vanished from a machine.** The platform owns that file: anything
   added by hand inside the machine is removed on the next change.
 - **The machine stopped by itself.** It had a stop time. Say so, and start it

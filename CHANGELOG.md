@@ -8,9 +8,10 @@ Claude Code users get the update only when the version changes.
 ## 1.14.0
 
 Organizations: a workspace can belong to an organization, whose owners and
-members share it. Wording and hints only; the new hints answer codes a key
-or an agent gets only from a LiveLLM with organizations, so against an
-earlier one nothing changes.
+members share it. Wording and hints only. The hints for `owners_only`,
+`own_only`, `credential_no_access` and `organization_billing` answer codes a
+key or an agent gets only from a LiveLLM with organizations, so against an
+earlier one only `support_credentials`'s hint changes.
 
 - A full plan (402) on an organization's workspace is its share of the
   organization: `llc.py`, rule 4, the refusal table and
@@ -21,14 +22,21 @@ earlier one nothing changes.
   their code: `owners_only` (only the workspace's owners), `own_only` (only
   whoever made it changes a key, agent, screen link or SSH key) and
   `credential_no_access` (the person behind this key or agent no longer has
-  access). The generic 403 advice named a permission that can't help.
+  access), and on `support_credentials` (LiveLLM support's own key or agent
+  in a customer's workspace). The generic 403 advice named a permission that
+  can't help. `profile import` and `profile copy` keep these answers (they
+  gave their browser-rights advice for every 403), and a refusal's code
+  decides before any words in its message. The refusal table and
+  `references/troubleshooting.md` say the same.
 - A 409 `organization_billing` (the plan of an organization's workspace is
   managed by the organization) says an owner changes it in the console, and
-  stop; it is no longer retried as mid-change.
+  stop; it is no longer retried as mid-change. The refusal table has its row.
 - Profiles: an export, an import or a copy is refused to a key or an agent
   whose person isn't one of the workspace's people (was: the workspace
   owner's). `references/workspace.md`: the plan of an organization's
   workspace is the organization's; alert emails go to the workspace's owners.
+  `references/machines.md`: the SSH keys the workspace's people added (not
+  only its owner) are installed on a new machine alongside the agent's.
 
 ## 1.13.0
 

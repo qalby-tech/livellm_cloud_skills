@@ -89,6 +89,7 @@ class Problem(Exception):
         super().__init__(message)
         self.message, self.next, self.code, self.status = message, nxt, code, status
         self.oauth = oauth  # the OAuth error code of a sign-in endpoint's refusal
+        self.refusal = ""  # the API's code for this refusal (code above is the exit code)
         self.missing = []  # a create from a template: the secrets it still needs
 
 
@@ -138,6 +139,7 @@ def unreachable(e):
 def http_problem(status, payload):
     p = status_problem(status, payload)
     p.oauth = payload.get("error")
+    p.refusal = payload.get("code") if isinstance(payload.get("code"), str) else ""
     missing = payload.get("missing")
     p.missing = missing if isinstance(missing, list) else []
     return p
@@ -146,6 +148,13 @@ def http_problem(status, payload):
 def status_problem(status, payload):
     message = payload.get("error_description") or payload.get("error") or f"HTTP {status}"
     code = payload.get("code") if isinstance(payload.get("code"), str) else ""
+    # Refusals known by their code come first: an exact code wins over words
+    # in the message (an organization's name, in organization_billing's, is
+    # any text its owners chose).
+    if status == 403 and code in WHO_ONLY:
+        return Problem(message, WHO_ONLY[code], EXIT_USER, status)
+    if status == 409 and code == "organization_billing":
+        return Problem(message, ORGANIZATION_BILLING_NEXT, EXIT_USER, status)
     inside = inside_problem(status, code, message)
     if inside:
         return inside
@@ -161,18 +170,11 @@ def status_problem(status, payload):
         return Problem(message, "the plan is full (on an organization's workspace: its share of the organization): show the user "
                        "their usage and stop; an owner of the organization can give the workspace more under Organization → "
                        "Billing; never delete to make room", EXIT_USER, status)
-    # Refusals no permission can lift, known by their code: the generic 403
-    # advice would send the user to a permission that can't help.
-    if status == 403 and code in WHO_ONLY:
-        return Problem(message, WHO_ONLY[code], EXIT_USER, status)
     if status == 403:
         return Problem(message, "tell the user which permission this needs; they can turn it on for this agent on the console's Agents page "
                        "(for an API key, on the Keys page)", EXIT_USER, status)
     if status == 404:
         return Problem(message, "run: llc.py ls, the id is probably wrong", EXIT_OTHER, status)
-    if status == 409 and code == "organization_billing":
-        return Problem(message, "this workspace's plan is managed by its organization: tell the user an owner changes it in the "
-                       "console, and stop", EXIT_USER, status)
     if status == 409 and "location can't change" in message:
         return Problem(message, "its first start never finished, so moving it can't help and retrying won't either: "
                        "ask the user before deleting it and creating it again (a restore can be run again from the same backup)",
@@ -191,14 +193,23 @@ def status_problem(status, payload):
 
 
 # What to do about a 403 that says who may do this (a workspace's owners, or
-# whoever made it) or that the person behind the key or agent left: nothing
-# the agent or its permissions can change.
+# whoever made it), that the person behind the key or agent left, or that
+# LiveLLM support's own key or agent is in a customer's workspace: nothing the
+# agent or its permissions can change, so the generic 403 advice would send
+# the user to a permission that can't help.
 WHO_ONLY = {
     "owners_only": "only the workspace's owners can do this: tell the user, and stop",
     "own_only": "only whoever made it can change it: tell the user, and stop",
     "credential_no_access": "the person who made this key or allowed this agent no longer has access to the workspace: "
                             "tell the user, and stop",
+    "support_credentials": "LiveLLM support can't act through a key or an agent in a customer's workspace: tell the user, "
+                           "and stop",
 }
+
+# A 409 organization_billing: the plan of an organization's workspace is the
+# organization's, changed by its owners in the console.
+ORGANIZATION_BILLING_NEXT = ("this workspace's plan is managed by its organization: tell the user an owner changes it in the "
+                             "console, and stop")
 
 NETWORK_NEXT = ("letting one resource reach another inside the workspace needs the Network permission: ask the user, "
                 "saying what would reach what and why; a person turns on Network for this key on the Keys page, or for this "
@@ -1866,11 +1877,12 @@ def import_profile(args, tok):
 @contextlib.contextmanager
 def may_place_profile():
     """Import and copy put a profile in a browser: a plain 403 is the right to
-    change that browser (a copy also reads the one it copies from)."""
+    change that browser (a copy also reads the one it copies from). A refusal
+    no permission lifts keeps its own answer."""
     try:
         yield
     except Problem as p:
-        if p.status == 403 and "profile" not in p.message.lower():
+        if p.status == 403 and p.refusal not in WHO_ONLY and "profile" not in p.message.lower():
             p.next = ("putting a profile in a browser needs Manage, or Create on a browser this agent made (a copy also needs "
                       "Connect on the browser it copies from): tell the user; a person changes what this agent may do on the "
                       "console's Agents page (for an API key, on the Keys page)")

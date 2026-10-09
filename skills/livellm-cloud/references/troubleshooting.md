@@ -25,7 +25,10 @@ reach db inside the workspace") means letting one resource reach another:
 tell the user what would reach what and why; they turn on Network (Agents
 page, or Keys page for an API key) or make the opening in the console:
 Allowed on the resource, or, for a database (it has none), a link on
-what uses it (`references/inside-access.md`).
+what uses it (`references/inside-access.md`). A 403 saying only the
+workspace's owners, or whoever made it, may do this, that the person behind
+this key or agent no longer has access, or that LiveLLM support can't use a key
+or an agent here, is one no permission changes: tell the user, and stop.
 
 **404.** The id doesn't exist in this workspace. Run `ls`; ids are often close
 but not exact.
@@ -36,7 +39,9 @@ release it for you unless they want to. Otherwise something else is changing
 the resource, often a build: wait a few seconds and try once more. A
 database "still starting, so its location can't change" is different: its
 first start never finished, and retrying won't help. Ask the user before
-deleting it and creating it again.
+deleting it and creating it again. A 409 saying billing for this workspace is
+managed by its organization: tell the user an owner changes the plan in the
+console, and stop.
 
 **422.** A value was refused, and the message names it. Fix that value. Never
 send the same request again hoping for a different answer.

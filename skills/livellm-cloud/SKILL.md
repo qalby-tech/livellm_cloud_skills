@@ -201,10 +201,11 @@ Every error prints `{"error": ..., "next": ...}`. Do what `next` says.
 | not signed in, 401 | No sign-in, or it ended | `login`, give the user the link, `login` again after Allow |
 | 402 | The plan is full, or the workspace's share of its organization | Stop, show usage, let the user choose; an owner gives more under Organization → Billing |
 | 403 | Beyond this agent's permissions, or someone else's resource | Tell the user which permission it needs; they turn it on on the Agents page |
-| 403 `owners_only`, `own_only`, `credential_no_access` | Only the workspace's owners, or whoever made it, may do this; or the person behind this agent or key no longer has access | Tell the user, and stop; no permission changes it |
+| 403 `owners_only`, `own_only`, `credential_no_access`, `support_credentials` | Only the workspace's owners, or whoever made it, may do this; the person behind this agent or key no longer has access; or LiveLLM support's own agent or key is in a customer's workspace | Tell the user, and stop; no permission changes it |
 | 403 naming Network | Letting one resource reach another | Ask the user (rule 11); only a person turns on Network, for an agent on the Agents page, for a key on the Keys page |
 | 404 | No such resource here | `ls`; the id is probably wrong |
 | 409 | Another agent holds the machine, or the resource is mid-change | Held: wait until the time it names, or use another. A database "still starting" can't move: ask the user, don't retry. Otherwise wait a few seconds, retry once |
+| 409 `organization_billing` | The organization manages this workspace's plan | Tell the user an owner changes it in the console, and stop; don't retry |
 | 422 | A value was refused; the message names it | Fix that value, never retry unchanged |
 | 5xx | Platform trouble | Retry twice with a pause, then tell the user |
 
