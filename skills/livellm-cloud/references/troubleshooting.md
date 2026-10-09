@@ -11,9 +11,11 @@ agent out, or it went unused for 30 days). Run `login`, give the user the link,
 and run `login` again once they have pressed Allow. "still waiting" (exit 3)
 means they haven't yet. Never ask for an API key in chat.
 
-**402, the plan is full.** Creating this would go past the plan. Stop, show
-usage from `whoami`, and let the user decide. Deleting something to make room is
-never your call.
+**402, the plan is full.** Creating this would go past the plan (on an
+organization's workspace: its share of the organization). Stop, show usage
+from `whoami`, and let the user decide; on an organization's workspace an owner
+can give it more under Organization → Billing. Deleting something to make room
+is never your call.
 
 **403.** Either the resource belongs to someone else, or the agent lacks the
 permission. Say which: "this agent can't run commands; turn on Run commands for

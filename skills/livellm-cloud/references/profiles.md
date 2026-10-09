@@ -23,9 +23,9 @@ profile.
 
 A workspace can also keep profiles to its own people: then a 403 "Profiles
 hold sign-ins. Only the workspace's people can export them." refuses an export,
-an import or a copy by an agent or an API key that isn't the workspace owner's,
-whatever permissions it has. Tell the user; asking for a permission won't
-change it.
+an import or a copy by an agent or an API key that isn't one of the
+workspace's people, whatever permissions it has. Tell the user; asking for a
+permission won't change it.
 
 A browser made before profiles were offered answers 409 "Restart this browser
 once to turn on profiles". Ask the user, then `llc.py restart ID --yes`: its

@@ -25,6 +25,9 @@ something that doesn't fit is refused with a 402. When that happens:
 
 Stopped machines still use their disk. Kept builds count too.
 
+On an organization's workspace the plan is the organization's: an owner
+gives the workspace more under Organization → Billing.
+
 ## SSH keys
 
 The workspace's own SSH keys are installed on every machine, Linux and
@@ -58,7 +61,7 @@ its own system has in use (cache counts as free); a machine that doesn't
 report it shows no memory and gets no memory alert. Install discs and
 read-only mounts are not watched.
 
-The workspace owner gets an email when an alert opens and another when it is
+The workspace's owners get an email when an alert opens and another when it is
 over (at most one per resource and kind of alert every 30 minutes).
 `emailAlerts` in `monitoring` says whether that is on. Only the user turns it
 off or on, on the console's Monitoring page (`PUT /v1/monitoring/settings`

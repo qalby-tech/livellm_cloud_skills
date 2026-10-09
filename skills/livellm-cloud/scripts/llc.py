@@ -158,12 +158,21 @@ def status_problem(status, payload):
     if status == 401:
         return Problem(message, "run: llc.py login, give the user the link it prints, and run login again once they press Allow", EXIT_USER, status)
     if status == 402:
-        return Problem(message, "the plan is full: show the user their usage and stop; never delete to make room", EXIT_USER, status)
+        return Problem(message, "the plan is full (on an organization's workspace: its share of the organization): show the user "
+                       "their usage and stop; an owner of the organization can give the workspace more under Organization → "
+                       "Billing; never delete to make room", EXIT_USER, status)
+    # Refusals no permission can lift, known by their code: the generic 403
+    # advice would send the user to a permission that can't help.
+    if status == 403 and code in WHO_ONLY:
+        return Problem(message, WHO_ONLY[code], EXIT_USER, status)
     if status == 403:
         return Problem(message, "tell the user which permission this needs; they can turn it on for this agent on the console's Agents page "
                        "(for an API key, on the Keys page)", EXIT_USER, status)
     if status == 404:
         return Problem(message, "run: llc.py ls, the id is probably wrong", EXIT_OTHER, status)
+    if status == 409 and code == "organization_billing":
+        return Problem(message, "this workspace's plan is managed by its organization: tell the user an owner changes it in the "
+                       "console, and stop", EXIT_USER, status)
     if status == 409 and "location can't change" in message:
         return Problem(message, "its first start never finished, so moving it can't help and retrying won't either: "
                        "ask the user before deleting it and creating it again (a restore can be run again from the same backup)",
@@ -180,6 +189,16 @@ def status_problem(status, payload):
         return Problem(message, "platform trouble: retry twice with a pause, then tell the user", EXIT_OTHER, status)
     return Problem(message, "check the request", EXIT_OTHER, status)
 
+
+# What to do about a 403 that says who may do this (a workspace's owners, or
+# whoever made it) or that the person behind the key or agent left: nothing
+# the agent or its permissions can change.
+WHO_ONLY = {
+    "owners_only": "only the workspace's owners can do this: tell the user, and stop",
+    "own_only": "only whoever made it can change it: tell the user, and stop",
+    "credential_no_access": "the person who made this key or allowed this agent no longer has access to the workspace: "
+                            "tell the user, and stop",
+}
 
 NETWORK_NEXT = ("letting one resource reach another inside the workspace needs the Network permission: ask the user, "
                 "saying what would reach what and why; a person turns on Network for this key on the Keys page, or for this "
@@ -275,7 +294,8 @@ def browser_problem(status, code, message):
 
     if status == 403 and "profiles hold sign-ins" in low:
         return Problem(message, "this workspace keeps profiles to its own people: an export, an import or a copy by an agent or an "
-                       "API key is refused unless it is the workspace owner's, and no permission changes that: tell the user, and stop",
+                       "API key is refused unless the person behind it is one of the workspace's people, and no permission changes that: "
+                       "tell the user, and stop",
                        EXIT_USER, status)
     if status == 409 and ("profiles are still starting" in low or "proxies are still starting" in low):
         return Problem(message, "the browser's helper is still starting: wait half a minute and run the same command again; "

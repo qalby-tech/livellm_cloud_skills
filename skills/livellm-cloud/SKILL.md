@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.13.0
+  version: 1.14.0
   documentation: https://docs.live-llm.com
 ---
 
@@ -24,7 +24,8 @@ Everything goes through `scripts/llc.py`, which talks to the API and prints JSON
    need something extra, ask first and say what it uses against their plan.
 3. Delete only resources you created. Never delete anything to get under the
    plan limit.
-4. When the plan is full (a 402), stop and show usage. The user decides.
+4. When the plan is full (a 402; on an organization's workspace, its share of
+   the organization), stop and show usage. The user decides.
 5. Never open a port to the internet without a password or an allowed-address
    list, unless the user asked for a public site.
 6. Hand login codes, CAPTCHAs, passwords, payments and confirmations to the
@@ -198,8 +199,9 @@ Every error prints `{"error": ..., "next": ...}`. Do what `next` says.
 | Answer | What it means | What to do |
 |---|---|---|
 | not signed in, 401 | No sign-in, or it ended | `login`, give the user the link, `login` again after Allow |
-| 402 | The plan is full | Stop, show usage, let the user choose |
+| 402 | The plan is full, or the workspace's share of its organization | Stop, show usage, let the user choose; an owner gives more under Organization → Billing |
 | 403 | Beyond this agent's permissions, or someone else's resource | Tell the user which permission it needs; they turn it on on the Agents page |
+| 403 `owners_only`, `own_only`, `credential_no_access` | Only the workspace's owners, or whoever made it, may do this; or the person behind this agent or key no longer has access | Tell the user, and stop; no permission changes it |
 | 403 naming Network | Letting one resource reach another | Ask the user (rule 11); only a person turns on Network, for an agent on the Agents page, for a key on the Keys page |
 | 404 | No such resource here | `ls`; the id is probably wrong |
 | 409 | Another agent holds the machine, or the resource is mid-change | Held: wait until the time it names, or use another. A database "still starting" can't move: ask the user, don't retry. Otherwise wait a few seconds, retry once |

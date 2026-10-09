@@ -5,7 +5,7 @@
   },
   "metadata": {
     "description": "Skills that give agents browsers, machines, apps, databases and object storage on LiveLLM Cloud",
-    "version": "1.13.0"
+    "version": "1.14.0"
   },
   "plugins": [
     {

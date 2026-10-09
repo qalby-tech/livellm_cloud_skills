@@ -5,6 +5,31 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.14.0
+
+Organizations: a workspace can belong to an organization, whose owners and
+members share it. Wording and hints only; the new hints answer codes a key
+or an agent gets only from a LiveLLM with organizations, so against an
+earlier one nothing changes.
+
+- A full plan (402) on an organization's workspace is its share of the
+  organization: `llc.py`, rule 4, the refusal table and
+  `references/troubleshooting.md` say so and that an owner gives the
+  workspace more under Organization → Billing. Still stop and show usage;
+  never delete to make room.
+- `llc.py` tells the user and stops on the 403s no permission lifts, known by
+  their code: `owners_only` (only the workspace's owners), `own_only` (only
+  whoever made it changes a key, agent, screen link or SSH key) and
+  `credential_no_access` (the person behind this key or agent no longer has
+  access). The generic 403 advice named a permission that can't help.
+- A 409 `organization_billing` (the plan of an organization's workspace is
+  managed by the organization) says an owner changes it in the console, and
+  stop; it is no longer retried as mid-change.
+- Profiles: an export, an import or a copy is refused to a key or an agent
+  whose person isn't one of the workspace's people (was: the workspace
+  owner's). `references/workspace.md`: the plan of an organization's
+  workspace is the organization's; alert emails go to the workspace's owners.
+
 ## 1.13.0
 
 Object storage needs a LiveLLM that offers it; an earlier one refuses
