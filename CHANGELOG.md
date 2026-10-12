@@ -5,6 +5,26 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.15.0
+
+Pay as you go: Starter includes no resources, and what is above a plan is
+billed when the user turns pay as you go on. Wording and hints only; against
+a LiveLLM without these codes only the plain 402's wording changes.
+
+- `llc.py` answers a billing refusal by its code: `payg_off` (past the plan
+  with pay as you go off: ask the user to turn it on or choose a bigger plan
+  on the console's Billing page), `payg_limit` (past its monthly limit: only
+  the user raises it), `card_required` (the user adds a card there, and the
+  agent waits), `payment_overdue` (the user pays the open invoice there; what
+  runs keeps running; never pay or open a payment link) and the 403
+  `payg_not_offered` (not open to the account yet: tell the user, and stop;
+  no permission changes it, and profile import and copy keep this answer).
+  Each code counts only on its own status.
+- A plain 402 says the user turns on pay as you go or chooses a bigger plan
+  on the Billing page. Rule 4, the refusal table,
+  `references/troubleshooting.md`, `references/workspace.md` and
+  `references/machines.md` say the same.
+
 ## 1.14.0
 
 Organizations: a workspace can belong to an organization, whose owners and

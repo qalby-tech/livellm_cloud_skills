@@ -303,4 +303,5 @@ Changing it (`set` with `{"vm": {"placement": …}}`, a Desktop App `{"desktop":
   In a workspace without internet access it never comes: use Windows Server,
   the screen or Remote Desktop instead.
 - **The plan is full (402).** Stop and show usage. Suggest what could be removed
-  and let the user decide.
+  and let the user decide; they can also turn on pay as you go or choose a
+  bigger plan on the console's Billing page.

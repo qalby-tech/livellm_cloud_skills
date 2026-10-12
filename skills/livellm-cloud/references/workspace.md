@@ -17,11 +17,19 @@ who can do it in the console or sign the agent in with full access.
 ## The plan
 
 `whoami` shows what is used against the plan's cores, memory and disk. Creating
-something that doesn't fit is refused with a 402. When that happens:
+something that doesn't fit is refused with a 402, unless pay as you go is on:
+then what is above the plan is billed, up to the account's monthly limit.
+Starter includes no resources, so on Starter everything is pay as you go.
+When a create is refused:
 
 1. Stop. Don't delete anything to make room.
 2. Show the user what is used and what they asked for.
-3. Let them choose: a bigger plan, or removing something themselves.
+3. Let them choose, on the console's Billing page: turning on pay as you go,
+   a bigger plan, a higher limit, or removing something themselves.
+
+Pay as you go costs the user money. A card, an invoice to pay and the limit
+are theirs: when the refusal asks for one, tell them and wait. Never pay or
+open a payment link yourself.
 
 Stopped machines still use their disk. Kept builds count too.
 

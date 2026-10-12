@@ -13,9 +13,28 @@ means they haven't yet. Never ask for an API key in chat.
 
 **402, the plan is full.** Creating this would go past the plan (on an
 organization's workspace: its share of the organization). Stop, show usage
-from `whoami`, and let the user decide; on an organization's workspace an owner
-can give it more under Organization → Billing. Deleting something to make room
-is never your call.
+from `whoami`, and let the user decide: they turn on pay as you go or choose a
+bigger plan on the console's Billing page; on an organization's workspace an
+owner can give it more under Organization → Billing. Deleting something to
+make room is never your call.
+
+**402 for billing, by its code.** Each is the user's to settle on the
+console's Billing page; tell them which, and stop:
+- `payg_off`: past the plan with pay as you go off. Starter includes no
+  resources, so on Starter this is the first create. Ask them to turn on pay
+  as you go or choose a bigger plan; it costs them money, so they decide.
+- `payg_limit`: pay as you go would go past the account's monthly limit. Only
+  they raise it.
+- `card_required`: pay as you go and paid plans need a card on file. Ask them
+  to add one (Add a card) and wait until they say it is done. Never ask for
+  card details.
+- `payment_overdue`: a payment failed, and nothing can be added until it is
+  paid; what runs keeps running. They pay the open invoice. Never pay it or
+  open a payment link yourself.
+
+**403 `payg_not_offered`.** Pay as you go and paid plans aren't open to this
+account yet. LiveLLM opens them for an account, and no permission changes it:
+tell the user, and stop. Until then only what fits the plan can be added.
 
 **403.** Either the resource belongs to someone else, or the agent lacks the
 permission. Say which: "this agent can't run commands; turn on Run commands for

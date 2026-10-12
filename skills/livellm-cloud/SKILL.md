@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.14.0
+  version: 1.15.0
   documentation: https://docs.live-llm.com
 ---
 
@@ -25,7 +25,9 @@ Everything goes through `scripts/llc.py`, which talks to the API and prints JSON
 3. Delete only resources you created. Never delete anything to get under the
    plan limit.
 4. When the plan is full (a 402; on an organization's workspace, its share of
-   the organization), stop and show usage. The user decides.
+   the organization), stop and show usage. The user decides: they turn on pay
+   as you go or choose a bigger plan on the console's Billing page. Pay as you
+   go costs them money; a card, a payment and its limit are theirs alone.
 5. Never open a port to the internet without a password or an allowed-address
    list, unless the user asked for a public site.
 6. Hand login codes, CAPTCHAs, passwords, payments and confirmations to the
@@ -200,6 +202,9 @@ Every error prints `{"error": ..., "next": ...}`. Do what `next` says.
 |---|---|---|
 | not signed in, 401 | No sign-in, or it ended | `login`, give the user the link, `login` again after Allow |
 | 402 | The plan is full, or the workspace's share of its organization | Stop, show usage, let the user choose; an owner gives more under Organization → Billing |
+| 402 `payg_off`, `payg_limit` | Past the plan with pay as you go off (Starter includes no resources), or past its monthly limit | Stop, show usage; ask the user to turn on pay as you go, choose a bigger plan or raise the limit on the console's Billing page |
+| 402 `card_required`, `payment_overdue` | A card is needed first, or a payment failed | Ask the user to add a card, or pay the open invoice, on the console's Billing page (rule 6); never pay or open a payment link yourself |
+| 403 `payg_not_offered` | Pay as you go isn't open to this account yet | Tell the user, and stop; no permission changes it |
 | 403 | Beyond this agent's permissions, or someone else's resource | Tell the user which permission it needs; they turn it on on the Agents page |
 | 403 `owners_only`, `own_only`, `credential_no_access`, `support_credentials` | Only the workspace's owners, or whoever made it, may do this; the person behind this agent or key no longer has access; or LiveLLM support's own agent or key is in a customer's workspace | Tell the user, and stop; no permission changes it |
 | 403 naming Network | Letting one resource reach another | Ask the user (rule 11); only a person turns on Network, for an agent on the Agents page, for a key on the Keys page |
