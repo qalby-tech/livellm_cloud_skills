@@ -34,17 +34,35 @@ WHO_ONLY_REFUSALS = (OWNERS_ONLY, OWN_ONLY, NO_ACCESS, SUPPORT_CREDENTIALS)
 class OrganizationRefusals(unittest.TestCase):
 
     def test_a_full_plan_names_the_organizations_share_and_where_an_owner_gives_more(self):
-        # one answer for a personal plan and an organization's share alike
-        for payload in (SHARE, {"error": "This would go past the plan's 4 cores."}):
-            p = llc.status_problem(402, payload)
-            self.assertEqual(p.code, llc.EXIT_USER, payload)
-            self.assertEqual(p.status, 402, payload)
-            self.assertEqual(p.message, payload["error"])
-            self.assertIn("the plan is full", p.next, payload)
-            self.assertIn("its share of the organization", p.next, payload)
-            self.assertIn("an owner of the organization can give the workspace more under Organization → Billing", p.next, payload)
-            self.assertIn("show the user their usage and stop", p.next, payload)
-            self.assertIn("never delete to make room", p.next, payload)
+        # an organization's share has an answer of its own: only an owner gives
+        # the workspace more; the Billing page's pay as you go and plans are
+        # refused there for anyone (409 organization_billing)
+        p = llc.status_problem(402, SHARE)
+        self.assertEqual(p.next, llc.ORGANIZATION_SHARE_NEXT)
+        self.assertEqual((p.code, p.status, p.message), (llc.EXIT_USER, 402, SHARE["error"]))
+        self.assertIn("the plan is full", p.next)
+        self.assertIn("its share of the organization", p.next)
+        self.assertIn("an owner of the organization can give the workspace more under Organization → Billing", p.next)
+        self.assertIn("show the user their usage and stop", p.next)
+        self.assertIn("never delete to make room", p.next)
+        self.assertNotIn("pay as you go", p.next)
+        self.assertNotIn("bigger plan", p.next)
+        self.assertNotIn("Billing page", p.next)
+
+    def test_a_personal_full_plan_names_no_organization(self):
+        p = llc.status_problem(402, {"error": "This would go past the plan's 4 cores."})
+        self.assertEqual((p.code, p.status), (llc.EXIT_USER, 402))
+        self.assertIn("the plan is full", p.next)
+        self.assertIn("show the user their usage and stop", p.next)
+        self.assertIn("turns on pay as you go or chooses a bigger plan on the console's Billing page", p.next)
+        self.assertIn("never delete to make room", p.next)
+        self.assertNotIn("organization", p.next.lower())
+
+    def test_organization_share_counts_only_on_a_402(self):
+        p = llc.status_problem(409, {"error": "x", "code": "organization_share"})
+        self.assertNotEqual(p.next, llc.ORGANIZATION_SHARE_NEXT)
+        p = llc.status_problem(403, {"error": "x", "code": "organization_share"})
+        self.assertIn("which permission this needs", p.next)
 
     def test_owners_only_says_tell_the_user_and_stop(self):
         p = llc.status_problem(403, OWNERS_ONLY)
@@ -112,7 +130,7 @@ class OrganizationRefusals(unittest.TestCase):
             self.assertEqual((p.code, p.status, p.message), (llc.EXIT_USER, 409, message), name)
             share = f"This workspace is using its share of {name}. An owner can give it more under Organization → Billing."
             p = llc.http_problem(402, {"error": share, "code": "organization_share"})
-            self.assertIn("its share of the organization", p.next, name)
+            self.assertEqual(p.next, llc.ORGANIZATION_SHARE_NEXT, name)
             self.assertEqual(p.code, llc.EXIT_USER, name)
 
     def test_a_coded_refusal_keeps_its_answer_through_a_profile_import_or_copy(self):

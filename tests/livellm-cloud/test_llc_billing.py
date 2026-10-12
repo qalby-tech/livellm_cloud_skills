@@ -78,10 +78,10 @@ class BillingRefusals(unittest.TestCase):
         self.assertNotIn("Agents page", p.next)
         self.assertNotIn("Keys page", p.next)
 
-    def test_a_plain_full_plan_names_pay_as_you_go_and_the_organizations_share(self):
-        # an older LiveLLM sends no code; an organization's share has its own
+    def test_a_plain_full_plan_names_pay_as_you_go(self):
+        # an older LiveLLM sends no code, and a code this script doesn't know
+        # gets the same answer
         for payload in ({"error": "subscription \"starter\" pool exceeded: CPU (3/2 cores) — upgrade or enable metered overage"},
-                        {"error": "This workspace is using its share of Acme.", "code": "organization_share"},
                         {"error": "Something new.", "code": "something_new"}):
             p = llc.status_problem(402, payload)
             self.assertIn("the plan is full", p.next, payload)
@@ -89,6 +89,16 @@ class BillingRefusals(unittest.TestCase):
             self.assertIn("never delete to make room", p.next, payload)
             self.assertEqual(p.code, llc.EXIT_USER, payload)
             self.assertNotIn("metered", p.next, payload)
+
+    def test_an_organizations_share_names_no_billing_page(self):
+        # on an organization's workspace pay as you go and plans are refused
+        # for anyone (409 organization_billing): an owner gives it more
+        p = llc.status_problem(402, {"error": "This workspace is using its share of Acme.", "code": "organization_share"})
+        self.assertEqual(p.next, llc.ORGANIZATION_SHARE_NEXT)
+        self.assertIn("an owner of the organization can give the workspace more under Organization → Billing", p.next)
+        self.assertNotIn("pay as you go", p.next)
+        self.assertNotIn("Billing page", p.next)
+        self.assertEqual(p.code, llc.EXIT_USER)
 
     def test_the_codes_decide_only_on_their_own_status(self):
         # the same words with no code keep the generic answers

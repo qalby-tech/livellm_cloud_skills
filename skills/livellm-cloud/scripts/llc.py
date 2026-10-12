@@ -155,6 +155,8 @@ def status_problem(status, payload):
         return Problem(message, WHO_ONLY[code], EXIT_USER, status)
     if status == 409 and code == "organization_billing":
         return Problem(message, ORGANIZATION_BILLING_NEXT, EXIT_USER, status)
+    if status == 402 and code == "organization_share":
+        return Problem(message, ORGANIZATION_SHARE_NEXT, EXIT_USER, status)
     if code in BILLING and status == BILLING_STATUS.get(code, 402):
         return Problem(message, BILLING[code], EXIT_USER, status)
     inside = inside_problem(status, code, message)
@@ -169,10 +171,8 @@ def status_problem(status, payload):
     if status == 401:
         return Problem(message, "run: llc.py login, give the user the link it prints, and run login again once they press Allow", EXIT_USER, status)
     if status == 402:
-        return Problem(message, "the plan is full (on an organization's workspace: its share of the organization): show the user "
-                       "their usage and stop; the user turns on pay as you go or chooses a bigger plan on the console's Billing "
-                       "page, and on an organization's workspace an owner of the organization can give the workspace more under "
-                       "Organization → Billing; never delete to make room", EXIT_USER, status)
+        return Problem(message, "the plan is full: show the user their usage and stop; the user turns on pay as you go or "
+                       "chooses a bigger plan on the console's Billing page; never delete to make room", EXIT_USER, status)
     if status == 403:
         return Problem(message, "tell the user which permission this needs; they can turn it on for this agent on the console's Agents page "
                        "(for an API key, on the Keys page)", EXIT_USER, status)
@@ -231,6 +231,14 @@ BILLING = {
 
 # Each billing code on its own status: 402, except pay as you go not open (403).
 BILLING_STATUS = {"payg_not_offered": 403}
+
+# A 402 organization_share: an organization's workspace is using its share of
+# the organization's plan. Only an owner of the organization gives it more,
+# under Organization → Billing; the Billing page's pay as you go and plans are
+# refused there for anyone (409 organization_billing), so they aren't named.
+ORGANIZATION_SHARE_NEXT = ("the plan is full (the workspace is using its share of the organization): show the user their "
+                           "usage and stop; an owner of the organization can give the workspace more under Organization → "
+                           "Billing; never delete to make room")
 
 # A 409 organization_billing: the plan of an organization's workspace is the
 # organization's, changed by its owners in the console.
