@@ -155,6 +155,8 @@ def status_problem(status, payload):
         return Problem(message, WHO_ONLY[code], EXIT_USER, status)
     if status == 409 and code == "organization_billing":
         return Problem(message, ORGANIZATION_BILLING_NEXT, EXIT_USER, status)
+    if code in BILLING and status == BILLING_STATUS.get(code, 402):
+        return Problem(message, BILLING[code], EXIT_USER, status)
     inside = inside_problem(status, code, message)
     if inside:
         return inside
@@ -168,8 +170,9 @@ def status_problem(status, payload):
         return Problem(message, "run: llc.py login, give the user the link it prints, and run login again once they press Allow", EXIT_USER, status)
     if status == 402:
         return Problem(message, "the plan is full (on an organization's workspace: its share of the organization): show the user "
-                       "their usage and stop; an owner of the organization can give the workspace more under Organization → "
-                       "Billing; never delete to make room", EXIT_USER, status)
+                       "their usage and stop; the user turns on pay as you go or chooses a bigger plan on the console's Billing "
+                       "page, and on an organization's workspace an owner of the organization can give the workspace more under "
+                       "Organization → Billing; never delete to make room", EXIT_USER, status)
     if status == 403:
         return Problem(message, "tell the user which permission this needs; they can turn it on for this agent on the console's Agents page "
                        "(for an API key, on the Keys page)", EXIT_USER, status)
@@ -205,6 +208,29 @@ WHO_ONLY = {
     "support_credentials": "LiveLLM support can't act through a key or an agent in a customer's workspace: tell the user, "
                            "and stop",
 }
+
+# A billing refusal, by its code: pay as you go off (on Starter, which includes
+# no resources, everything is pay as you go) or past its monthly limit, a card
+# missing, a payment overdue (all 402), or pay as you go not open to the
+# account yet (403). Pay as you go costs the user money, and only a person adds
+# a card, pays or raises the limit, on the console's Billing page: the agent
+# asks and stops. A payment's own link is never followed.
+BILLING = {
+    "payg_off": "the plan has no room for this and pay as you go is off (Starter includes no resources): show the user their "
+                "usage and stop; ask them to turn on pay as you go, or choose a bigger plan, on the console's Billing page; "
+                "it costs them money, so they decide; never delete to make room",
+    "payg_limit": "this would take pay as you go past the account's monthly limit: show the user their usage and stop; only "
+                  "they can raise the limit, on the console's Billing page; never delete to make room",
+    "card_required": "pay as you go and paid plans need a card on file: ask the user to add one on the console's Billing page "
+                     "(Add a card) and wait until they say it is done; never ask for card details",
+    "payment_overdue": "a payment failed, so nothing can be added until it is paid (what runs keeps running): tell the user to "
+                       "pay the open invoice on the console's Billing page, and stop; never pay it or open a payment link yourself",
+    "payg_not_offered": "pay as you go and paid plans aren't open to this account yet: tell the user, and stop; LiveLLM opens "
+                        "them for an account and no permission changes it, so until then only what fits the plan can be added",
+}
+
+# Each billing code on its own status: 402, except pay as you go not open (403).
+BILLING_STATUS = {"payg_not_offered": 403}
 
 # A 409 organization_billing: the plan of an organization's workspace is the
 # organization's, changed by its owners in the console.
@@ -1878,11 +1904,12 @@ def import_profile(args, tok):
 def may_place_profile():
     """Import and copy put a profile in a browser: a plain 403 is the right to
     change that browser (a copy also reads the one it copies from). A refusal
-    no permission lifts keeps its own answer."""
+    no permission lifts, and a billing one, keeps its own answer."""
     try:
         yield
     except Problem as p:
-        if p.status == 403 and p.refusal not in WHO_ONLY and "profile" not in p.message.lower():
+        if (p.status == 403 and p.refusal not in WHO_ONLY and p.refusal != "payg_not_offered"
+                and "profile" not in p.message.lower()):
             p.next = ("putting a profile in a browser needs Manage, or Create on a browser this agent made (a copy also needs "
                       "Connect on the browser it copies from): tell the user; a person changes what this agent may do on the "
                       "console's Agents page (for an API key, on the Keys page)")
