@@ -209,14 +209,14 @@ WHO_ONLY = {
                            "and stop",
 }
 
-# A billing refusal, by its code: pay as you go off (on Starter, which includes
-# no resources, everything is pay as you go) or past its monthly limit, a card
+# A billing refusal, by its code: pay as you go off (on Free, which includes no
+# resources, everything is pay as you go) or past its monthly limit, a card
 # missing, a payment overdue (all 402), or pay as you go not open to the
 # account yet (403). Pay as you go costs the user money, and only a person adds
 # a card, pays or raises the limit, on the console's Billing page: the agent
 # asks and stops. A payment's own link is never followed.
 BILLING = {
-    "payg_off": "the plan has no room for this and pay as you go is off (Starter includes no resources): show the user their "
+    "payg_off": "the plan has no room for this and pay as you go is off (Free includes no resources): show the user their "
                 "usage and stop; ask them to turn on pay as you go, or choose a bigger plan, on the console's Billing page; "
                 "it costs them money, so they decide; never delete to make room",
     "payg_limit": "this would take pay as you go past the account's monthly limit: show the user their usage and stop; only "

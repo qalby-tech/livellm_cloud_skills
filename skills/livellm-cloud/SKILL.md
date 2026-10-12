@@ -205,7 +205,7 @@ Every error prints `{"error": ..., "next": ...}`. Do what `next` says.
 | not signed in, 401 | No sign-in, or it ended | `login`, give the user the link, `login` again after Allow |
 | 402 | The plan is full | Stop, show usage, let the user choose: pay as you go or a bigger plan on the console's Billing page |
 | 402 `organization_share` | The workspace is using its share of its organization | Stop, show usage; an owner of the organization gives it more under Organization → Billing |
-| 402 `payg_off`, `payg_limit` | Past the plan with pay as you go off (Starter includes no resources), or past its monthly limit | Stop, show usage; ask the user to turn on pay as you go, choose a bigger plan or raise the limit on the console's Billing page |
+| 402 `payg_off`, `payg_limit` | Past the plan with pay as you go off (Free includes no resources), or past its monthly limit | Stop, show usage; ask the user to turn on pay as you go, choose a bigger plan or raise the limit on the console's Billing page |
 | 402 `card_required`, `payment_overdue` | A card is needed first, or a payment failed | Ask the user to add a card, or pay the open invoice, on the console's Billing page (rule 6); never pay or open a payment link yourself |
 | 403 `payg_not_offered` | Pay as you go isn't open to this account yet | Tell the user, and stop; no permission changes it |
 | 403 | Beyond this agent's permissions, or someone else's resource | Tell the user which permission it needs; they turn it on on the Agents page |

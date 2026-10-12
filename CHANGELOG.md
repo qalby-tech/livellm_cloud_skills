@@ -7,9 +7,9 @@ Claude Code users get the update only when the version changes.
 
 ## 1.15.0
 
-Pay as you go: Starter includes no resources, and what is above a plan is
-billed when the user turns pay as you go on. Wording and hints only; against
-a LiveLLM without these codes only the plain 402's wording changes.
+Pay as you go: Free includes no resources, and what is above a plan is billed
+when the user turns pay as you go on. Wording and hints only; against a
+LiveLLM without these codes only the plain 402's wording changes.
 
 - `llc.py` answers a billing refusal by its code: `payg_off` (past the plan
   with pay as you go off: ask the user to turn it on or choose a bigger plan
@@ -29,6 +29,10 @@ a LiveLLM without these codes only the plain 402's wording changes.
   Billing page isn't named). Rule 4, the refusal table,
   `references/troubleshooting.md`, `references/workspace.md` and
   `references/machines.md` say the same, the personal case first.
+- `references/workspace.md` names the plans: Free, Starter, Pro and Max for
+  a person; Team, Startup and Business, which an organization's owners
+  choose, and Enterprise by agreement. The user changes the plan in the
+  console; an agent never does.
 
 ## 1.14.0
 

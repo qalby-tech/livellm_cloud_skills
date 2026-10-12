@@ -1,5 +1,5 @@
 """What scripts/llc.py tells an agent about a billing refusal, by its code:
-pay as you go off (Starter includes no resources) or past its monthly limit,
+pay as you go off (Free includes no resources) or past its monthly limit,
 a card missing, a payment overdue (402), and pay as you go not open to the
 account yet (403). Each says to ask or tell the user, names the console's
 Billing page, and stops; a plain 402 still says the plan is full.
@@ -20,7 +20,7 @@ llc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(llc)
 
 # The API's refusals, as the plan words them.
-PAYG_OFF = {"error": "Starter includes no resources. Turn on pay as you go, or choose Pro, on the Billing page.",
+PAYG_OFF = {"error": "Free includes no resources. Turn on pay as you go, or choose Pro, on the Billing page.",
             "code": "payg_off"}
 PAYG_LIMIT = {"error": "This would bring pay as you go to $140 a month, past your $100 limit. Raise it on the Billing page.",
               "code": "payg_limit"}
@@ -49,7 +49,7 @@ class BillingRefusals(unittest.TestCase):
     def test_pay_as_you_go_off_asks_the_user_to_turn_it_on_and_never_deletes(self):
         p = llc.status_problem(402, PAYG_OFF)
         self.assertIn("ask them to turn on pay as you go, or choose a bigger plan, on the console's Billing page", p.next)
-        self.assertIn("Starter includes no resources", p.next)
+        self.assertIn("Free includes no resources", p.next)
         self.assertIn("show the user their usage and stop", p.next)
         self.assertIn("it costs them money, so they decide", p.next)
         self.assertIn("never delete to make room", p.next)

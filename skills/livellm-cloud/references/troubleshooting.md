@@ -23,8 +23,8 @@ plans aren't changed on the Billing page there, for anyone).
 
 **402 for billing, by its code.** Each is the user's to settle on the
 console's Billing page; tell them which, and stop:
-- `payg_off`: past the plan with pay as you go off. Starter includes no
-  resources, so on Starter this is the first create. Ask them to turn on pay
+- `payg_off`: past the plan with pay as you go off. Free includes no
+  resources, so on Free this is the first create. Ask them to turn on pay
   as you go or choose a bigger plan; it costs them money, so they decide.
 - `payg_limit`: pay as you go would go past the account's monthly limit. Only
   they raise it.
