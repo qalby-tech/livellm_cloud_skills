@@ -33,8 +33,10 @@ open a payment link yourself.
 
 Stopped machines still use their disk. Kept builds count too.
 
-On an organization's workspace the plan is the organization's: an owner
-gives the workspace more under Organization → Billing.
+On an organization's workspace the plan is the organization's, and its 402 is
+`organization_share`: pay as you go and plans aren't changed on the Billing
+page there, for anyone; an owner of the organization gives the workspace more
+under Organization → Billing.
 
 ## SSH keys
 

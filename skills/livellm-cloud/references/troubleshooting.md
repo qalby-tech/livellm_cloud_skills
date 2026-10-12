@@ -11,12 +11,15 @@ agent out, or it went unused for 30 days). Run `login`, give the user the link,
 and run `login` again once they have pressed Allow. "still waiting" (exit 3)
 means they haven't yet. Never ask for an API key in chat.
 
-**402, the plan is full.** Creating this would go past the plan (on an
-organization's workspace: its share of the organization). Stop, show usage
-from `whoami`, and let the user decide: they turn on pay as you go or choose a
-bigger plan on the console's Billing page; on an organization's workspace an
-owner can give it more under Organization → Billing. Deleting something to
-make room is never your call.
+**402, the plan is full.** Creating this would go past the plan. Stop, show
+usage from `whoami`, and let the user decide: they turn on pay as you go or
+choose a bigger plan on the console's Billing page. Deleting something to make
+room is never your call.
+
+**402 `organization_share`.** On an organization's workspace this is its share
+of the organization. Stop and show usage: only an owner of the organization
+can give the workspace more, under Organization → Billing (pay as you go and
+plans aren't changed on the Billing page there, for anyone).
 
 **402 for billing, by its code.** Each is the user's to settle on the
 console's Billing page; tell them which, and stop:

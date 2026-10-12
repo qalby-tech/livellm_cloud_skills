@@ -24,10 +24,12 @@ Everything goes through `scripts/llc.py`, which talks to the API and prints JSON
    need something extra, ask first and say what it uses against their plan.
 3. Delete only resources you created. Never delete anything to get under the
    plan limit.
-4. When the plan is full (a 402; on an organization's workspace, its share of
-   the organization), stop and show usage. The user decides: they turn on pay
-   as you go or choose a bigger plan on the console's Billing page. Pay as you
-   go costs them money; a card, a payment and its limit are theirs alone.
+4. When the plan is full (a 402), stop and show usage. The user decides: they
+   turn on pay as you go or choose a bigger plan on the console's Billing
+   page. Pay as you go costs them money; a card, a payment and its limit are
+   theirs alone. On an organization's workspace a 402 is its share of the
+   organization: only an owner of the organization gives it more, under
+   Organization → Billing.
 5. Never open a port to the internet without a password or an allowed-address
    list, unless the user asked for a public site.
 6. Hand login codes, CAPTCHAs, passwords, payments and confirmations to the
@@ -201,7 +203,8 @@ Every error prints `{"error": ..., "next": ...}`. Do what `next` says.
 | Answer | What it means | What to do |
 |---|---|---|
 | not signed in, 401 | No sign-in, or it ended | `login`, give the user the link, `login` again after Allow |
-| 402 | The plan is full, or the workspace's share of its organization | Stop, show usage, let the user choose; an owner gives more under Organization → Billing |
+| 402 | The plan is full | Stop, show usage, let the user choose: pay as you go or a bigger plan on the console's Billing page |
+| 402 `organization_share` | The workspace is using its share of its organization | Stop, show usage; an owner of the organization gives it more under Organization → Billing |
 | 402 `payg_off`, `payg_limit` | Past the plan with pay as you go off (Starter includes no resources), or past its monthly limit | Stop, show usage; ask the user to turn on pay as you go, choose a bigger plan or raise the limit on the console's Billing page |
 | 402 `card_required`, `payment_overdue` | A card is needed first, or a payment failed | Ask the user to add a card, or pay the open invoice, on the console's Billing page (rule 6); never pay or open a payment link yourself |
 | 403 `payg_not_offered` | Pay as you go isn't open to this account yet | Tell the user, and stop; no permission changes it |

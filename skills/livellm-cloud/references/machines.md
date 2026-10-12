@@ -304,4 +304,6 @@ Changing it (`set` with `{"vm": {"placement": …}}`, a Desktop App `{"desktop":
   the screen or Remote Desktop instead.
 - **The plan is full (402).** Stop and show usage. Suggest what could be removed
   and let the user decide; they can also turn on pay as you go or choose a
-  bigger plan on the console's Billing page.
+  bigger plan on the console's Billing page. On an organization's workspace
+  (`organization_share`) only an owner of the organization gives it more,
+  under Organization → Billing.

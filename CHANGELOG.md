@@ -20,10 +20,15 @@ a LiveLLM without these codes only the plain 402's wording changes.
   `payg_not_offered` (not open to the account yet: tell the user, and stop;
   no permission changes it, and profile import and copy keep this answer).
   Each code counts only on its own status.
-- A plain 402 says the user turns on pay as you go or chooses a bigger plan
-  on the Billing page. Rule 4, the refusal table,
+- A plain 402 (no code, or one `llc.py` doesn't know) says the user turns on
+  pay as you go or chooses a bigger plan on the Billing page, and no longer
+  names the organization. A 402 `organization_share` keeps an answer of its
+  own, decided by the code: an owner of the organization gives the workspace
+  more under Organization → Billing (pay as you go and plans are refused on an
+  organization's workspace for anyone, 409 `organization_billing`, so the
+  Billing page isn't named). Rule 4, the refusal table,
   `references/troubleshooting.md`, `references/workspace.md` and
-  `references/machines.md` say the same.
+  `references/machines.md` say the same, the personal case first.
 
 ## 1.14.0
 
