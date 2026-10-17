@@ -276,8 +276,15 @@ S3_LINK_FIELDS = ("endpoint", "host", "port", "region", "bucket", "accessKey", "
 S3_ONLY_FIELDS = ("endpoint", "region", "bucket", "accesskey", "secretkey")
 S3_PRESET = ("AWS_ENDPOINT_URL_S3: endpoint, AWS_ACCESS_KEY_ID: accessKey, AWS_SECRET_ACCESS_KEY: secretKey, "
              "AWS_REGION: region, S3_BUCKET: bucket")
-NO_S3_BACKUPS = ("object storage keeps one copy of its files and has no backups: leave backup out, don't back it up "
+NO_S3_BACKUPS = ("object storage has no backups (3 servers keep it running when a host is lost, they aren't a backup): "
+                 "leave backup out, don't back it up "
                  "or restore it, and tell the user if they wanted backups (references/databases.md)")
+
+
+S3_NEEDS_HOSTS = ("this LiveLLM has fewer than 3 hosts the workspace can use, so it can't run 3 servers: tell the user, and "
+                  "make it with 1 server (instances 1, or left out) only if they agree; it can't be moved to 3 later")
+S3_SERVERS_FIXED = ("an object storage's servers are fixed when it is made: keep its instances as they are. For the other "
+                    "shape, ask the user, then make a new object storage under another name and copy the files over")
 
 
 def object_storage_problem(status, message):
@@ -292,14 +299,25 @@ def object_storage_problem(status, message):
     if status == 502 and "new secret key wasn't stored" in low:
         return Problem(message, "the object storage still uses its old secret key: send the same set again with the new one "
                        "(the other changes are already in place); after two failures tell the user", EXIT_OTHER, status)
+    # 3 servers (one on each of 3 hosts) and their shape, fixed when made.
+    if status in (400, 409, 422):
+        if "object storage of 3 servers needs 3 hosts" in low:
+            return Problem(message, S3_NEEDS_HOSTS, EXIT_USER, status)
+        if "object storage of 3 servers" in low and "can't be pinned to one host" in low:
+            return Problem(message, "leave placement out (automatic) or choose a region: its 3 servers run on 3 hosts, "
+                           "one on each", EXIT_OTHER, status)
+        if "moving an object storage to 3 servers" in low or "can't go back to one server" in low:
+            return Problem(message, S3_SERVERS_FIXED, EXIT_USER, status)
     if status != 422:
         return None
     # A LiveLLM from before object storage knows only postgres and redis.
     if "must be postgres or redis" in low and "s3" in low:
         return Problem(message, "this LiveLLM offers no object storage yet: tell the user, and don't make a database in its place "
                        "unless they ask", EXIT_USER, status)
+    # A LiveLLM from before 3 servers runs object storage as one.
     if "object storage runs as one server" in low:
-        return Problem(message, "leave instances out (or 1): object storage runs as one server, one copy", EXIT_OTHER, status)
+        return Problem(message, "this LiveLLM runs object storage as one server only: leave instances out (or 1), and tell "
+                       "the user if they wanted 3", EXIT_OTHER, status)
     if "object storage runs version" in low:
         return Problem(message, 'leave version out (or "1"): object storage has one version', EXIT_OTHER, status)
     if "turning on the admin console needs the secret key" in low:
@@ -2066,7 +2084,7 @@ def restore(args):
     if kind != "storage":
         raise Problem(f"{args.id} has no backups", "only machines and databases have backups", EXIT_OTHER)
     if (w.get("storage") or {}).get("engine") == "s3":
-        raise Problem(f"{args.id} is an object storage: it has no backups yet, it keeps one copy of its files",
+        raise Problem(f"{args.id} is an object storage: it has no backups yet",
                       NO_S3_BACKUPS, EXIT_OTHER)
     if not args.as_id:
         raise Problem(f"a database restores into a new one; {args.id} keeps running as it is",

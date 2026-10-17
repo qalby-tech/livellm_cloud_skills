@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.15.0
+  version: 1.16.0
   documentation: https://docs.live-llm.com
 ---
 
@@ -191,8 +191,8 @@ repository, then `build web --wait`: it builds again and waits until the app
 is live, or prints why not. To go back to what worked: `builds web`, then
 `deploy web <build> --yes`.
 
-Machines and Postgres databases have backups (object storage keeps one copy
-and has none): `backups <id>` lists them, `backup <id>` takes one now. A database restores into a new one
+Machines and Postgres databases have backups (object storage, on 1 server or
+3, has none): `backups <id>` lists them, `backup <id>` takes one now. A database restores into a new one
 (`restore db <backup> --as db-restored --password-env VAR --yes`); a machine is put back in place
 and must be stopped first. Restore only when the user asked for it.
 

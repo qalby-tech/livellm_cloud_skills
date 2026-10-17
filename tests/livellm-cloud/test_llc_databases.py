@@ -188,6 +188,13 @@ class DatabasesAndTemplatesTest(unittest.TestCase):
         cases = {
             "workloads[0] (files): object storage has no backups yet — it keeps one copy of your files": "has no backups",
             "workloads[0] (files): object storage runs as one server — a second copy isn't offered yet": "leave instances out",
+            "workloads[0] (files): an object storage of 3 servers needs 3 hosts, one server on each, and this cluster has "
+            "1 host it can use — make it with 1 server": "make it with 1 server (instances 1, or left out) only if they agree",
+            "workloads[0] (files): an object storage of 3 servers runs on 3 hosts, one server on each, so it can't be "
+            "pinned to one host — choose automatic or a region": "leave placement out",
+            "workloads[0] (files): moving an object storage to 3 servers isn't available yet — make a new object storage "
+            "of 3 servers and copy the files over": "servers are fixed when it is made",
+            "workloads[0] (files): a replicated object storage can't go back to one server": "make a new object storage",
             "workloads[0] (files): object storage runs version 1": "leave version out",
             "workloads[0] (files): turning on the admin console needs the secret key in the same save — it signs in with it":
                 "access key llc.py ls shows",
@@ -220,7 +227,7 @@ class DatabasesAndTemplatesTest(unittest.TestCase):
         self.assertNotIn("platform trouble", p.next)
         # the backups routes answer 400 for an object storage
         p = llc.status_problem(400, {"error": "object storage has no backups yet: it keeps one copy of your files"})
-        self.assertIn("one copy", p.next)
+        self.assertIn("has no backups", p.next)
         self.assertIn("don't back it up", p.next)
         # a database's own field refusal and other 422s keep the plain answer
         for message in ("workloads[1] (web).pod.databases[0].env.D: a Redis database has no database",
@@ -265,7 +272,7 @@ class DatabasesAndTemplatesTest(unittest.TestCase):
         _, problem = self.run_llc(llc.restore, id="files", backup="b1", as_id="files-2", at=None,
                                   password_env="LLC_TEST_NEW_KEY", host=None, region=None, yes=True)
         self.assertIn("no backups", problem.message)
-        self.assertIn("one copy", problem.next)
+        self.assertIn("has no backups", problem.next)
         self.assertEqual(fake.writes(), [])
 
     def test_rm_when_the_answer_is_lost(self):

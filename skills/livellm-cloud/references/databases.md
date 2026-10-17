@@ -4,8 +4,8 @@ Postgres for data an app keeps, Redis for caches and queues, and object
 storage (S3) for files: uploads, media, exports, anything an app keeps in
 buckets. All three are managed: the platform keeps them running. Postgres
 takes the backups you ask for; you can back up now, restore a backup into a
-new database, and restart one. Object storage keeps one copy and has no
-backups yet ("Object storage (S3)", below).
+new database, and restart one. Object storage runs as 1 server or 3 and
+has no backups yet ("Object storage (S3)", below).
 
 A database for an app you are making is best made WITH the app, in one step,
 and linked to it: the platform makes the password and hands it to the app, so
@@ -210,12 +210,31 @@ python3 scripts/llc.py connect files
   either end, stored write-only like a database password. It can never be
   read back: generate it, hand it to what needs it, and show the user once.
 - `storageSize` is at least `1Gi` (default `5Gi`); it can grow, never shrink.
-  `instances` stays `1` and `version` stays `"1"` (422 otherwise).
+  `version` stays `"1"` (422 otherwise). `instances` is `1` or `3`
+  ("1 server or 3", below).
 - Region `us-east-1`. More buckets: make them in the RustFS console or with
   any S3 tool (`aws s3 mb s3://reports --endpoint-url ENDPOINT`, path-style).
 - `connect files` prints the access key, the region, the bucket, the private
   endpoint, and the public and console addresses when they are on (never the
   secret key). `ls` names its engine (`s3`).
+
+**1 server or 3.** Left out, `instances` is `1`: one server, the default.
+`"instances": 3` makes 3 servers, one on each of 3 hosts, that keep reading
+and writing if one host is lost. Choose 3 only when the user wants that:
+
+- It needs 3 hosts the workspace can use. With fewer the create is refused
+  ("needs 3 hosts, one server on each … make it with 1 server"): tell the
+  user, and make it with 1 server only if they agree. `hosts` shows the hosts.
+- It costs 3 times the `cpu` and `memory` (each server has them) and 1.5
+  times the `storageSize` (`storageSize` is the room for files), all counted
+  toward the plan. `storageSize` is then a whole number of `Mi`, `Gi` or `Ti`.
+- It can't be pinned to one host: leave `placement` out or choose a region.
+- **It can't be changed later**: 1 to 3 and 3 to 1 are refused (422). For the
+  other shape, ask the user, then make a new object storage under another name
+  and copy the files over.
+- `status files` shows `servers: {desired, ready}`; it keeps serving with one
+  server down. A restart restarts one server at a time.
+- 3 servers are not a backup: a file deleted is deleted on all of them.
 
 **Link it to an app.** The usual variables:
 
@@ -259,8 +278,8 @@ in the same `set` (the current one or a new one); a key nobody saw means
 agreeing a new one with the user. That save restarts the server for a few
 seconds, even with the current key: tell the user first.
 
-**One copy, no backups.** Deleting a file, a bucket or the object storage is
-final. A `backup` that is on is refused (422); `backups`, `backup` and
+**No backups.** Deleting a file, a bucket or the object storage is
+final, on 1 server or 3. A `backup` that is on is refused (422); `backups`, `backup` and
 `restore` are refused too. Keep in it only what the user accepts losing, or
 copies of files kept elsewhere, and say so when you make one.
 

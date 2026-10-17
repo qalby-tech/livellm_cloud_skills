@@ -5,6 +5,26 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.16.0
+
+Object storage of 1 server or 3. Against a LiveLLM without 3 servers only
+the hints change.
+
+- `references/databases.md` says an object storage runs as 1 server (the
+  default) or 3 (`"instances": 3`): 3 servers, one on each of 3 hosts, that
+  keep working if one host is lost. It needs 3 hosts the workspace can use,
+  costs 3 times the cpu and memory and 1.5 times the storage, can't be pinned
+  to one host, and can't be changed later (make a new one and copy the files
+  over). `status` shows `servers: {desired, ready}`. 3 servers are not a
+  backup.
+- `llc.py` answers the new refusals: too few hosts (tell the user; 1 server
+  only if they agree), pinned to one host (leave placement out or choose a
+  region), and a change of an existing store's servers (they are fixed: a
+  new object storage, with the user's agreement). One that runs object
+  storage as one server only says so.
+- Object storage's hints and SKILL.md say "has no backups" instead of "keeps
+  one copy".
+
 ## 1.15.0
 
 Pay as you go: Free includes no resources, and what is above a plan is billed
