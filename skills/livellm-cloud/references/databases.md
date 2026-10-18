@@ -65,7 +65,7 @@ connection details go into which environment variables:
 | `database` | `app` | — | — |
 | `username` | the login's name | — | — |
 | `password` | the password | the password | — |
-| `url` | `postgres://user:password@host:5432/app` | `redis://:password@host:6379` | — |
+| `url` | `postgres://user:password@host:5432/app` | `redis://default:password@host:6379` | — |
 | `endpoint` | — | — | `http://<private address>:9000` |
 | `region` | — | — | `us-east-1` |
 | `bucket` | — | — | `app` |
