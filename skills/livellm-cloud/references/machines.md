@@ -324,8 +324,9 @@ Changing it (`set` with `{"vm": {"placement": …}}`, a Desktop App `{"desktop":
   cores run at different clock speeds."** (`core_speeds_mixed`). Too few
   dedicated cores of one speed are free; the next step says how many are. Ask
   the user: that many cores (`cpus`), or the cores they asked for at mixed
-  speeds (`"mixedSpeeds": true`). Send it again with their choice, never
-  unchanged.
+  speeds (`"mixedSpeeds": true`). Never offer 0, nor fewer than the machine
+  runs on (2 for a desktop machine or Windows 11): then it is mixed speeds or
+  another `coreSpeed`. Send it again with their choice, never unchanged.
 - **422 "No server this machine may run on has cores at 3 GHz."**
   (`core_speed_unknown`). `llc.py cores` lists the speeds there are: ask the
   user for one, or leave `coreSpeed` out.
