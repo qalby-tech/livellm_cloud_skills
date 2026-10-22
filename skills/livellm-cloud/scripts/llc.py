@@ -415,6 +415,26 @@ def with_core_floor(p, floor):
     return p
 
 
+# The refusals of a machine's cores of one speed, which name the machine.
+CORES_CODES = ("core_speed_short", "core_speeds_mixed", "core_speed_unknown")
+
+
+def for_another_machine(p, machine):
+    """A cores refusal (CORES_CODES) that names another machine than the one
+    a create or a set sent (machine; the API names it trimmed) worded again:
+    cpus, mixedSpeeds or coreSpeed in what was sent would change that one,
+    not the machine named, so none is offered (as the console and the CLI).
+    True when it was; any other problem is left as it is."""
+    named = p.payload.get("workload") if p.refusal in CORES_CODES else None
+    named = named.strip() if isinstance(named, str) else ""
+    sent = machine.strip() if isinstance(machine, str) else ""
+    if not named or not sent or named == sent:
+        return False
+    p.next = (f"this is about {named}, another machine, not {sent}: no change to what you sent helps; tell the user, "
+              "and stop; never send it again unchanged")
+    return True
+
+
 def browser_problem(status, code, message):
     """A browser's proxy or profile refusal, with what to do about it; None
     for any other answer. A refusal is known by its code, or by the same word
@@ -833,6 +853,8 @@ def create(args):
     try:
         request("POST", f"/v1/workloads/{urllib.parse.quote(args.type)}", body, token=tok)
     except Problem as p:
+        if for_another_machine(p, body.get("id")):
+            raise
         raise with_core_floor(p, core_floor(args.type, body)) from None
     answer = {"created": body.get("id"), "type": args.type,
               "next": f"llc.py wait {body.get('id')} then llc.py connect {body.get('id')}"}
@@ -1102,6 +1124,9 @@ def set_settings(args):
     try:
         patch_workload(args.id, changes, tok)
     except Problem as p:
+        # another machine's refusal: nothing to read for this one's floor
+        if for_another_machine(p, args.id):
+            raise
         if p.refusal in ("core_speed_short", "core_speeds_mixed"):
             # the machine's kind and edition (fixed when made), read only now
             try:

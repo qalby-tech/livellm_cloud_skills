@@ -265,6 +265,38 @@ class CoresCommand(unittest.TestCase):
         self.assertIn("tell the user, and stop", problem.next)
         self.assertEqual([c[:2] for c in fake.calls], [("PATCH", "/v1/workloads/desk")])
 
+    def test_a_refusal_for_another_machine_offers_no_change_to_the_one_sent(self):
+        # cpus, mixedSpeeds or coreSpeed in what was sent would change the
+        # machine sent, not the one the refusal names: nothing is offered,
+        # and a set reads nothing for a floor
+        for status, payload in ((409, SHORT), (409, MIXED), (422, UNKNOWN)):
+            other = {**payload, "workload": "other"}
+            fake = self.use(refuse=(status, other))
+            f = self.machine_file({"id": "box", "cpus": 8, "dedicatedCores": True, "coreSpeed": 5700})
+            _, problem = self.run_llc(llc.create, json=f, type="vm-ubuntu")
+            fake_set = self.use(refuse=(status, other))
+            _, set_problem = self.run_llc(llc.set_settings, json=self.machine_file({"vm": {"cpus": 8}}), id="desk")
+            for p, sent in ((problem, "box"), (set_problem, "desk")):
+                self.assertEqual((p.message, p.status, p.refusal, p.code), (payload["error"], status, payload["code"], llc.EXIT_USER))
+                self.assertIn(f"this is about other, another machine, not {sent}", p.next)
+                self.assertIn("never send it again unchanged", p.next)
+                for word in ('"cpus"', "mixedSpeeds", "coreSpeed", "send the same"):
+                    self.assertNotIn(word, p.next, (payload["code"], sent))
+            self.assertEqual([c[:2] for c in fake.calls], [("POST", "/v1/workloads/vm-ubuntu")])
+            self.assertEqual([c[:2] for c in fake_set.calls], [("PATCH", "/v1/workloads/desk")])
+        # the machine sent (the API names it trimmed), or none named: the
+        # choice as before
+        for body_id, payload in (("box", SHORT), (" box ", SHORT), ("box", {k: v for k, v in SHORT.items() if k != "workload"})):
+            self.use(refuse=(409, payload))
+            f = self.machine_file({"id": body_id, "cpus": 8, "dedicatedCores": True, "coreSpeed": 5700})
+            _, problem = self.run_llc(llc.create, json=f, type="vm-ubuntu")
+            self.assertIn('6 cores of one speed ("cpus": 6), or 8 cores at mixed speeds', problem.next, (body_id, payload))
+        # server_full names the kind, not a machine to compare: as it is
+        self.use(refuse=(409, {**APP_NO_ROOM, "workload": "other"}))
+        _, problem = self.run_llc(llc.set_settings, json=self.machine_file({"vm": {"cpus": 8}}), id="desk")
+        self.assertIn("tell the user, and stop", problem.next)
+        self.assertNotIn("another machine", problem.next)
+
     def test_a_livellm_without_dedicated_cores_says_so(self):
         self.use(status=404, answer={"error": "404 page not found"})
         _, problem = self.run_llc(llc.cores)
