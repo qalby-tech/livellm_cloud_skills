@@ -91,6 +91,7 @@ class Problem(Exception):
         self.oauth = oauth  # the OAuth error code of a sign-in endpoint's refusal
         self.refusal = ""  # the API's code for this refusal (code above is the exit code)
         self.missing = []  # a create from a template: the secrets it still needs
+        self.payload = {}  # the API's answer, for a command that words it again with what it knows
 
 
 def out(value):
@@ -142,6 +143,7 @@ def http_problem(status, payload):
     p.refusal = payload.get("code") if isinstance(payload.get("code"), str) else ""
     missing = payload.get("missing")
     p.missing = missing if isinstance(missing, list) else []
+    p.payload = payload
     return p
 
 
@@ -349,15 +351,18 @@ def object_storage_problem(status, message):
     return None
 
 
-def cores_problem(status, code, message, payload):
+def cores_problem(status, code, message, payload, floor=1):
     """A machine's cores refused, by the API's code: too few dedicated cores
     of one clock speed free (409 core_speed_short, core_speeds_mixed) or a
     speed no server has (422 core_speed_unknown); or no server with room for
     a resource of any kind, a machine, an app, a database or a browser (409
     server_full); None for any other answer. The words are the API's own. Fewer
-    cores or mixed speeds changes what the user asked for, so they choose."""
+    cores or mixed speeds changes what the user asked for, so they choose.
+    The cores that fit are offered only when there are some and at least the
+    machine's floor (core_floor: a create or a set that knows the kind gives
+    it), never 0 and never fewer than the machine runs on."""
     fit, asked = payload.get("fit"), payload.get("cores")
-    fit = fit if isinstance(fit, int) and fit > 0 else 0
+    fit = fit if isinstance(fit, int) and fit >= max(floor, 1) else 0
     count = f"{asked} cores" if isinstance(asked, int) and asked > 0 else "the same cores"
     mixed = f'{count} at mixed speeds ("mixedSpeeds": true)'
     if status == 409 and code in ("core_speed_short", "core_speeds_mixed"):
@@ -373,6 +378,36 @@ def cores_problem(status, code, message, payload):
                        "less memory, fewer copies) or another placement may fit if they want that; never delete to "
                        "make room", EXIT_USER, status)
     return None
+
+
+# The fewest cores a machine runs on, by kind, as the API holds them (a
+# size under it is refused): a desktop machine and Windows 11 (the edition a
+# vm-windows gets when it names none) 2; a server and Windows Server 1, the
+# least any machine has.
+DESKTOP_CORE_FLOOR = 2
+
+
+def core_floor(typ, vm):
+    """The fewest cores a machine of type typ, with its settings vm (a create's
+    flat body, a set's stored vm block), runs on; an unknown kind gets the
+    most any machine needs, so nothing below a floor is ever offered."""
+    if typ is None:
+        return DESKTOP_CORE_FLOOR
+    edition = (vm.get("windowsEdition") if isinstance(vm, dict) else None) or "desktop"
+    if typ == "vm-ubuntu-desktop" or (typ == "vm-windows" and edition != "server"):
+        return DESKTOP_CORE_FLOOR
+    return 1
+
+
+def with_core_floor(p, floor):
+    """A cores refusal (409 core_speed_short, core_speeds_mixed) worded again
+    with the machine's floor: fewer cores than it runs on are not offered.
+    Any other problem is returned as it is."""
+    if p.refusal in ("core_speed_short", "core_speeds_mixed") and floor > 1:
+        again = cores_problem(p.status, p.refusal, p.message, p.payload, floor)
+        if again:
+            p.next = again.next
+    return p
 
 
 def browser_problem(status, code, message):
@@ -790,7 +825,10 @@ def create(args):
         out(answer)
         return
     tok = token()
-    request("POST", f"/v1/workloads/{urllib.parse.quote(args.type)}", body, token=tok)
+    try:
+        request("POST", f"/v1/workloads/{urllib.parse.quote(args.type)}", body, token=tok)
+    except Problem as p:
+        raise with_core_floor(p, core_floor(args.type, body)) from None
     answer = {"created": body.get("id"), "type": args.type,
               "next": f"llc.py wait {body.get('id')} then llc.py connect {body.get('id')}"}
     if args.type in ENGINE_TYPES and isinstance(body, dict) and body.get("engine") == "camoufox":
@@ -1056,7 +1094,17 @@ def set_settings(args):
             x.get("id") == args.id and x.get("type") == "storage" for x in workspace_workloads(tok))
         if is_db:
             raise db_reach_problem(args.id, args.json)
-    patch_workload(args.id, changes, tok)
+    try:
+        patch_workload(args.id, changes, tok)
+    except Problem as p:
+        if p.refusal in ("core_speed_short", "core_speeds_mixed"):
+            # the machine's kind and edition (fixed when made), read only now
+            try:
+                w = next((x for x in workspace_workloads(tok) if x.get("id") == args.id), None)
+            except Problem:
+                w = None
+            raise with_core_floor(p, core_floor(w.get("type"), w.get("vm")) if w else core_floor(None, None)) from None
+        raise
     out({"changed": args.id, **({"delete": reminder} if reminder else {})})
 
 

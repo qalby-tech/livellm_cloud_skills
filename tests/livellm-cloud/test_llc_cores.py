@@ -14,6 +14,7 @@ import importlib.util
 import io
 import json
 import sys
+import tempfile
 import threading
 import types
 import unittest
@@ -61,6 +62,36 @@ class CoresRefusals(unittest.TestCase):
         self.assertIn("another coreSpeed (llc.py cores", p.next)
         self.assertNotIn('"cpus"', p.next)
 
+    def test_none_free_in_the_apis_words_for_none_never_offers_0_cores(self):
+        # the API may word none free as "No cores at ... are available", and
+        # leave fit out of a core_speeds_mixed: never "0 cores" or "cpus": 0
+        for status, payload in (
+                (409, {**SHORT, "error": "No cores at 5.7 GHz are available. Continue with mixed core speeds?", "fit": 0}),
+                (409, {k: v for k, v in MIXED.items() if k != "fit"})):
+            p = llc.http_problem(status, payload)
+            self.assertEqual(p.message, payload["error"])
+            self.assertIn(f'{payload["cores"]} cores at mixed speeds ("mixedSpeeds": true)', p.next)
+            self.assertNotIn('"cpus"', p.next)
+            self.assertNotIn("0 cores of one speed", p.next)
+
+    def test_never_fewer_cores_than_the_machine_runs_on(self):
+        # a desktop machine or Windows 11 runs on 2 cores at least: 1 that
+        # fits is not offered, 2 is
+        one = {**SHORT, "error": "Only 1 core at 5.7 GHz is available. Continue with mixed core speeds?", "fit": 1}
+        for payload in (one, {**MIXED, "fit": 1}):
+            p = llc.cores_problem(409, payload["code"], payload["error"], payload, floor=2)
+            self.assertNotIn('"cpus"', p.next, payload)
+            self.assertIn("at mixed speeds", p.next)
+            self.assertIn('"cpus": 1', llc.cores_problem(409, payload["code"], payload["error"], payload).next)
+        p = llc.cores_problem(409, "core_speed_short", SHORT["error"], {**SHORT, "fit": 2}, floor=2)
+        self.assertIn('2 cores of one speed ("cpus": 2)', p.next)
+
+    def test_core_floor_by_kind(self):
+        for typ, vm, floor in (("vm-ubuntu", {}, 1), ("vm-ubuntu-desktop", {}, 2), ("vm-windows", {}, 2),
+                               ("vm-windows", {"windowsEdition": "desktop"}, 2), ("vm-windows", {"windowsEdition": "server"}, 1),
+                               ("vm-windows", None, 2), ("pod", {}, 1), (None, None, 2)):
+            self.assertEqual(llc.core_floor(typ, vm), floor, (typ, vm))
+
     def test_a_speed_no_server_has_points_at_the_speeds_there_are(self):
         p = llc.http_problem(422, UNKNOWN)
         self.assertEqual((p.code, p.status, p.message), (llc.EXIT_USER, 422, UNKNOWN["error"]))
@@ -89,6 +120,8 @@ class CoresRefusals(unittest.TestCase):
 WORKSPACE = {"spec": {"workloads": [
     {"id": "fast", "type": "vm-ubuntu", "vm": {"cpus": 8, "dedicatedCores": True}},
     {"id": "desk", "type": "vm-ubuntu-desktop", "vm": {"cpus": 4}},
+    {"id": "win", "type": "vm-windows", "vm": {"cpus": 4, "windowsEdition": "desktop"}},
+    {"id": "winsrv", "type": "vm-windows", "vm": {"cpus": 4, "windowsEdition": "server"}},
     {"id": "web", "type": "pod", "pod": {"image": "nginx"}},
 ]}}
 STATUS = {"workloads": [
@@ -100,9 +133,11 @@ STATUS = {"workloads": [
 
 class FakeAPI:
     """GET /v1/machine-cores answers `answer` with `status`, GET /v1/workspace
-    WORKSPACE and GET /v1/status STATUS; records every call."""
+    WORKSPACE (500 with `workspace_down`) and GET /v1/status STATUS; a POST
+    or PATCH answers `refuse` (status, body) when given, else 201 {}; records
+    every call."""
 
-    def __init__(self, status=200, answer=None):
+    def __init__(self, status=200, answer=None, refuse=None, workspace_down=False):
         self.calls = []
         fake = self
 
@@ -112,10 +147,20 @@ class FakeAPI:
 
             def do_GET(self):
                 fake.calls.append((self.command, self.path))
+                if self.path == "/v1/workspace" and workspace_down:
+                    self.reply(500, {"error": "down"})
+                    return
                 if self.path in ("/v1/workspace", "/v1/status"):
                     self.reply(200, WORKSPACE if self.path == "/v1/workspace" else STATUS)
                     return
                 self.reply(status, answer if answer is not None else {})
+
+            def write(self):
+                n = int(self.headers.get("content-length") or 0)
+                fake.calls.append((self.command, self.path, json.loads(self.rfile.read(n) or b"{}")))
+                self.reply(*(refuse or (201, {})))
+
+            do_POST = do_PATCH = write
 
             def reply(self, status, answer):
                 raw = json.dumps(answer).encode()
@@ -132,8 +177,8 @@ class FakeAPI:
 
 class CoresCommand(unittest.TestCase):
 
-    def use(self, status=200, answer=None):
-        fake = FakeAPI(status, answer)
+    def use(self, status=200, answer=None, **kw):
+        fake = FakeAPI(status, answer, **kw)
         self.addCleanup(fake.server.server_close)
         self.addCleanup(fake.server.shutdown)
         saved = {k: getattr(llc, k) for k in ("API", "API_KEY")}
@@ -164,7 +209,54 @@ class CoresCommand(unittest.TestCase):
         res, problem = self.run_llc(llc.ls, type=None)
         self.assertIsNone(problem)
         got = {r["id"]: r.get("cores") for r in res["resources"]}
-        self.assertEqual(got, {"fast": {"speedMHz": 5700}, "desk": {"mixed": True, "message": MIXED["error"]}, "web": None})
+        self.assertEqual(got, {"fast": {"speedMHz": 5700}, "desk": {"mixed": True, "message": MIXED["error"]}, "win": None,
+                               "winsrv": None, "web": None})
+
+    def machine_file(self, body):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = Path(tmp.name) / "machine.json"
+        path.write_text(json.dumps(body))
+        return str(path)
+
+    def test_a_create_refused_offers_no_fewer_cores_than_the_kind_runs_on(self):
+        # 1 core of 5.7 GHz fits: offered for a server and Windows Server,
+        # never for a desktop machine or Windows 11 (2 at least)
+        one = {**SHORT, "error": "Only 1 core at 5.7 GHz is available. Continue with mixed core speeds?", "fit": 1}
+        for typ, body, offered in (("vm-ubuntu", {}, True), ("vm-ubuntu-desktop", {}, False),
+                                   ("vm-windows", {}, False), ("vm-windows", {"windowsEdition": "server"}, True)):
+            fake = self.use(refuse=(409, one))
+            f = self.machine_file({"id": "box", "cpus": 8, "dedicatedCores": True, "coreSpeed": 5700, **body})
+            _, problem = self.run_llc(llc.create, json=f, type=typ)
+            self.assertEqual((problem.message, problem.status, problem.refusal), (one["error"], 409, "core_speed_short"))
+            self.assertEqual('1 cores of one speed ("cpus": 1)' in problem.next, offered, (typ, body, problem.next))
+            self.assertIn('8 cores at mixed speeds ("mixedSpeeds": true)', problem.next)
+            self.assertEqual([c[:2] for c in fake.calls], [("POST", f"/v1/workloads/{typ}")])
+
+    def test_a_set_refused_reads_the_machines_kind_for_its_floor(self):
+        one = {**MIXED, "fit": 1, "cores": 6}
+        f = self.machine_file({"vm": {"cpus": 6, "dedicatedCores": True}})
+        for wid, offered in (("fast", True), ("desk", False), ("win", False), ("winsrv", True)):
+            fake = self.use(refuse=(409, {**one, "workload": wid}))
+            _, problem = self.run_llc(llc.set_settings, json=f, id=wid)
+            self.assertEqual(problem.refusal, "core_speeds_mixed")
+            self.assertEqual('"cpus": 1' in problem.next, offered, (wid, problem.next))
+            self.assertIn('6 cores at mixed speeds ("mixedSpeeds": true)', problem.next)
+            self.assertEqual([c[:2] for c in fake.calls], [("PATCH", f"/v1/workloads/{wid}"), ("GET", "/v1/workspace")])
+        # 2 that fit are offered to a desktop machine
+        self.use(refuse=(409, {**one, "fit": 2, "workload": "desk"}))
+        _, problem = self.run_llc(llc.set_settings, json=f, id="desk")
+        self.assertIn('2 cores of one speed ("cpus": 2)', problem.next)
+        # the kind unread: the most any machine needs
+        self.use(refuse=(409, {**one, "workload": "fast"}), workspace_down=True)
+        _, problem = self.run_llc(llc.set_settings, json=f, id="fast")
+        self.assertEqual(problem.message, one["error"])
+        self.assertNotIn('"cpus"', problem.next)
+        # any other refusal of a set is left as it is, with no read
+        fake = self.use(refuse=(409, FULL))
+        _, problem = self.run_llc(llc.set_settings, json=f, id="desk")
+        self.assertIn("tell the user, and stop", problem.next)
+        self.assertEqual([c[:2] for c in fake.calls], [("PATCH", "/v1/workloads/desk")])
 
     def test_a_livellm_without_dedicated_cores_says_so(self):
         self.use(status=404, answer={"error": "404 page not found"})
