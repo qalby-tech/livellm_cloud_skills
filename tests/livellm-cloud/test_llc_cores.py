@@ -86,6 +86,13 @@ class CoresRefusals(unittest.TestCase):
         p = llc.cores_problem(409, "core_speed_short", SHORT["error"], {**SHORT, "fit": 2}, floor=2)
         self.assertIn('2 cores of one speed ("cpus": 2)', p.next)
 
+    def test_one_core_is_one_core(self):
+        p = llc.http_problem(409, {**MIXED, "cores": 1, "fit": 0})
+        self.assertIn('1 core at mixed speeds ("mixedSpeeds": true)', p.next)
+        p = llc.http_problem(409, {**SHORT, "error": "Only 1 core at 5.7 GHz is available. Continue with mixed core speeds?",
+                                   "fit": 1})
+        self.assertIn('1 core of one speed ("cpus": 1), or 8 cores at mixed speeds', p.next)
+
     def test_core_floor_by_kind(self):
         for typ, vm, floor in (("vm-ubuntu", {}, 1), ("vm-ubuntu-desktop", {}, 2), ("vm-windows", {}, 2),
                                ("vm-windows", {"windowsEdition": "desktop"}, 2), ("vm-windows", {"windowsEdition": "server"}, 1),
@@ -229,7 +236,7 @@ class CoresCommand(unittest.TestCase):
             f = self.machine_file({"id": "box", "cpus": 8, "dedicatedCores": True, "coreSpeed": 5700, **body})
             _, problem = self.run_llc(llc.create, json=f, type=typ)
             self.assertEqual((problem.message, problem.status, problem.refusal), (one["error"], 409, "core_speed_short"))
-            self.assertEqual('1 cores of one speed ("cpus": 1)' in problem.next, offered, (typ, body, problem.next))
+            self.assertEqual('1 core of one speed ("cpus": 1)' in problem.next, offered, (typ, body, problem.next))
             self.assertIn('8 cores at mixed speeds ("mixedSpeeds": true)', problem.next)
             self.assertEqual([c[:2] for c in fake.calls], [("POST", f"/v1/workloads/{typ}")])
 

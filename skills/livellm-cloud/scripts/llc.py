@@ -351,6 +351,11 @@ def object_storage_problem(status, message):
     return None
 
 
+def cores_word(n):
+    """A count of cores as the console words it: "1 core", "6 cores"."""
+    return "1 core" if n == 1 else f"{n} cores"
+
+
 def cores_problem(status, code, message, payload, floor=1):
     """A machine's cores refused, by the API's code: too few dedicated cores
     of one clock speed free (409 core_speed_short, core_speeds_mixed) or a
@@ -363,10 +368,10 @@ def cores_problem(status, code, message, payload, floor=1):
     it), never 0 and never fewer than the machine runs on."""
     fit, asked = payload.get("fit"), payload.get("cores")
     fit = fit if isinstance(fit, int) and fit >= max(floor, 1) else 0
-    count = f"{asked} cores" if isinstance(asked, int) and asked > 0 else "the same cores"
+    count = cores_word(asked) if isinstance(asked, int) and asked > 0 else "the same cores"
     mixed = f'{count} at mixed speeds ("mixedSpeeds": true)'
     if status == 409 and code in ("core_speed_short", "core_speeds_mixed"):
-        choice = f'{fit} cores of one speed ("cpus": {fit}), or {mixed}' if fit else \
+        choice = f'{cores_word(fit)} of one speed ("cpus": {fit}), or {mixed}' if fit else \
             f"{mixed}, or another coreSpeed (llc.py cores lists what fits)"
         return Problem(message, f"tell the user and ask which they want: {choice}; then send the same create or set "
                        "again with that change, never unchanged", EXIT_USER, status)
