@@ -71,9 +71,12 @@ or the one `"coreSpeed"` asks for, in MHz (`5700` is 5.7 GHz).
 dedicated cores of each fit on one server; `showSpeed: false` means every
 server runs at one speed, so leave `coreSpeed` out. `"mixedSpeeds": true`
 keeps the count when no one speed has it free (the cores may then run at
-different speeds). A set that leaves these out keeps them, `false` (or
-`coreSpeed` 0) clears one, and they take effect at the machine's next restart
-(ask the user before `restart`). `llc.py ls` shows the clock a running
+different speeds). A set takes them in the machine's block
+(`{"vm": {"dedicatedCores": true}}`); one that leaves them out keeps them,
+`false` (or `coreSpeed` 0) clears one, and they take effect at the machine's
+next restart (ask the user before `restart`). A machine kept on mixed speeds
+stays on them whatever `coreSpeed` says: a new speed goes with
+`"mixedSpeeds": false` in the same set. `llc.py ls` shows the clock a running
 machine's cores got (`cores.speedMHz`), or `cores.mixed` with the words for
 it.
 

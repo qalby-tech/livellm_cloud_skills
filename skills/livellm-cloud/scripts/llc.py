@@ -351,8 +351,9 @@ def object_storage_problem(status, message):
 
 def cores_problem(status, code, message, payload):
     """A machine's cores refused, by the API's code: too few dedicated cores
-    of one clock speed free (409 core_speed_short, core_speeds_mixed), a speed
-    no server has (422 core_speed_unknown), or no server with room for it (409
+    of one clock speed free (409 core_speed_short, core_speeds_mixed) or a
+    speed no server has (422 core_speed_unknown); or no server with room for
+    a resource of any kind, a machine, an app, a database or a browser (409
     server_full); None for any other answer. The words are the API's own. Fewer
     cores or mixed speeds changes what the user asked for, so they choose."""
     fit, asked = payload.get("fit"), payload.get("cores")
@@ -368,8 +369,8 @@ def cores_problem(status, code, message, payload):
         return Problem(message, "no server here has cores at that speed: llc.py cores lists the speeds there are; ask "
                        "the user for one, or leave coreSpeed out (any one speed)", EXIT_USER, status)
     if status == 409 and code == "server_full":
-        return Problem(message, "no server has room for this machine: tell the user, and stop; "
-                       "fewer cores or less memory, or another placement, may fit if they want that; never delete to "
+        return Problem(message, "no server has room for it: tell the user, and stop; a smaller size (fewer cores, "
+                       "less memory, fewer copies) or another placement may fit if they want that; never delete to "
                        "make room", EXIT_USER, status)
     return None
 

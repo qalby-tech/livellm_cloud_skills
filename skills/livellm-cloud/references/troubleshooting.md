@@ -64,9 +64,10 @@ first start never finished, and retrying won't help. Ask the user before
 deleting it and creating it again. A 409 saying billing for this workspace is
 managed by its organization: tell the user an owner changes the plan in the
 console, and stop. A machine's cores refused (`core_speed_short`,
-`core_speeds_mixed`: too few dedicated cores of one speed free; `server_full`:
-no server has room) won't change on a retry either: see
-`references/machines.md`.
+`core_speeds_mixed`: too few dedicated cores of one speed free) won't change
+on a retry either: see `references/machines.md`. Nor will `server_full` (no
+server has room for the machine, app, database or browser): tell the user,
+and stop; never delete anything to make room.
 
 **422.** A value was refused, and the message names it. Fix that value. Never
 send the same request again hoping for a different answer.

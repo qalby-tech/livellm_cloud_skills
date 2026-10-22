@@ -35,6 +35,8 @@ UNKNOWN = {"error": "No server this machine may run on has cores at 3 GHz.", "co
            "workload": "box", "cores": 8, "fit": 0, "speedMHz": 3000}
 FULL = {"error": "This server is full: it has no room for this machine.", "code": "server_full", "workload": "box"}
 NO_ROOM = {"error": "No server has room for this machine.", "code": "server_full", "workload": "box"}
+# Every kind that reserves on a server is held to its fill limit, an app too.
+APP_NO_ROOM = {"error": "No server has room for this app.", "code": "server_full", "workload": "web"}
 
 SPEEDS = {"showSpeed": True, "speeds": [{"speedMHz": 5700, "fit": 16}, {"speedMHz": 4400, "fit": 16}], "dedicatedFit": 16}
 
@@ -66,12 +68,14 @@ class CoresRefusals(unittest.TestCase):
         self.assertIn("leave coreSpeed out", p.next)
 
     def test_no_server_with_room_tells_the_user_and_stops(self):
-        for payload in (FULL, NO_ROOM):
+        for payload in (FULL, NO_ROOM, APP_NO_ROOM):
             p = llc.http_problem(409, payload)
             self.assertEqual((p.code, p.status, p.message), (llc.EXIT_USER, 409, payload["error"]), payload)
             self.assertIn("tell the user, and stop", p.next)
             self.assertIn("never delete to make room", p.next)
             self.assertNotIn("retry", p.next)
+            # the words name the kind; what to do is the same for each
+            self.assertNotIn("machine", p.next)
 
     def test_known_by_the_code_alone(self):
         # the same words without the code are any other 409; the code without
