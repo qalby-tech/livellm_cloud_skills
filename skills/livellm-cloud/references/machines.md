@@ -252,7 +252,9 @@ python3 scripts/llc.py reach node-1 --add node-2,node-3 --yes
 Each of these lets resources in: ask the user first (rule 11). `["*"]` (the
 whole workspace) always needs their agreement. `reach ID` lists the names a
 machine answers on inside: `<res>` for SSH and raw ports, `<res>-http`,
-`<res>-internal` and `<res>-rdp`. See `references/inside-access.md`.
+`<res>-internal` and `<res>-rdp`, and `<res>-host` (no port): the machine
+itself on every port, TCP and UDP, for the resources its `reachableFrom` lets
+in. See `references/inside-access.md`.
 
 A database is reached only by what links it. A machine or a Desktop App that
 uses one links it, `"databases": [{"id": "db"}]` in the create file or

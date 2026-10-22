@@ -1228,7 +1228,8 @@ def inside_addresses(res, w):
             found.append(e)
         return found
     if t.startswith("vm-"):
-        found = [hp(res, 22, name="ssh")]
+        # <res>-host, with no port, is the machine itself on every port, TCP and UDP
+        found = [hp(res, 22, name="ssh"), {"host": f"{res}-host"}]
         for p in (w.get("vm") or {}).get("ports") or []:
             n = (p or {}).get("port")
             if not n:

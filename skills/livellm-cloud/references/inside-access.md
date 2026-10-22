@@ -174,7 +174,9 @@ an agent on the console's Agents page, for an API key on the Keys page.
   it`, `drives it` (a Browser API; `through` is what can drive the browser
   through it), `same app`.
 - `addresses` are the names that answer inside the workspace, for the
-  resources allowed. They are left out when nothing may reach it.
+  resources allowed. They are left out when nothing may reach it. A machine's
+  include `<res>-host` with no port: the machine itself on every port, TCP and
+  UDP, for whatever its `reachableFrom` lets in.
 - `reachableFrom: null` with a `note`: a resource that has no setting yet. Set
   the whole list with `--from` or `--none`; `--add` and `--remove` are refused
   on it.

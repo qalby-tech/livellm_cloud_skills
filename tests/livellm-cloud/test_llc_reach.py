@@ -439,6 +439,20 @@ class ReachTest(unittest.TestCase):
             _, problem, _ = self.run_llc(llc.reach, **reach_args(id="files", yes=True, **kw))
             self.assertIn("llc.py link APP files --yes", problem.next, kw)
 
+    def test_a_machine_answers_on_its_own_name_on_every_port_after_ssh(self):
+        # <res>-host has no port: the machine itself on every port, TCP and UDP,
+        # right after <res> as the platform lists it; the ports keep their names
+        vm = {"type": "vm-ubuntu", "vm": {"ports": [{"name": "web", "port": 8080}, {"name": "dns", "port": 53, "udp": True},
+                                                     {"name": "etcd", "port": 2380, "internal": True}]}}
+        self.assertEqual(llc.inside_addresses("acme-box", vm), [
+            {"host": "acme-box", "port": 22, "name": "ssh"}, {"host": "acme-box-host"},
+            {"host": "acme-box-http", "port": 8080, "name": "web"},
+            {"host": "acme-box", "port": 53, "name": "dns", "protocol": "udp"},
+            {"host": "acme-box-internal", "port": 2380, "name": "etcd"}])
+        self.assertEqual(llc.inside_addresses("acme-win", {"type": "vm-windows"}), [
+            {"host": "acme-win", "port": 22, "name": "ssh"}, {"host": "acme-win-host"},
+            {"host": "acme-win-rdp", "port": 3389, "name": "rdp"}])
+
     def test_a_databases_setting_is_never_changed_and_the_answer_points_at_link(self):
         fake = self.use()
         for kw in ({"source": "web"}, {"source": "*"}, {"none": True}, {"add": "api"}, {"remove": "web"}):
