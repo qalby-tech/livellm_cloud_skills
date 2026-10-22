@@ -137,6 +137,13 @@ python3 scripts/llc.py template use small-box box-2 --secret credentials.usernam
 - Missing ones are refused (422) with the list of paths, and `next` spells
   the flags. Generate passwords yourself; ask the user for keys and tokens
   that belong to them. Never invent one.
+- A machine's template refused for its cores (`core_speed_short`,
+  `core_speeds_mixed`, `core_speed_unknown`) made nothing, so `set` can't
+  help, and `use` takes no `cpus`, `coreSpeed` or `mixedSpeeds`. Ask the user,
+  then create the machine directly with their choice: `template show`'s `vm`
+  settings, flat, with the new `id` and `credentials`
+  (`references/machines.md`). A new template saved from a machine can keep
+  fewer cores or another speed, never mixed speeds.
 - It counts toward the plan like any other create; make one only when the
   user asked.
 
