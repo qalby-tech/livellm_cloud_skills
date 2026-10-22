@@ -300,6 +300,18 @@ class CoresCommand(unittest.TestCase):
         self.assertIn("tell the user, and stop", problem.next)
         self.assertNotIn("another machine", problem.next)
 
+    def test_a_create_whose_file_isnt_an_object_keeps_the_apis_refusal(self):
+        # no id to compare with the machine a cores refusal names: the API's
+        # answer comes back as it is, never a crash
+        bad = {"error": "bad JSON: json: cannot unmarshal array into Go value of type map[string]interface {}"}
+        for status, payload in ((400, bad), (409, {**SHORT, "workload": "other"})):
+            fake = self.use(refuse=(status, payload))
+            _, problem = self.run_llc(llc.create, json=self.machine_file([{"id": "box", "cpus": 8}]), type="vm-ubuntu")
+            self.assertIsNotNone(problem, payload)
+            self.assertEqual((problem.message, problem.status), (payload["error"], status))
+            self.assertNotIn("another machine", problem.next)
+            self.assertEqual([c[:2] for c in fake.calls], [("POST", "/v1/workloads/vm-ubuntu")])
+
     def use_template(self, t, refuse):
         """llc.py template use T box --yes, LiveLLM keeping the template t and
         refusing its create with refuse (status, body)."""

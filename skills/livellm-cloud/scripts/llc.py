@@ -890,7 +890,7 @@ def create(args):
     try:
         request("POST", f"/v1/workloads/{urllib.parse.quote(args.type)}", body, token=tok)
     except Problem as p:
-        if for_another_machine(p, body.get("id")):
+        if for_another_machine(p, body.get("id") if isinstance(body, dict) else None):
             raise
         raise with_core_floor(p, core_floor(args.type, body)) from None
     answer = {"created": body.get("id"), "type": args.type,
