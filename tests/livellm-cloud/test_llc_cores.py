@@ -3,7 +3,10 @@ for (llc.py cores), against a stand-in for LiveLLM's API that records every
 call, and what the agent is told about a cores refusal: too few cores of one
 speed (409 core_speed_short, core_speeds_mixed), a speed no server has (422
 core_speed_unknown) and no server with room (409 server_full). Each keeps the
-API's words, has the user choose, and never says to retry unchanged.
+API's words, has the user choose, and never says to retry unchanged. A
+refusal that names another machine offers no change to the one sent, and a
+create from a template, which takes no cpus, coreSpeed or mixedSpeeds, has
+the machine created directly instead.
 
 Run from the repository root:  python3 -m unittest discover -s tests/livellm-cloud
 Only the standard library.
@@ -296,6 +299,62 @@ class CoresCommand(unittest.TestCase):
         _, problem = self.run_llc(llc.set_settings, json=self.machine_file({"vm": {"cpus": 8}}), id="desk")
         self.assertIn("tell the user, and stop", problem.next)
         self.assertNotIn("another machine", problem.next)
+
+    def use_template(self, t, refuse):
+        """llc.py template use T box --yes, LiveLLM keeping the template t and
+        refusing its create with refuse (status, body)."""
+        fake = self.use(answer={"templates": [t]}, refuse=refuse)
+        _, problem = self.run_llc(llc.template, action="use", ref=t["name"], new_id="box", secret=[], secret_env=[],
+                                  json=None, yes=True, host=None, region=None, automatic=False)
+        self.assertEqual([c[:2] for c in fake.calls], [("GET", "/v1/templates"), ("POST", f"/v1/templates/{t['id']}/create")])
+        return problem
+
+    def test_a_template_create_refused_for_its_cores_has_the_machine_created_directly(self):
+        # a create from a template takes no cpus, coreSpeed or mixedSpeeds:
+        # the choice goes into the machine created directly, or a new template
+        box = {"id": "tpl_box", "name": "small-box", "kind": "vm-ubuntu",
+               "config": {"vm": {"cpus": 8, "memory": "16Gi", "dedicatedCores": True, "coreSpeed": 5700}}}
+        for status, payload in ((409, SHORT), (409, MIXED), (422, UNKNOWN)):
+            problem = self.use_template(box, (status, payload))
+            self.assertEqual((problem.message, problem.status, problem.refusal, problem.code),
+                             (payload["error"], status, payload["code"], llc.EXIT_USER))
+            for said in ("a create from a template takes no cpus, coreSpeed or mixedSpeeds", "create the machine directly",
+                         "llc.py template show tpl_box", '"id": "box"', "llc.py create vm-ubuntu --json FILE --yes",
+                         "for fewer cores or another coreSpeed in the template itself (a template never keeps mixed speeds), "
+                         "save a new one from a machine that has them", "never send the same template use unchanged"):
+                self.assertIn(said, problem.next, payload["code"])
+            self.assertNotIn("send the same create or set", problem.next)
+            self.assertNotIn("retry", problem.next)
+        problem = self.use_template(box, (409, SHORT))
+        self.assertIn('6 cores of one speed ("cpus": 6), or 8 cores at mixed speeds ("mixedSpeeds": true)', problem.next)
+        problem = self.use_template(box, (422, UNKNOWN))
+        self.assertIn("llc.py cores lists the speeds there are", problem.next)
+        self.assertIn("coreSpeed left out", problem.next)
+
+    def test_a_template_create_offers_no_fewer_cores_than_the_templates_kind_runs_on(self):
+        one = {**SHORT, "error": "Only 1 core at 5.7 GHz is available. Continue with mixed core speeds?", "fit": 1}
+        for kind, vm, offered in (("vm-ubuntu", {}, True), ("vm-ubuntu-desktop", {}, False), ("vm-windows", {}, False),
+                                  ("vm-windows", {"windowsEdition": "desktop"}, False),
+                                  ("vm-windows", {"windowsEdition": "server"}, True)):
+            t = {"id": "tpl_m", "name": "m", "kind": kind, "config": {"vm": {"cpus": 8, "dedicatedCores": True, **vm}}}
+            for payload in (one, {**MIXED, "cores": 8, "fit": 1}):
+                problem = self.use_template(t, (409, payload))
+                self.assertEqual('1 core of one speed ("cpus": 1)' in problem.next, offered, (kind, vm, problem.next))
+                self.assertIn('8 cores at mixed speeds ("mixedSpeeds": true)', problem.next)
+                self.assertIn(f"llc.py create {kind} --json FILE --yes", problem.next)
+        # 2 that fit are offered to a desktop machine's template
+        t = {"id": "tpl_d", "name": "d", "kind": "vm-ubuntu-desktop", "config": {"vm": {"cpus": 4}}}
+        problem = self.use_template(t, (409, {**SHORT, "cores": 4, "fit": 2}))
+        self.assertIn('2 cores of one speed ("cpus": 2), or 4 cores at mixed speeds', problem.next)
+
+    def test_a_template_create_refused_for_another_machine_or_no_room_is_left_as_it_is(self):
+        box = {"id": "tpl_box", "name": "small-box", "kind": "vm-ubuntu", "config": {"vm": {"cpus": 8}}}
+        problem = self.use_template(box, (409, {**SHORT, "workload": "other"}))
+        self.assertIn("this is about other, another machine, not box", problem.next)
+        self.assertNotIn("create the machine directly", problem.next)
+        problem = self.use_template(box, (409, NO_ROOM))
+        self.assertIn("tell the user, and stop", problem.next)
+        self.assertNotIn("create the machine directly", problem.next)
 
     def test_a_livellm_without_dedicated_cores_says_so(self):
         self.use(status=404, answer={"error": "404 page not found"})

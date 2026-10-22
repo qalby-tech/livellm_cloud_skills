@@ -363,18 +363,10 @@ def cores_problem(status, code, message, payload, floor=1):
     a resource of any kind, a machine, an app, a database or a browser (409
     server_full); None for any other answer. The words are the API's own. Fewer
     cores or mixed speeds changes what the user asked for, so they choose.
-    The cores that fit are offered only when there are some and at least the
-    machine's floor (core_floor: a create or a set that knows the kind gives
-    it), never 0 and never fewer than the machine runs on."""
-    fit, asked = payload.get("fit"), payload.get("cores")
-    fit = fit if isinstance(fit, int) and fit >= max(floor, 1) else 0
-    count = cores_word(asked) if isinstance(asked, int) and asked > 0 else "the same cores"
-    mixed = f'{count} at mixed speeds ("mixedSpeeds": true)'
+    The cores that fit are offered as cores_choice says."""
     if status == 409 and code in ("core_speed_short", "core_speeds_mixed"):
-        choice = f'{cores_word(fit)} of one speed ("cpus": {fit}), or {mixed}' if fit else \
-            f"{mixed}, or another coreSpeed (llc.py cores lists what fits)"
-        return Problem(message, f"tell the user and ask which they want: {choice}; then send the same create or set "
-                       "again with that change, never unchanged", EXIT_USER, status)
+        return Problem(message, f"tell the user and ask which they want: {cores_choice(payload, floor)}; then send the "
+                       "same create or set again with that change, never unchanged", EXIT_USER, status)
     if status == 422 and code == "core_speed_unknown":
         return Problem(message, "no server here has cores at that speed: llc.py cores lists the speeds there are; ask "
                        "the user for one, or leave coreSpeed out (any one speed)", EXIT_USER, status)
@@ -383,6 +375,22 @@ def cores_problem(status, code, message, payload, floor=1):
                        "less memory, fewer copies) or another placement may fit if they want that; never delete to "
                        "make room", EXIT_USER, status)
     return None
+
+
+def cores_choice(payload, floor=1):
+    """What the user chooses between after too few dedicated cores of one
+    speed (409 core_speed_short, core_speeds_mixed): the cores that fit,
+    offered only when there are some and at least the machine's floor
+    (core_floor: a create, a set or a template that knows the kind gives it),
+    never 0 and never fewer than the machine runs on; the cores asked for at
+    mixed speeds; else another coreSpeed."""
+    fit, asked = payload.get("fit"), payload.get("cores")
+    fit = fit if isinstance(fit, int) and fit >= max(floor, 1) else 0
+    count = cores_word(asked) if isinstance(asked, int) and asked > 0 else "the same cores"
+    mixed = f'{count} at mixed speeds ("mixedSpeeds": true)'
+    if fit:
+        return f'{cores_word(fit)} of one speed ("cpus": {fit}), or {mixed}'
+    return f"{mixed}, or another coreSpeed (llc.py cores lists what fits)"
 
 
 # The fewest cores a machine runs on, by kind, as the API holds them (a
@@ -433,6 +441,35 @@ def for_another_machine(p, machine):
     p.next = (f"this is about {named}, another machine, not {sent}: no change to what you sent helps; tell the user, "
               "and stop; never send it again unchanged")
     return True
+
+
+def template_cores(p, t, new_id):
+    """A create from the machine template t refused for the new machine's
+    cores (CORES_CODES) worded again: a create from a template takes no
+    cpus, coreSpeed or mixedSpeeds, so the user's choice goes into the
+    machine created directly from the template's settings, or, fewer cores
+    or another coreSpeed, into a new template (a template never keeps mixed
+    speeds). The cores that fit are offered no fewer than the template's
+    kind runs on (core_floor). Any other problem, and a refusal that names
+    another machine (for_another_machine), is left as it is."""
+    kind = t.get("kind") if isinstance(t.get("kind"), str) else ""
+    if not kind.startswith("vm-") or p.refusal not in CORES_CODES or for_another_machine(p, new_id):
+        return p
+    config = t.get("config") if isinstance(t.get("config"), dict) else {}
+    new_id = new_id.strip() if isinstance(new_id, str) else new_id
+    instead = ("a create from a template takes no cpus, coreSpeed or mixedSpeeds, so create the machine directly: "
+               f'llc.py template show {t.get("id")} has its settings; send its "vm" settings flat, with "id": "{new_id}", '
+               f'"credentials" and that change, as llc.py create {kind} --json FILE --yes; or, for fewer cores or another '
+               "coreSpeed in the template itself (a template never keeps mixed speeds), save a new one from a machine "
+               "that has them (llc.py template save) and remove this one once the user agrees; never send the same "
+               "template use unchanged")
+    if p.refusal == "core_speed_unknown":
+        p.next = ("no server here has cores at that speed: llc.py cores lists the speeds there are; ask the user for "
+                  "one, or none (any one speed, coreSpeed left out); " + instead)
+    else:
+        choice = cores_choice(p.payload, core_floor(kind, config.get("vm")))
+        p.next = f"tell the user and ask which they want: {choice}; " + instead
+    return p
 
 
 def browser_problem(status, code, message):
@@ -2448,6 +2485,7 @@ def template(args):
         if p.missing:
             p.next = ("put each value in an environment variable (generate a password, ask the user for a key) and run it "
                       "again with " + secret_flags(p.missing))
+        template_cores(p, t, args.new_id)
         raise
     created = made.get("created") or [args.new_id]
     answer = {"created": created if t.get("kind") == "stack" else args.new_id, "type": t["kind"], "template": t.get("name"),
