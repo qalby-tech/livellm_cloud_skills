@@ -168,6 +168,9 @@ def status_problem(status, payload):
     storage = object_storage_problem(status, message)
     if storage:
         return storage
+    machine = cores_problem(status, code, message, payload)
+    if machine:
+        return machine
     if status == 401:
         return Problem(message, "run: llc.py login, give the user the link it prints, and run login again once they press Allow", EXIT_USER, status)
     if status == 402:
@@ -343,6 +346,31 @@ def object_storage_problem(status, message):
         return Problem(message, "endpoint, region, bucket, accessKey and secretKey are an object storage's: link a "
                        "PostgreSQL database with host, port, database, username, password or url, a Redis one with "
                        "host, port, password or url", EXIT_OTHER, status)
+    return None
+
+
+def cores_problem(status, code, message, payload):
+    """A machine's cores refused, by the API's code: too few dedicated cores
+    of one clock speed free (409 core_speed_short, core_speeds_mixed), a speed
+    no server has (422 core_speed_unknown), or no server with room for it (409
+    server_full); None for any other answer. The words are the API's own. Fewer
+    cores or mixed speeds changes what the user asked for, so they choose."""
+    fit, asked = payload.get("fit"), payload.get("cores")
+    fit = fit if isinstance(fit, int) and fit > 0 else 0
+    count = f"{asked} cores" if isinstance(asked, int) and asked > 0 else "the same cores"
+    mixed = f'{count} at mixed speeds ("mixedSpeeds": true)'
+    if status == 409 and code in ("core_speed_short", "core_speeds_mixed"):
+        choice = f'{fit} cores of one speed ("cpus": {fit}), or {mixed}' if fit else \
+            f"{mixed}, or another coreSpeed (llc.py cores lists what fits)"
+        return Problem(message, f"tell the user and ask which they want: {choice}; then send the same create or set "
+                       "again with that change, never unchanged", EXIT_USER, status)
+    if status == 422 and code == "core_speed_unknown":
+        return Problem(message, "no server here has cores at that speed: llc.py cores lists the speeds there are; ask "
+                       "the user for one, or leave coreSpeed out (any one speed)", EXIT_USER, status)
+    if status == 409 and code == "server_full":
+        return Problem(message, "no server has room for this machine: tell the user, and stop; "
+                       "fewer cores or less memory, or another placement, may fit if they want that; never delete to "
+                       "make room", EXIT_USER, status)
     return None
 
 
@@ -689,6 +717,8 @@ def resources(tok):
             # and the apps a database serves
             **({"databases": link_list(w)} if link_list(w) else {}),
             **({"usedBy": live["usedBy"]} if live.get("usedBy") else {}),
+            # a running machine's cores: the clock they got, or mixed speeds with the words for it
+            **({"cores": live["cores"]} if live.get("cores") else {}),
             # a Camoufox browser says so; a Chrome one carries no engine (a Browser API has none)
             **({"engine": "camoufox"} if (w.get("browser") or {}).get("engine") == "camoufox" else {}),
             # a database's engine: postgres (when its settings name none), redis, or s3 (object storage)
@@ -840,6 +870,20 @@ def hosts_view(answer):
 def hosts(_args):
     """Where resources can run: each host's id, region and free room."""
     out(hosts_view(request("GET", "/v1/fleet/hosts", token=token())))
+
+
+def cores(_args):
+    """Dedicated cores: the clock speeds a machine may ask for (coreSpeed) and
+    how many of each fit on one server, as the platform answers. showSpeed
+    false: the servers run at one speed, and there is none to choose."""
+    try:
+        answer = request("GET", "/v1/machine-cores", token=token())
+    except Problem as p:
+        if p.status != 404:
+            raise
+        raise Problem("this LiveLLM has no dedicated cores yet", "leave dedicatedCores, coreSpeed and mixedSpeeds out, "
+                      "and tell the user if they wanted them", EXIT_USER, 404) from None
+    out(answer)
 
 
 def placement(host, region):
@@ -2413,6 +2457,7 @@ def main():
     ls_p.set_defaults(fn=ls)
 
     sub.add_parser("hosts", help="where resources can run: each host's id, region and free room").set_defaults(fn=hosts)
+    sub.add_parser("cores", help="dedicated cores: the clock speeds a machine may ask for, and how many fit").set_defaults(fn=cores)
 
     create_p = sub.add_parser("create", help="create a resource from a JSON file (type apps: several at once, with their databases)")
     create_p.add_argument("type")

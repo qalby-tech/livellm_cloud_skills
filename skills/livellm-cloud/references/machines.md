@@ -61,6 +61,26 @@ default for a machine made for one job. `connect` shows when it will stop.
 Stopping a machine, by hand or by its own time, clears the stop time: start it
 again and it keeps running until you give it a new one.
 
+**Cores are shared unless the user asks for dedicated ones.** `cpus` is how
+many cores the machine has; shared, they may be slower while its server is
+busy. `"dedicatedCores": true` reserves every one of them for the machine on
+its server. Where the servers run their cores at different clock speeds, a
+machine's dedicated cores are all of one speed: any one with that many free,
+or the one `"coreSpeed"` asks for, in MHz (`5700` is 5.7 GHz).
+`python3 scripts/llc.py cores` lists the speeds there are and how many
+dedicated cores of each fit on one server; `showSpeed: false` means every
+server runs at one speed, so leave `coreSpeed` out. `"mixedSpeeds": true`
+keeps the count when no one speed has it free (the cores may then run at
+different speeds). A set that leaves these out keeps them, `false` (or
+`coreSpeed` 0) clears one, and they take effect at the machine's next restart
+(ask the user before `restart`). `llc.py ls` shows the clock a running
+machine's cores got (`cores.speedMHz`), or `cores.mixed` with the words for
+it.
+
+```json
+{ "id": "build-box", "cpus": 8, "memory": "16Gi", "dedicatedCores": true, "coreSpeed": 5700 }
+```
+
 ## Run commands
 
 ```
@@ -296,6 +316,20 @@ Changing it (`set` with `{"vm": {"placement": …}}`, a Desktop App `{"desktop":
   than guessing.
 - **409, reserved by another agent.** Wait until the time the message names, or
   use another machine.
+- **409 "Only 6 cores at 5.7 GHz are available. Continue with mixed core
+  speeds?"** (`core_speed_short`) or **409 "Mixed core speeds: this machine's
+  cores run at different clock speeds."** (`core_speeds_mixed`). Too few
+  dedicated cores of one speed are free; the next step says how many are. Ask
+  the user: that many cores (`cpus`), or the cores they asked for at mixed
+  speeds (`"mixedSpeeds": true`). Send it again with their choice, never
+  unchanged.
+- **422 "No server this machine may run on has cores at 3 GHz."**
+  (`core_speed_unknown`). `llc.py cores` lists the speeds there are: ask the
+  user for one, or leave `coreSpeed` out.
+- **409 "This server is full: it has no room for this machine."** or **"No
+  server has room for this machine."** (`server_full`). Tell the user and
+  stop: fewer cores or less memory, or another placement, may fit if they want
+  that. Never delete anything to make room.
 - **A command on Windows fails with "is not recognized".** It ran in
   PowerShell, not bash: write it in PowerShell (`Get-Content`, not `cat -n`;
   `$env:PATH`, not `$PATH`).
