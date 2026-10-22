@@ -333,6 +333,8 @@ Changing it (`set` with `{"vm": {"placement": …}}`, a Desktop App `{"desktop":
 - **Any of these for a `template use`**: it takes no `cpus`, `coreSpeed` or
   `mixedSpeeds`, so create the machine directly with the user's choice
   instead (`references/workspace.md`, "Templates").
+- **Any of these naming another machine** than the one you sent (its
+  `workload`): no change to yours helps. Tell the user, and stop.
 - **409 "This server is full: it has no room for this machine."** or **"No
   server has room for this machine."** (`server_full`). Tell the user and
   stop: fewer cores or less memory, or another placement, may fit if they want
