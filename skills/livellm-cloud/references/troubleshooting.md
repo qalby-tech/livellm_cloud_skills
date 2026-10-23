@@ -70,7 +70,9 @@ server has room for the machine, app, database or browser): tell the user,
 and stop; never delete anything to make room.
 
 **422.** A value was refused, and the message names it. Fix that value. Never
-send the same request again hoping for a different answer.
+send the same request again hoping for a different answer. Dedicated cores
+refused because they come in pairs on those servers: the message names the
+counts that fit, and which one is the user's to choose (`references/machines.md`).
 
 **5xx or "cannot reach LiveLLM".** The platform or the network. Retry twice with
 a pause. If it keeps failing, tell the user plainly, with the time and what you

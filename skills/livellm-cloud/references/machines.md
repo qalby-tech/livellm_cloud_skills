@@ -63,29 +63,39 @@ again and it keeps running until you give it a new one.
 
 **Cores are shared unless the user asks for dedicated ones.** `cpus` is how
 many cores the machine has; shared, they may be slower while its server is
-busy. `"dedicatedCores": true` reserves every one of them for the machine on
-its server. Where the servers run their cores at different clock speeds, a
-machine's dedicated cores are all of one speed: any one with that many free,
-or the one `"coreSpeed"` asks for, in MHz (`5700` is 5.7 GHz).
-`python3 scripts/llc.py cores` lists the speeds there are and how many
-dedicated cores of each fit on one server; `showSpeed: false` means every
-server runs at one speed, so leave `coreSpeed` out. `"mixedSpeeds": true`
+busy. `"dedicatedCores": true` gives the machine whole cores of its server for
+it alone: nothing else runs on them. On servers whose cores have 2 threads
+they come in pairs (`cpus` 2, 4, 6…; the API refuses another count), and a
+dedicated core counts as 2 of the plan's cores and on pay as you go: say so
+when the user asks for them. Where the servers run their cores at different
+clock speeds, a machine's dedicated cores are all of one speed: any one with
+that many free, or the one `"coreSpeed"` asks for, in MHz (`5700` is 5.7 GHz).
+`python3 scripts/llc.py cores` lists the speeds there are, the CPU model of
+the servers with each (`model`) and how many dedicated cores of each fit on
+one server (whole cores: an even count where they have 2 threads);
+`showSpeed: false` means every server runs at one speed, so leave `coreSpeed`
+out. `"mixedSpeeds": true`
 keeps the count when no one speed has it free (the cores may then run at
 different speeds). A set takes them in the machine's block
 (`{"vm": {"dedicatedCores": true}}`); one that leaves them out keeps them,
 `false` (or `coreSpeed` 0) clears one, and they take effect at the machine's
 next restart (ask the user before `restart`). A machine kept on mixed speeds
 stays on them whatever `coreSpeed` says: a new speed goes with
-`"mixedSpeeds": false` in the same set. `llc.py ls` shows the clock a running
-machine's cores got (`cores.speedMHz`), or `cores.mixed` with the message
-"Mixed core speeds".
+`"mixedSpeeds": false` in the same set. `llc.py ls` shows a running
+resource's cores: `cores.model`, the CPU of the server it runs on, shared or
+dedicated ("Intel Core i9-14900K"), and for dedicated cores only the clock
+they got (`cores.speedMHz`) or `cores.mixed` with the message "Mixed core
+speeds". Shared cores aren't reserved and have no clock: never give the user
+a speed for them.
 
 ```json
 { "id": "build-box", "cpus": 8, "memory": "16Gi", "dedicatedCores": true, "coreSpeed": 5700 }
 ```
 
 A Desktop App's cores are shared too unless `"dedicatedCores": true` asks for
-all of its `cpu` (shared reserves a quarter), with no speed to choose:
+all of its `cpu` as whole cores of its server for it alone (shared reserves a
+quarter; dedicated in pairs where the cores have 2 threads, each counting as
+2 of the plan's cores), with no speed to choose:
 `{"desktop": {"dedicatedCores": true}}` applies at once and restarts it (ask
 the user first).
 
@@ -392,6 +402,11 @@ Changing it (`set` with `{"vm": {"placement": …}}`, a Desktop App `{"desktop":
 - **422 "No server this machine may run on has cores at 3 GHz."**
   (`core_speed_unknown`). `llc.py cores` lists the speeds there are: ask the
   user for one, or leave `coreSpeed` out.
+- **422, dedicated cores in pairs** (such as "Dedicated cores come in pairs
+  on these servers: use 8 or 10."). On servers whose cores have 2 threads a
+  dedicated count is even, for a machine (`cpus`) and any other kind (`cpu`).
+  The count is the user's: ask which of the counts the message names they
+  want, then send that; never pick one yourself, never send it unchanged.
 - **Any of these for a `template use`**: it takes no `cpus`, `coreSpeed` or
   `mixedSpeeds`, so create the machine directly with the user's choice
   instead (`references/workspace.md`, "Templates").

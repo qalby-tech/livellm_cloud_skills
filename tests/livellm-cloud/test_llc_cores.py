@@ -2,8 +2,11 @@
 for (llc.py cores), against a stand-in for LiveLLM's API that records every
 call, and what the agent is told about a cores refusal: too few cores of one
 speed (409 core_speed_short, core_speeds_mixed), a speed no server has (422
-core_speed_unknown) and no server with room (409 server_full). Each keeps the
-API's words, has the user choose, and never says to retry unchanged. A
+core_speed_unknown), no server with room (409 server_full) and dedicated
+cores in pairs (422, which the API judges). Each keeps the API's words, has
+the user choose, and never says to retry unchanged. ls shows a running
+resource's cores as the API says them: its server's CPU model, and a clock
+for dedicated cores only. A
 refusal that names another machine offers no change to the one sent, and a
 create from a template, which takes no cpus, coreSpeed or mixedSpeeds, has
 the machine created directly instead.
@@ -41,10 +44,16 @@ FULL = {"error": "This server is full: it has no room for this machine.", "code"
 NO_ROOM = {"error": "No server has room for this machine.", "code": "server_full", "workload": "box"}
 # A running machine's card when its own cores run at different speeds.
 MIXED_CARD = "Mixed core speeds"
+# The CPU model of the server a resource runs on, shared or dedicated.
+I9 = "Intel Core i9-14900K"
+# Dedicated cores come in pairs on servers whose cores have 2 threads.
+PAIRS = {"error": "Dedicated cores come in pairs on these servers: use 8 or 10.", "code": "dedicated_pairs",
+         "workload": "box", "cores": 9}
 # Every kind that reserves on a server is held to its fill limit, an app too.
 APP_NO_ROOM = {"error": "No server has room for this app.", "code": "server_full", "workload": "web"}
 
-SPEEDS = {"showSpeed": True, "speeds": [{"speedMHz": 5700, "fit": 16}, {"speedMHz": 4400, "fit": 16}], "dedicatedFit": 16}
+SPEEDS = {"showSpeed": True, "speeds": [{"speedMHz": 5700, "fit": 16, "model": I9}, {"speedMHz": 4400, "fit": 16, "model": I9}],
+          "dedicatedFit": 16}
 
 
 class CoresRefusals(unittest.TestCase):
@@ -120,6 +129,19 @@ class CoresRefusals(unittest.TestCase):
             # the words name the kind; what to do is the same for each
             self.assertNotIn("machine", p.next)
 
+    def test_dedicated_cores_in_pairs_keep_the_apis_words_and_have_the_user_choose(self):
+        # the API judges the count and names the ones that fit: nothing made up here
+        for payload in (PAIRS, {"error": PAIRS["error"]}):
+            p = llc.http_problem(422, payload)
+            self.assertEqual((p.code, p.status, p.message), (llc.EXIT_USER, 422, PAIRS["error"]), payload)
+            self.assertIn("the count is the user's", p.next)
+            self.assertIn("never pick one yourself", p.next)
+            self.assertNotIn('"cpus": 8', p.next)
+            self.assertNotIn("mixedSpeeds", p.next)
+        # any other 422 stays the plain one
+        p = llc.http_problem(422, {"error": "cpus must be at least 1"})
+        self.assertIn("fix the field the message names", p.next)
+
     def test_known_by_the_code_alone(self):
         # the same words without the code are any other 409; the code without
         # the numbers still asks the user
@@ -135,11 +157,14 @@ WORKSPACE = {"spec": {"workloads": [
     {"id": "win", "type": "vm-windows", "vm": {"cpus": 4, "windowsEdition": "desktop"}},
     {"id": "winsrv", "type": "vm-windows", "vm": {"cpus": 4, "windowsEdition": "server"}},
     {"id": "web", "type": "pod", "pod": {"image": "nginx"}},
+    {"id": "api", "type": "pod", "pod": {"image": "nginx"}},
 ]}}
 STATUS = {"workloads": [
-    {"id": "fast", "phase": "Running", "ready": True, "cores": {"speedMHz": 5700}},
+    {"id": "fast", "phase": "Running", "ready": True, "cores": {"speedMHz": 5700, "model": I9}},
     {"id": "desk", "phase": "Running", "ready": True, "cores": {"mixed": True, "message": MIXED_CARD}},
+    {"id": "winsrv", "phase": "Running", "ready": True, "cores": {"model": I9}},
     {"id": "web", "phase": "Running", "ready": True},
+    {"id": "api", "phase": "Running", "ready": True, "cores": {"model": I9}},
 ]}
 
 
@@ -216,13 +241,24 @@ class CoresCommand(unittest.TestCase):
         self.assertEqual(res, SPEEDS)
         self.assertEqual(fake.calls, [("GET", "/v1/machine-cores")])
 
-    def test_ls_shows_the_clock_a_running_machines_cores_got(self):
+    def test_ls_shows_the_cores_a_running_resource_got_as_the_api_says_them(self):
+        # dedicated: the clock or mixed speeds, with the server's CPU model; shared (a machine or an app): the
+        # model alone, never a clock
         self.use()
         res, problem = self.run_llc(llc.ls, type=None)
         self.assertIsNone(problem)
         got = {r["id"]: r.get("cores") for r in res["resources"]}
-        self.assertEqual(got, {"fast": {"speedMHz": 5700}, "desk": {"mixed": True, "message": MIXED_CARD}, "win": None,
-                               "winsrv": None, "web": None})
+        self.assertEqual(got, {"fast": {"speedMHz": 5700, "model": I9}, "desk": {"mixed": True, "message": MIXED_CARD},
+                               "win": None, "winsrv": {"model": I9}, "web": None, "api": {"model": I9}})
+
+    def test_a_create_refused_for_dedicated_cores_in_pairs_keeps_the_apis_words(self):
+        fake = self.use(refuse=(422, PAIRS))
+        f = self.machine_file({"id": "box", "cpus": 9, "dedicatedCores": True})
+        _, problem = self.run_llc(llc.create, json=f, type="vm-ubuntu")
+        self.assertEqual((problem.message, problem.status, problem.code), (PAIRS["error"], 422, llc.EXIT_USER))
+        self.assertIn("never pick one yourself", problem.next)
+        # the count went as asked: the API judges it
+        self.assertEqual(fake.calls[0][2]["cpus"], 9)
 
     def machine_file(self, body):
         tmp = tempfile.TemporaryDirectory()

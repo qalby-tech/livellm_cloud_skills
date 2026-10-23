@@ -12,13 +12,22 @@ Against a LiveLLM without them only the hints change, and `llc.py cores` and
 `llc.py devices` say it has none.
 
 - `references/machines.md` says a machine's cores are shared unless the user
-  asks for dedicated ones (`"dedicatedCores": true`, every core reserved for
-  it on its server), all of one clock speed (`"coreSpeed"` in MHz asks for
-  one) unless `"mixedSpeeds": true` keeps the count; a set takes them in the
-  `vm` block and they apply at the machine's next restart. `llc.py cores`
-  lists the speeds there are and how many dedicated cores of each fit on one
-  server; `llc.py ls` shows the clock a running machine's cores got, or "Mixed
-  core speeds".
+  asks for dedicated ones (`"dedicatedCores": true`, whole cores of its server
+  for it alone), all of one clock speed (`"coreSpeed"` in MHz asks for one)
+  unless `"mixedSpeeds": true` keeps the count; a set takes them in the `vm`
+  block and they apply at the machine's next restart. `llc.py cores` lists the
+  speeds there are, the CPU model of the servers with each (`model`) and how
+  many dedicated cores of each fit on one server; `llc.py ls` shows a running
+  resource's cores as the API says them: its server's CPU model
+  (`cores.model`), shared or dedicated, and for dedicated cores only the clock
+  they got or "Mixed core speeds". Shared cores have no clock, and the agent
+  never gives the user a speed for them.
+- Dedicated cores come in pairs on servers whose cores have 2 threads (`cpus`
+  or `cpu` 2, 4, 6…; shared cores take any count), and a dedicated core
+  counts as 2 of the plan's cores and on pay as you go
+  (`references/workspace.md`, each kind's Cores). The API judges the count:
+  its 422 keeps its words, and `llc.py` has the user choose among the counts
+  it names, never picking one itself.
 - `llc.py` answers the cores refusals by their code, in the API's words, and
   has the user choose instead of a retry: too few of one speed
   (`core_speed_short`, `core_speeds_mixed`: the cores that fit, never 0 nor
@@ -30,10 +39,11 @@ Against a LiveLLM without them only the hints change, and `llc.py cores` and
   refused for its cores (it takes no `cpus`, `coreSpeed` or `mixedSpeeds`)
   has the machine created directly with the user's choice.
 - Apps, Desktop Apps, databases (PostgreSQL and Redis), browsers and Browser
-  APIs have shared cores too unless `"dedicatedCores": true` reserves all of
-  their `cpu` (shared reserves a quarter); a set takes it in the resource's
-  block and applies at once (it restarts); an object storage has none.
-  `llc.py browser-api create` takes `--dedicated-cores`.
+  APIs have shared cores too unless `"dedicatedCores": true` gives them all of
+  their `cpu` as whole cores of the server for them alone (shared reserves a
+  quarter); a set takes it in the resource's block and applies at once (it
+  restarts); an object storage has none. `llc.py browser-api create` takes
+  `--dedicated-cores`.
 - A machine's devices: `"devices": ["rtx5090"]` gives it one of the
   cluster's own devices (a GPU, a USB controller); `llc.py devices` lists the
   ones offered, how many are free and which machines have them. They change

@@ -186,10 +186,15 @@ try to answer a CAPTCHA yourself.
 
 Shared unless the user asks for dedicated ones: shared cores reserve a quarter
 of `cpu` on the server and may use all of it, but may be slower while the
-server is busy. `"dedicatedCores": true` reserves all of `cpu` for the browser. A set
-takes it in its block (`{"browser": {"dedicatedCores": true}}`); one that
-leaves it out keeps it, `false` makes the cores shared again, and it applies at
-once: the browser restarts, so ask the user first. A server with no room answers 409
+server is busy. `"dedicatedCores": true` gives the browser all of `cpu` as
+whole cores of its server, for it alone. On servers whose cores have 2 threads
+they come in pairs (`cpu` 2, 4, 6…): another count is refused (422) in the
+API's words; ask the user which count they want. A dedicated core counts as 2
+of the plan's cores, and on pay as you go. `llc.py ls` shows the CPU model of
+the server it runs on (`cores.model`); shared cores have no clock. A set takes
+it in its block (`{"browser": {"dedicatedCores": true}}`); one that leaves it
+out keeps it, `false` makes the cores shared again, and it applies at once: the
+browser restarts, so ask the user first. A server with no room answers 409
 `server_full`: tell the user and let them choose what to stop or shrink.
 
 ## Where it runs

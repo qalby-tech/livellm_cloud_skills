@@ -8,7 +8,7 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py login [--wait] | logout | whoami | ssh-keys | logs <id>
     llc.py ls [--type TYPE]
     llc.py hosts                               (where resources can run: ids, regions, free room)
-    llc.py cores                               (dedicated cores: the clock speeds there are, and what fits)
+    llc.py cores                               (dedicated cores: the clock speeds there are, their CPU model, what fits)
     llc.py devices                             (the devices a machine can be given: a GPU, a USB controller)
     llc.py create TYPE --json FILE --yes
     llc.py create browser --json FILE --engine chrome|camoufox --yes
@@ -366,9 +366,11 @@ def cores_problem(status, code, message, payload, floor=1):
     of one clock speed free (409 core_speed_short, core_speeds_mixed) or a
     speed no server has (422 core_speed_unknown); or no server with room for
     a resource of any kind, a machine, an app, a database or a browser (409
-    server_full); None for any other answer. The words are the API's own. Fewer
-    cores or mixed speeds changes what the user asked for, so they choose.
-    The cores that fit are offered as cores_choice says."""
+    server_full); or a dedicated count the servers can't take, in pairs where
+    their cores have 2 threads (422, known by the API's words, which name the
+    counts that fit); None for any other answer. The words are the API's own.
+    Fewer cores, another count or mixed speeds changes what the user asked
+    for, so they choose. The cores that fit are offered as cores_choice says."""
     if status == 409 and code in ("core_speed_short", "core_speeds_mixed"):
         return Problem(message, f"tell the user and ask which they want: {cores_choice(payload, floor)}; then send the "
                        "same create or set again with that change, never unchanged", EXIT_USER, status)
@@ -379,7 +381,18 @@ def cores_problem(status, code, message, payload, floor=1):
         return Problem(message, "no server has room for it: tell the user, and stop; a smaller size (fewer cores, "
                        "less memory, fewer copies) or another placement may fit if they want that; never delete to "
                        "make room", EXIT_USER, status)
+    if status == 422 and DEDICATED_PAIRS in message.lower():
+        return Problem(message, PAIRS_NEXT, EXIT_USER, status)
     return None
+
+
+# Dedicated cores come in pairs on servers whose cores have 2 threads: the
+# API judges the count and names the ones that fit (422). Which one is the
+# user's to choose: it changes what they asked for and what it costs.
+DEDICATED_PAIRS = "dedicated cores come in pairs"
+PAIRS_NEXT = ("the count is the user's: ask which of the counts the message names they want, then send the same "
+              "create or set with that count (cpus for a machine, cpu for any other kind); never pick one yourself, "
+              "never send it unchanged")
 
 
 def cores_choice(payload, floor=1):
@@ -858,7 +871,8 @@ def resources(tok):
             # and the apps a database serves
             **({"databases": link_list(w)} if link_list(w) else {}),
             **({"usedBy": live["usedBy"]} if live.get("usedBy") else {}),
-            # a running machine's cores: the clock they got, or mixed speeds with the words for it
+            # a running resource's cores as the API says them: its server's CPU model, shared or dedicated, and
+            # for dedicated cores only the clock they got or mixed speeds with the words for it (shared: no clock)
             **({"cores": live["cores"]} if live.get("cores") else {}),
             # a Camoufox browser says so; a Chrome one carries no engine (a Browser API has none)
             **({"engine": "camoufox"} if (w.get("browser") or {}).get("engine") == "camoufox" else {}),
@@ -1019,9 +1033,10 @@ def hosts(_args):
 
 
 def cores(_args):
-    """Dedicated cores: the clock speeds a machine may ask for (coreSpeed) and
-    how many of each fit on one server, as the platform answers. showSpeed
-    false: the servers run at one speed, and there is none to choose."""
+    """Dedicated cores: the clock speeds a machine may ask for (coreSpeed),
+    the CPU model of the servers with each (model) and how many of each fit
+    on one server (whole cores), as the platform answers. showSpeed false:
+    the servers run at one speed, and there is none to choose."""
     try:
         answer = request("GET", "/v1/machine-cores", token=token())
     except Problem as p:
@@ -2681,7 +2696,7 @@ def main():
     ls_p.set_defaults(fn=ls)
 
     sub.add_parser("hosts", help="where resources can run: each host's id, region and free room").set_defaults(fn=hosts)
-    sub.add_parser("cores", help="dedicated cores: the clock speeds a machine may ask for, and how many fit").set_defaults(fn=cores)
+    sub.add_parser("cores", help="dedicated cores: the clock speeds a machine may ask for, their CPU model, and how many fit").set_defaults(fn=cores)
     sub.add_parser("devices", help="the devices a machine can be given (a GPU, a USB controller), and how many are free").set_defaults(fn=devices)
 
     create_p = sub.add_parser("create", help="create a resource from a JSON file (type apps: several at once, with their databases)")

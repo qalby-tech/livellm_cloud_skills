@@ -21,7 +21,9 @@ Team, Startup or Business, which its owners choose, or on Enterprise, by
 agreement with LiveLLM. The user changes the plan in the console; an agent
 never does.
 
-`whoami` shows what is used against the plan's cores, memory and disk. Creating
+`whoami` shows what is used against the plan's cores, memory and disk; a
+dedicated core counts as 2 of them, and as 2 on pay as you go (a shared core
+as 1). Creating
 something that doesn't fit is refused with a 402, unless pay as you go is on:
 then what is above the plan is billed, up to the account's monthly limit.
 Free includes no resources, so on Free everything is pay as you go.
