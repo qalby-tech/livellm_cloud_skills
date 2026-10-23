@@ -8,6 +8,8 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py login [--wait] | logout | whoami | ssh-keys | logs <id>
     llc.py ls [--type TYPE]
     llc.py hosts                               (where resources can run: ids, regions, free room)
+    llc.py cores                               (dedicated cores: the clock speeds there are, and what fits)
+    llc.py devices                             (the devices a machine can be given: a GPU, a USB controller)
     llc.py create TYPE --json FILE --yes
     llc.py create browser --json FILE --engine chrome|camoufox --yes
     llc.py create apps --json FILE --yes       (several apps and their databases, linked)
@@ -29,7 +31,7 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py reach ID (--from a,b | --from '*' | --none | --add X | --remove X) --yes   (not a database)
     llc.py link ID DB [DB...] [--remove] --yes (an app, machine or Desktop App reaches a database or an object storage; no variables)
     llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS]
-                   [--host H | --region R] --yes
+                   [--host H | --region R] [--dedicated-cores] --yes
     llc.py browser-api show NAME | (add | remove) NAME BROWSER --yes
     llc.py locales                             (languages and time zones a browser takes)
     llc.py engines                             (browser engines offered: Chrome, Camoufox)
@@ -171,6 +173,9 @@ def status_problem(status, payload):
     if storage:
         return storage
     machine = cores_problem(status, code, message, payload)
+    if machine:
+        return machine
+    machine = machine_problem(status, message)
     if machine:
         return machine
     if status == 401:
@@ -470,6 +475,44 @@ def template_cores(p, t, new_id):
         choice = cores_choice(p.payload, core_floor(kind, config.get("vm")))
         p.next = f"tell the user and ask which they want: {choice}; " + instead
     return p
+
+
+# A machine's devices and port groups are refused in the API's words, with no
+# code: a device this workspace isn't offered (403), one another machine has
+# or no server has (409); a port group the platform can't publish (409, 422),
+# past the most ports a machine publishes (422), or a LiveLLM without port
+# groups (503).
+DEVICE_NOT_OFFERED = "isn't offered to this workspace"
+DEVICE_TAKEN = ("is in use by another machine", "no node of this cluster has one")
+GROUP_UNPLACED = ("no free place on this cluster for group", "free ports in a row are left on this cluster",
+                  "would be published at", "can't grow", "is held by something else now", "the cluster publishes ports in")
+PORT_CAP = "a machine publishes at most"
+NO_PORT_GROUPS = "port groups aren't available on this install"
+
+
+def machine_problem(status, message):
+    """A machine's devices or port groups refused, known by the API's words,
+    with what to do; None for any other answer. A device or a published port
+    is shared with every workspace, so the agent never frees one: the user
+    decides."""
+    low = message.lower()
+    if status == 403 and DEVICE_NOT_OFFERED in low:
+        return Problem(message, "this device isn't offered to this workspace, and no permission changes that: tell the "
+                       "user, and stop; llc.py devices lists the ones a machine here can have", EXIT_USER, status)
+    if status == 409 and any(w in low for w in DEVICE_TAKEN):
+        return Problem(message, "the device is taken: tell the user, and stop; llc.py devices shows how many are free and "
+                       "which of this workspace's machines have one; never take it off another machine", EXIT_USER, status)
+    if status in (409, 422) and any(w in low for w in GROUP_UNPLACED):
+        return Problem(message, "the ports of this group can't be published as asked: tell the user what the message says, "
+                       "and stop; a group removed and added again is published at new numbers, so only with their "
+                       "agreement; never send it again unchanged", EXIT_USER, status)
+    if status == 422 and PORT_CAP in low:
+        return Problem(message, "a machine publishes no more ports than that, SSH and its groups included: ask the user "
+                       "which to leave out", EXIT_USER, status)
+    if status == 503 and NO_PORT_GROUPS in low:
+        return Problem(message, "this LiveLLM can't publish port groups: leave portGroups out, and tell the user",
+                       EXIT_USER, status)
+    return None
 
 
 def browser_problem(status, code, message):
@@ -989,6 +1032,50 @@ def cores(_args):
     out(answer)
 
 
+def devices(_args):
+    """The cluster's devices (a GPU, a USB controller) a machine of this
+    workspace may be given ("devices"): how many the cluster has, how many are
+    free, and this workspace's machines that have one, as the platform
+    answers."""
+    try:
+        answer = request("GET", "/v1/machine-devices", token=token())
+    except Problem as p:
+        if p.status != 404:
+            raise
+        raise Problem("this LiveLLM gives machines no devices yet", "leave devices out, and tell the user if they "
+                      "wanted one", EXIT_USER, 404) from None
+    out(answer)
+
+
+def group_addresses(vm, host):
+    """Where a machine's port groups are reached from outside: each port at
+    its number plus its group's offset, on the host of the machine's own
+    address ("" while it has none). A group whose ports the platform hasn't
+    given yet (a mirrored one being made) is listed with none."""
+    groups = []
+    for g in (vm or {}).get("portGroups") or []:
+        if not isinstance(g, dict):
+            continue
+        off = g.get("offset") if isinstance(g.get("offset"), int) else 0
+        ports = []
+        for p in g.get("ports") or []:
+            n = p.get("port") if isinstance(p, dict) else None
+            if not isinstance(n, int) or not n:
+                continue
+            udp = bool(p.get("udp"))
+            e = {"port": n, "published": n + off, "tcp": bool(p.get("tcp")) or not udp, "udp": udp}
+            if host:
+                e["address"] = f"[{host}]:{n + off}" if ":" in host else f"{host}:{n + off}"
+            ports.append(e)
+        entry = {"name": g.get("name"), "offset": off, "ports": ports}
+        if g.get("mirrored"):
+            entry["mirrored"] = True
+        if g.get("allowCIDRs"):
+            entry["allowCIDRs"] = g["allowCIDRs"]
+        groups.append(entry)
+    return groups
+
+
 def placement(host, region):
     """Where a new resource runs: pinned to a host, any host of a region, or
     None for automatic (LiveLLM picks the host). A flag given with no value is
@@ -1025,6 +1112,15 @@ def connect(args):
             if w.get("expiresAt"):
                 info["stopsAt"] = w["expiresAt"]
             break
+        # Its port groups are published on the same host, each port at its
+        # number plus the group's offset.
+        try:
+            spec_w = next((x for x in workspace_workloads(tok) if x.get("id") == args.id), None)
+        except Problem:
+            spec_w = None
+        groups = group_addresses((spec_w or {}).get("vm"), (info.get("ssh") or {}).get("host", "").strip("[]"))
+        if groups:
+            info["portGroups"] = groups
     raw = [u for u in info.get("urls") or [] if u.get("raw") and not u.get("address")]
     if raw:
         # A raw TCP/UDP port's host:port lives in the status, like a machine's.
@@ -1147,6 +1243,10 @@ def set_settings(args):
     changes = json.loads(Path(args.json).read_text())
     if not isinstance(changes, dict) or not changes:
         raise Problem("the file should hold a JSON object with the settings that change", "fix the file", EXIT_OTHER)
+    if isinstance(changes.get("vm"), dict) and "timeZone" in changes["vm"]:
+        raise Problem("a machine's time zone is set when it is made, and a set doesn't change it",
+                      "leave timeZone out of the set; to change it, ask the user, then change it on the machine itself "
+                      "(Linux: llc.py exec ID \"sudo timedatectl set-timezone ZONE\")", EXIT_OTHER)
     reminder = check_settings_proxy(changes, args.json)
     check_body_reach(changes, args.json, patch=True)
     check_patch_links(changes, args.json)
@@ -1617,7 +1717,7 @@ def member_path(api, browser):
     return f"{workload_path(api)}/browsers/{urllib.parse.quote(browser)}"
 
 
-def browser_api_body(name, browsers, every, remotes, place=None):
+def browser_api_body(name, browsers, every, remotes, place=None, dedicated=False):
     names = [b.strip() for b in (browsers or "").split(",") if b.strip()]
     if every and names:
         raise Problem("--all already means every browser in the workspace", "leave out --browsers", EXIT_OTHER)
@@ -1637,6 +1737,8 @@ def browser_api_body(name, browsers, every, remotes, place=None):
         body["externalBrowsers"] = ext
     if place:
         body["placement"] = place
+    if dedicated:
+        body["dedicatedCores"] = True
     return body
 
 
@@ -1645,6 +1747,11 @@ def browser_api(args):
     if args.action != "create" and (host is not None or region is not None):
         raise Problem("--host and --region are for create",
                       f"to move it: llc.py set {args.name} --json FILE --yes, the file holding {{\"controller\": {{\"placement\": ...}}}}", EXIT_OTHER)
+    dedicated = bool(getattr(args, "dedicated_cores", False))
+    if args.action != "create" and dedicated:
+        raise Problem("--dedicated-cores is for create",
+                      f"to change it: llc.py set {args.name} --json FILE --yes, the file holding {{\"controller\": {{\"dedicatedCores\": true}}}} "
+                      "(it restarts the Browser API: ask the user first)", EXIT_OTHER)
     tok = token()
     if args.action == "create":
         if not args.yes:
@@ -1652,7 +1759,7 @@ def browser_api(args):
                           "only create a Browser API the user asked for; the browsers you put in it are reached by "
                           "whatever reaches it, so ask the user and wait for their agreement (SKILL.md rule 11), "
                           "then pass --yes", EXIT_OTHER)
-        body = browser_api_body(args.name, args.browsers, args.all, args.remote, placement(host, region))
+        body = browser_api_body(args.name, args.browsers, args.all, args.remote, placement(host, region), dedicated)
         request("POST", f"/v1/workloads/{BROWSER_API}", body, token=tok)
         out({"created": args.name, "type": BROWSER_API,
              "next": f"llc.py wait {args.name} then llc.py connect {args.name} --tool api"})
@@ -2575,6 +2682,7 @@ def main():
 
     sub.add_parser("hosts", help="where resources can run: each host's id, region and free room").set_defaults(fn=hosts)
     sub.add_parser("cores", help="dedicated cores: the clock speeds a machine may ask for, and how many fit").set_defaults(fn=cores)
+    sub.add_parser("devices", help="the devices a machine can be given (a GPU, a USB controller), and how many are free").set_defaults(fn=devices)
 
     create_p = sub.add_parser("create", help="create a resource from a JSON file (type apps: several at once, with their databases)")
     create_p.add_argument("type")
@@ -2705,6 +2813,7 @@ def main():
     bapi_p.add_argument("--remote", action="append", help="create: a browser running elsewhere, ID=wss://address")
     bapi_p.add_argument("--host", help="create: pin it to this host (ids from llc.py hosts)")
     bapi_p.add_argument("--region", help="create: run it on any host in this region; neither: automatic")
+    bapi_p.add_argument("--dedicated-cores", action="store_true", help="create: all its cpu reserved for it on its server (left out: shared)")
     bapi_p.add_argument("--yes", action="store_true", help="create, add: the user agreed to what it lets in; remove: the user agreed")
     bapi_p.set_defaults(fn=browser_api)
 
