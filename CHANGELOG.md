@@ -5,6 +5,14 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## Unreleased
+
+Shared or dedicated cores on apps, Desktop Apps, databases (Postgres and
+Redis), browsers and Browser APIs: `"dedicatedCores": true` reserves all of
+`cpu` on the server; shared, the default, reserves a quarter. A set takes it
+in the resource's block and applies at once (it restarts); an object storage
+has none.
+
 ## 1.16.0
 
 Object storage of 1 server or 3. Against a LiveLLM without 3 servers only

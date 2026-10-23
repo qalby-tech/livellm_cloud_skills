@@ -182,6 +182,16 @@ try to answer a CAPTCHA yourself.
   upload them somewhere the user can reach.
 - The browser has its own screen password in its settings; you never need it.
 
+## Cores
+
+Shared unless the user asks for dedicated ones: shared cores reserve a quarter
+of `cpu` on the server and may use all of it, but may be slower while the
+server is busy. `"dedicatedCores": true` reserves all of `cpu` for the browser. A set
+takes it in its block (`{"browser": {"dedicatedCores": true}}`); one that
+leaves it out keeps it, `false` makes the cores shared again, and it applies at
+once: the browser restarts, so ask the user first. A server with no room answers 409
+`server_full`: tell the user and let them choose what to stop or shrink.
+
 ## Where it runs
 
 Leave `placement` out and LiveLLM picks the host. To choose, put

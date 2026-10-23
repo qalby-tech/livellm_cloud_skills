@@ -149,6 +149,16 @@ To start the session on a chosen browser, add `X-Browser-Id` to
 (or `"chrome"`). End sessions you started. A restart of the Browser API ends
 them all: start a new one.
 
+## Cores
+
+Shared unless the user asks for dedicated ones: shared cores reserve a quarter
+of `cpu` on the server and may use all of it, but may be slower while the
+server is busy. `"dedicatedCores": true` reserves all of `cpu` for the Browser API. A set
+takes it in its block (`{"controller": {"dedicatedCores": true}}`); one that
+leaves it out keeps it, `false` makes the cores shared again, and it applies at
+once: the Browser API restarts, so ask the user first. A server with no room answers 409
+`server_full`: tell the user and let them choose what to stop or shrink.
+
 ## Where it runs
 
 Leave it out and LiveLLM picks the host. `browser-api create … --host <id>` pins it,

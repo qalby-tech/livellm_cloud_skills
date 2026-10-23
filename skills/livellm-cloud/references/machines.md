@@ -84,6 +84,11 @@ machine's cores got (`cores.speedMHz`), or `cores.mixed` with the message
 { "id": "build-box", "cpus": 8, "memory": "16Gi", "dedicatedCores": true, "coreSpeed": 5700 }
 ```
 
+A Desktop App's cores are shared too unless `"dedicatedCores": true` asks for
+all of its `cpu` (shared reserves a quarter), with no speed to choose:
+`{"desktop": {"dedicatedCores": true}}` applies at once and restarts it (ask
+the user first).
+
 ## Run commands
 
 ```
