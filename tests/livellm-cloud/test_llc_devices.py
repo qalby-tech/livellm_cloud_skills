@@ -29,7 +29,7 @@ llc = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(llc)
 
 DEVICES = {"devices": [{"id": "rtx5090", "label": "NVIDIA RTX 5090", "kind": "gpu", "total": 1, "free": 0, "here": ["box"]},
-                       {"id": "station-usb", "label": "The station's USB ports", "kind": "usb", "total": 1, "free": 1,
+                       {"id": "usb-1", "label": "USB controller", "kind": "usb", "total": 1, "free": 1,
                         "here": []}]}
 
 WORKSPACE = {"spec": {"workloads": [

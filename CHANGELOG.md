@@ -49,8 +49,9 @@ Against a LiveLLM without them only the hints change, and `llc.py cores` and
   where each port is published (`portGroups[].ports[]`: `port`, `published`,
   `address`). A group that can't be published as asked, or past the 64 ports a
   machine publishes, has the user decide.
-- What LiveLLM sets itself on a machine (`virtio`, `machineType`,
-  `installed`, `pin`, a group's `offset`) is left out of a create or a set.
+- What LiveLLM sets itself on a machine (`hostDevices`, `hideHypervisor`,
+  `virtio`, `virtioMove`, `virtioMoveAt`, `machineType`, `installed`, `pin`, a
+  group's `offset`) is left out of a create or a set.
 - `llc.py reach` and `references/inside-access.md` list a machine's
   `<res>-host` inside address: the machine itself on every port, TCP and UDP,
   for the resources its `reachableFrom` lets in.

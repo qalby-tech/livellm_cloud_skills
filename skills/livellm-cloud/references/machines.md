@@ -106,10 +106,12 @@ that it is the machine's own: a set never changes it (`llc.py set` refuses
 one), so change it on the machine itself, with the user's agreement.
 
 **What LiveLLM sets itself.** A machine's settings, as the workspace lists
-them, also hold what only LiveLLM writes: `virtio` (a Windows machine made with
-the faster disk and network card), `machineType`, `installed`, `pin`, and a
-port group's `offset`. Leave them out of a create or a set: whatever is sent
-for them is ignored.
+them, also hold what only LiveLLM writes: `hostDevices` and `hideHypervisor`
+(what the machine's `devices` take on its server), `virtio` (a Windows machine
+made with the faster disk and network card), `virtioMove` and `virtioMoveAt`
+(an older Windows machine moving to them), `machineType`, `installed`, `pin`,
+and a port group's `offset`. Leave them out of a create or a set: whatever is
+sent for them is ignored.
 
 ## Run commands
 
