@@ -89,6 +89,28 @@ all of its `cpu` (shared reserves a quarter), with no speed to choose:
 `{"desktop": {"dedicatedCores": true}}` applies at once and restarts it (ask
 the user first).
 
+**A GPU or a USB controller.** `"devices": ["rtx5090"]` gives the machine one
+of the cluster's own devices, passed through to it. `python3 scripts/llc.py
+devices` lists the ones this workspace's machines may have: `id` (what
+`devices` names), `label`, `kind` (`gpu` or `usb`), how many the cluster has
+(`total`) and has `free`, and which of this workspace's machines have one
+(`here`). A device belongs to one machine at a time, and the machine runs on
+the server that has it, so ask the user before giving one. A set takes them in
+the machine's block (`{"vm": {"devices": ["rtx5090"]}}`); `[]` takes them all
+off, and one that leaves them out keeps them. They change at the machine's
+next restart (ask the user before `restart`).
+
+**Its time zone.** `"timeZone": "Europe/Berlin"` (an IANA name) sets the
+machine's time zone when it is made; left out, it gets the cluster's. After
+that it is the machine's own: a set never changes it (`llc.py set` refuses
+one), so change it on the machine itself, with the user's agreement.
+
+**What LiveLLM sets itself.** A machine's settings, as the workspace lists
+them, also hold what only LiveLLM writes: `virtio` (a Windows machine made with
+the faster disk and network card), `machineType`, `installed`, `pin`, and a
+port group's `offset`. Leave them out of a create or a set: whatever is sent
+for them is ignored.
+
 ## Run commands
 
 ```
@@ -261,6 +283,39 @@ backups (a count, 1 to 100):
   `start ci-box` runs it again.
 - Never delete a machine you did not create, even if it looks unused.
 
+## Ports published together
+
+A machine's own `tcp` and `udp` ports are each published at a number LiveLLM
+picks. When a program works its ports out from one (Moonlight with Sunshine
+or Apollo, Steam Remote Play) or needs a range (passive FTP, SIP), put them in
+a group, `"portGroups"` in the create file or a set's `vm` block:
+
+```json
+"portGroups": [
+  { "name": "stream", "allowCIDRs": ["203.0.113.7/32"], "ports": [
+      {"port": 47984}, {"port": 47989}, {"port": 48010},
+      {"port": 47998, "udp": true}, {"port": 47999, "udp": true},
+      {"port": 48000, "udp": true}, {"port": 48002, "udp": true}] },
+  { "name": "ftp", "mirrored": true, "count": 10 }
+]
+```
+
+A group keeps its ports' numbers inside the machine and is published at those
+numbers plus one offset LiveLLM picks, so the gaps between them stay (a port
+with neither `tcp` nor `udp` is TCP). A `mirrored` group is published at the
+same numbers inside and out, which LiveLLM picks: `count` of them (1 to 64,
+all `tcp`, `udp` or both as the group says; TCP when neither). A group is open
+to any address unless its `allowCIDRs` names some: give it the user's
+addresses unless they asked for it open to anyone (rule 5). Up to 8 groups; a
+machine publishes at most 64 ports, SSH and its groups included.
+
+`python3 scripts/llc.py connect ID` lists where each one is published:
+`portGroups[].ports[]` has `port` (inside), `published` and `address`. Give
+the user those addresses: for Moonlight, the machine's host with the published
+number of 47989. A group's offset stays for its life; a port added to it later
+that can't take the same offset is refused. A set that leaves `portGroups` out
+keeps them, and `[]` removes them all.
+
 ## Inside the workspace
 
 A machine or Desktop App, new or made before this setting existed, is closed
@@ -340,6 +395,18 @@ Changing it (`set` with `{"vm": {"placement": …}}`, a Desktop App `{"desktop":
   instead (`references/workspace.md`, "Templates").
 - **Any of these naming another machine** than the one you sent (its
   `workload`): no change to yours helps. Tell the user, and stop.
+- **403 "NVIDIA RTX 5090 isn't offered to this workspace."** No permission
+  changes it: tell the user, and stop.
+- **409 "… is in use by another machine" or "… no node of this cluster has
+  one."** Tell the user, and stop; `llc.py devices` shows what is free. Never
+  take a device off another machine.
+- **409 or 422 about a port group** (no free place on this cluster for it, a
+  port that would be published at a number in use, a mirrored group that
+  can't grow, more numbers than the cluster publishes). Tell the user what it
+  says. A group removed and added again is published at new numbers: only with
+  their agreement. "Taken just now by another save" goes once more as it was.
+- **422 "… would publish 70 ports; a machine publishes at most 64".** Ask the
+  user which ports to leave out.
 - **409 "This server is full: it has no room for this machine."** or **"No
   server has room for this machine."** (`server_full`). Tell the user and
   stop: fewer cores or less memory, or another placement, may fit if they want

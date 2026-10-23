@@ -153,7 +153,8 @@ them all: start a new one.
 
 Shared unless the user asks for dedicated ones: shared cores reserve a quarter
 of `cpu` on the server and may use all of it, but may be slower while the
-server is busy. `"dedicatedCores": true` reserves all of `cpu` for the Browser API. A set
+server is busy. `"dedicatedCores": true` reserves all of `cpu` for the Browser API
+(`browser-api create … --dedicated-cores` makes it so). A set
 takes it in its block (`{"controller": {"dedicatedCores": true}}`); one that
 leaves it out keeps it, `false` makes the cores shared again, and it applies at
 once: the Browser API restarts, so ask the user first. A server with no room answers 409

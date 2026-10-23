@@ -101,6 +101,8 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 | Windows software, a Windows desktop | Windows 11 (`vm-windows`) | `references/machines.md` |
 | A Windows server, no desktop | Windows Server Core (`vm-windows`, `"windowsEdition": "server"`) | `references/machines.md` |
 | A Linux desktop that starts in seconds, one for each task or agent | Desktop App (`desktop`) | `references/machines.md` |
+| A GPU or the user's USB devices on a machine; a machine's time zone | Machine `"devices"` (`devices` lists them), `"timeZone"` | `references/machines.md` |
+| Ports published together on a machine: game streaming (Moonlight), an FTP range | Machine `"portGroups"` | `references/machines.md` |
 | The user to watch a screen, or take it over | Screen link (`share`) | `references/machines.md` |
 | A service or site online, from an image or a Git repo, one service or several; a raw TCP/UDP port (game server, VPN) | Composable App (`pod`) | `references/apps.md` |
 | A site automated, logged into, scraped or tested in real Chrome | Browser (`browser`) | `references/browsers.md` |
