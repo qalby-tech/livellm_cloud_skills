@@ -47,8 +47,8 @@ MIXED_CARD = "Mixed core speeds"
 # The CPU model of the server a resource runs on, shared or dedicated.
 I9 = "Intel Core i9-14900K"
 # Dedicated cores come in pairs on servers whose cores have 2 threads.
-PAIRS = {"error": "Dedicated cores come in pairs on these servers: use 8 or 10.", "code": "dedicated_pairs",
-         "workload": "box", "cores": 9}
+PAIRS = {"error": "Dedicated cores come in pairs on these servers: use 8 or 10.", "code": "cores_pairs",
+         "workload": "box", "cores": 9, "choices": [8, 10]}
 # Every kind that reserves on a server is held to its fill limit, an app too.
 APP_NO_ROOM = {"error": "No server has room for this app.", "code": "server_full", "workload": "web"}
 
@@ -131,9 +131,10 @@ class CoresRefusals(unittest.TestCase):
 
     def test_dedicated_cores_in_pairs_keep_the_apis_words_and_have_the_user_choose(self):
         # the API judges the count and names the ones that fit: nothing made up here
-        for payload in (PAIRS, {"error": PAIRS["error"]}):
+        groups = "Dedicated cores come in groups of 4 on these servers: use 8 or 12."
+        for payload in (PAIRS, {"error": PAIRS["error"]}, {"error": "x", "code": "cores_pairs"}, {"error": groups}):
             p = llc.http_problem(422, payload)
-            self.assertEqual((p.code, p.status, p.message), (llc.EXIT_USER, 422, PAIRS["error"]), payload)
+            self.assertEqual((p.code, p.status, p.message), (llc.EXIT_USER, 422, payload["error"]), payload)
             self.assertIn("the count is the user's", p.next)
             self.assertIn("never pick one yourself", p.next)
             self.assertNotIn('"cpus": 8', p.next)

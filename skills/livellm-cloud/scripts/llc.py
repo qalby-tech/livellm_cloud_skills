@@ -381,15 +381,17 @@ def cores_problem(status, code, message, payload, floor=1):
         return Problem(message, "no server has room for it: tell the user, and stop; a smaller size (fewer cores, "
                        "less memory, fewer copies) or another placement may fit if they want that; never delete to "
                        "make room", EXIT_USER, status)
-    if status == 422 and DEDICATED_PAIRS in message.lower():
+    if status == 422 and (code == "cores_pairs" or DEDICATED_PAIRS in message.lower()):
         return Problem(message, PAIRS_NEXT, EXIT_USER, status)
     return None
 
 
-# Dedicated cores come in pairs on servers whose cores have 2 threads: the
-# API judges the count and names the ones that fit (422). Which one is the
-# user's to choose: it changes what they asked for and what it costs.
-DEDICATED_PAIRS = "dedicated cores come in pairs"
+# Dedicated cores come in pairs on servers whose cores have 2 threads (in
+# groups of as many as a core has): the API judges the count and names the
+# ones that fit (422 cores_pairs, its words "Dedicated cores come in pairs on
+# these servers: use 8 or 10."). Which one is the user's to choose: it
+# changes what they asked for and what it costs.
+DEDICATED_PAIRS = "dedicated cores come in "
 PAIRS_NEXT = ("the count is the user's: ask which of the counts the message names they want, then send the same "
               "create or set with that count (cpus for a machine, cpu for any other kind); never pick one yourself, "
               "never send it unchanged")
