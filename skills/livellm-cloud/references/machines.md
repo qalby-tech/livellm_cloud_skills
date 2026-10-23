@@ -77,8 +77,8 @@ different speeds). A set takes them in the machine's block
 next restart (ask the user before `restart`). A machine kept on mixed speeds
 stays on them whatever `coreSpeed` says: a new speed goes with
 `"mixedSpeeds": false` in the same set. `llc.py ls` shows the clock a running
-machine's cores got (`cores.speedMHz`), or `cores.mixed` with the words for
-it.
+machine's cores got (`cores.speedMHz`), or `cores.mixed` with the message
+"Mixed core speeds".
 
 ```json
 { "id": "build-box", "cpus": 8, "memory": "16Gi", "dedicatedCores": true, "coreSpeed": 5700 }
@@ -320,8 +320,8 @@ Changing it (`set` with `{"vm": {"placement": …}}`, a Desktop App `{"desktop":
 - **409, reserved by another agent.** Wait until the time the message names, or
   use another machine.
 - **409 "Only 6 cores at 5.7 GHz are available. Continue with mixed core
-  speeds?"** (`core_speed_short`) or **409 "Mixed core speeds: this machine's
-  cores run at different clock speeds."** (`core_speeds_mixed`). Too few
+  speeds?"** (`core_speed_short`) or **409 "No server has 20 free cores of
+  one speed. Continue with cores of mixed speeds?"** (`core_speeds_mixed`). Too few
   dedicated cores of one speed are free; the next step says how many are. Ask
   the user: that many cores (`cpus`), or the cores they asked for at mixed
   speeds (`"mixedSpeeds": true`). Never offer 0, nor fewer than the machine

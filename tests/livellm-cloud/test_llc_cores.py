@@ -33,12 +33,14 @@ spec.loader.exec_module(llc)
 # The API's refusals, in the owner's words.
 SHORT = {"error": "Only 6 cores at 5.7 GHz are available. Continue with mixed core speeds?", "code": "core_speed_short",
          "workload": "box", "cores": 8, "fit": 6, "speedMHz": 5700}
-MIXED = {"error": "Mixed core speeds: this machine's cores run at different clock speeds.", "code": "core_speeds_mixed",
+MIXED = {"error": "No server has 20 free cores of one speed. Continue with cores of mixed speeds?", "code": "core_speeds_mixed",
          "workload": "box", "cores": 20, "fit": 16}
 UNKNOWN = {"error": "No server this machine may run on has cores at 3 GHz.", "code": "core_speed_unknown",
            "workload": "box", "cores": 8, "fit": 0, "speedMHz": 3000}
 FULL = {"error": "This server is full: it has no room for this machine.", "code": "server_full", "workload": "box"}
 NO_ROOM = {"error": "No server has room for this machine.", "code": "server_full", "workload": "box"}
+# A running machine's card when its own cores run at different speeds.
+MIXED_CARD = "Mixed core speeds"
 # Every kind that reserves on a server is held to its fill limit, an app too.
 APP_NO_ROOM = {"error": "No server has room for this app.", "code": "server_full", "workload": "web"}
 
@@ -136,7 +138,7 @@ WORKSPACE = {"spec": {"workloads": [
 ]}}
 STATUS = {"workloads": [
     {"id": "fast", "phase": "Running", "ready": True, "cores": {"speedMHz": 5700}},
-    {"id": "desk", "phase": "Running", "ready": True, "cores": {"mixed": True, "message": MIXED["error"]}},
+    {"id": "desk", "phase": "Running", "ready": True, "cores": {"mixed": True, "message": MIXED_CARD}},
     {"id": "web", "phase": "Running", "ready": True},
 ]}
 
@@ -219,7 +221,7 @@ class CoresCommand(unittest.TestCase):
         res, problem = self.run_llc(llc.ls, type=None)
         self.assertIsNone(problem)
         got = {r["id"]: r.get("cores") for r in res["resources"]}
-        self.assertEqual(got, {"fast": {"speedMHz": 5700}, "desk": {"mixed": True, "message": MIXED["error"]}, "win": None,
+        self.assertEqual(got, {"fast": {"speedMHz": 5700}, "desk": {"mixed": True, "message": MIXED_CARD}, "win": None,
                                "winsrv": None, "web": None})
 
     def machine_file(self, body):
