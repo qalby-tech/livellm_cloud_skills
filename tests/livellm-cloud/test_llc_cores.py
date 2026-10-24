@@ -49,6 +49,8 @@ I9 = "Intel Core i9-14900K"
 # Dedicated cores come in pairs on servers whose cores have 2 threads.
 PAIRS = {"error": "Dedicated cores come in pairs on these servers: use 8 or 10.", "code": "cores_pairs",
          "workload": "box", "cores": 9, "choices": [8, 10]}
+# Too few whole cores free to dedicate on any server, a resource of any kind.
+CORES_SHORT = {"error": "Only 4 dedicated cores are available.", "code": "cores_short", "workload": "web", "cores": 6, "fit": 4}
 # Every kind that reserves on a server is held to its fill limit, an app too.
 APP_NO_ROOM = {"error": "No server has room for this app.", "code": "server_full", "workload": "web"}
 
@@ -142,6 +144,24 @@ class CoresRefusals(unittest.TestCase):
         # any other 422 stays the plain one
         p = llc.http_problem(422, {"error": "cpus must be at least 1"})
         self.assertIn("fix the field the message names", p.next)
+
+    def test_too_few_whole_cores_free_offers_those_or_shared_cores(self):
+        p = llc.http_problem(409, CORES_SHORT)
+        self.assertEqual((p.code, p.status, p.message), (llc.EXIT_USER, 409, CORES_SHORT["error"]))
+        self.assertIn('4 cores dedicated ("cpus": 4 for a machine, "cpu": "4" for any other kind)', p.next)
+        self.assertIn('shared cores ("dedicatedCores": false)', p.next)
+        self.assertIn("never unchanged", p.next)
+        self.assertNotIn("retry", p.next)
+        self.assertNotIn("mixedSpeeds", p.next)
+        # none free: never 0 cores
+        p = llc.http_problem(409, {**CORES_SHORT, "error": "No dedicated cores are available.", "fit": 0})
+        self.assertNotIn('"cpus": 0', p.next)
+        self.assertIn("shared cores", p.next)
+        # never fewer than the machine runs on
+        p = llc.cores_problem(409, "cores_short", "Only 1 dedicated core is available.", {**CORES_SHORT, "fit": 1}, floor=2)
+        self.assertNotIn('"cpus": 1', p.next)
+        p = llc.with_core_floor(llc.http_problem(409, {**CORES_SHORT, "fit": 1}), 2)
+        self.assertNotIn('"cpus": 1', p.next)
 
     def test_known_by_the_code_alone(self):
         # the same words without the code are any other 409; the code without
@@ -260,6 +280,16 @@ class CoresCommand(unittest.TestCase):
         self.assertIn("never pick one yourself", problem.next)
         # the count went as asked: the API judges it
         self.assertEqual(fake.calls[0][2]["cpus"], 9)
+
+    def test_a_create_refused_for_too_few_whole_cores_offers_no_fewer_than_the_kind_runs_on(self):
+        one = {**CORES_SHORT, "error": "Only 1 dedicated core is available.", "fit": 1, "workload": "box"}
+        for typ, offered in (("vm-ubuntu", True), ("vm-ubuntu-desktop", False)):
+            self.use(refuse=(409, one))
+            f = self.machine_file({"id": "box", "cpus": 6, "dedicatedCores": True})
+            _, problem = self.run_llc(llc.create, json=f, type=typ)
+            self.assertEqual((problem.message, problem.status, problem.refusal), (one["error"], 409, "cores_short"))
+            self.assertEqual('"cpus": 1' in problem.next, offered, (typ, problem.next))
+            self.assertIn("shared cores", problem.next)
 
     def machine_file(self, body):
         tmp = tempfile.TemporaryDirectory()

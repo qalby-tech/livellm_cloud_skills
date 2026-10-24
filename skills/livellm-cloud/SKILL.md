@@ -217,6 +217,7 @@ Every error prints `{"error": ..., "next": ...}`. Do what `next` says.
 | 409 | Another agent holds the machine, or the resource is mid-change | Held: wait until the time it names, or use another. A database "still starting" can't move: ask the user, don't retry. Otherwise wait a few seconds, retry once |
 | 409 `organization_billing` | The organization manages this workspace's plan | Tell the user an owner changes it in the console, and stop; don't retry |
 | 409 `core_speed_short`, `core_speeds_mixed`, `server_full` | Too few dedicated cores of one speed are free, or no server has room for the resource | Ask the user: fewer cores or mixed speeds; no room: tell them, and stop (`references/machines.md`); don't retry unchanged |
+| 409 `cores_short` | Too few whole cores are free to dedicate, for a resource of any kind | Ask the user: the dedicated cores the message names, or shared cores; don't retry unchanged (`references/machines.md`) |
 | 422, dedicated cores in pairs | On servers whose cores have 2 threads a dedicated count is even | Ask the user which of the counts the message names; never pick one yourself (`references/machines.md`) |
 | 422 | A value was refused; the message names it | Fix that value, never retry unchanged |
 | 5xx | Platform trouble | Retry twice with a pause, then tell the user |

@@ -402,6 +402,12 @@ Changing it (`set` with `{"vm": {"placement": …}}`, a Desktop App `{"desktop":
 - **422 "No server this machine may run on has cores at 3 GHz."**
   (`core_speed_unknown`). `llc.py cores` lists the speeds there are: ask the
   user for one, or leave `coreSpeed` out.
+- **409 "Only 4 dedicated cores are available."** (`cores_short`). No server
+  has that many whole cores free to dedicate, for a machine or any other kind.
+  Ask the user: the dedicated cores the message names (`cpus` for a machine,
+  `cpu` for any other kind; never 0, nor fewer than the machine runs on), or
+  shared cores (`"dedicatedCores": false`). Mixed speeds don't help. Send it
+  again with their choice, never unchanged.
 - **422, dedicated cores in pairs** (such as "Dedicated cores come in pairs
   on these servers: use 8 or 10."). On servers whose cores have 2 threads a
   dedicated count is even, for a machine (`cpus`) and any other kind (`cpu`).

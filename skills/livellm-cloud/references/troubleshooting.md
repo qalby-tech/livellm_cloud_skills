@@ -65,7 +65,9 @@ deleting it and creating it again. A 409 saying billing for this workspace is
 managed by its organization: tell the user an owner changes the plan in the
 console, and stop. A machine's cores refused (`core_speed_short`,
 `core_speeds_mixed`: too few dedicated cores of one speed free) won't change
-on a retry either: see `references/machines.md`. Nor will `server_full` (no
+on a retry either, nor will `cores_short` (too few whole cores free to
+dedicate, for any kind: the cores the message names, or shared cores): see
+`references/machines.md`. Nor will `server_full` (no
 server has room for the machine, app, database or browser): tell the user,
 and stop; never delete anything to make room.
 

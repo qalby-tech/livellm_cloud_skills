@@ -383,6 +383,9 @@ def cores_problem(status, code, message, payload, floor=1):
                        "make room", EXIT_USER, status)
     if status == 422 and (code == "cores_pairs" or DEDICATED_PAIRS in message.lower()):
         return Problem(message, PAIRS_NEXT, EXIT_USER, status)
+    if status == 409 and code == "cores_short":
+        return Problem(message, f"tell the user and ask which they want: {cores_short_choice(payload, floor)}; then send "
+                       "the same create or set again with that change, never unchanged", EXIT_USER, status)
     return None
 
 
@@ -413,6 +416,20 @@ def cores_choice(payload, floor=1):
     return f"{mixed}, or another coreSpeed (llc.py cores lists what fits)"
 
 
+def cores_short_choice(payload, floor=1):
+    """What the user chooses between after too few whole cores free to
+    dedicate on any server (409 cores_short, a resource of any kind): the
+    dedicated cores that fit (cpus for a machine, cpu for any other kind),
+    offered only when there are some and at least the machine's floor, never
+    0; or shared cores. Mixed speeds don't help here: it is the count."""
+    fit = payload.get("fit")
+    fit = fit if isinstance(fit, int) and fit >= max(floor, 1) else 0
+    shared = 'shared cores ("dedicatedCores": false)'
+    if fit:
+        return f'{cores_word(fit)} dedicated ("cpus": {fit} for a machine, "cpu": "{fit}" for any other kind), or {shared}'
+    return f"{shared}, or to wait until dedicated cores are free"
+
+
 # The fewest cores a machine runs on, by kind, as the API holds them (a
 # size under it is refused): a desktop machine and Windows 11 (the edition a
 # vm-windows gets when it names none) 2; a server and Windows Server 1, the
@@ -436,15 +453,16 @@ def with_core_floor(p, floor):
     """A cores refusal (409 core_speed_short, core_speeds_mixed) worded again
     with the machine's floor: fewer cores than it runs on are not offered.
     Any other problem is returned as it is."""
-    if p.refusal in ("core_speed_short", "core_speeds_mixed") and floor > 1:
+    if p.refusal in ("core_speed_short", "core_speeds_mixed", "cores_short") and floor > 1:
         again = cores_problem(p.status, p.refusal, p.message, p.payload, floor)
         if again:
             p.next = again.next
     return p
 
 
-# The refusals of a machine's cores of one speed, which name the machine.
-CORES_CODES = ("core_speed_short", "core_speeds_mixed", "core_speed_unknown")
+# The refusals of a machine's cores, which name the machine (cores_short
+# names a resource of any kind).
+CORES_CODES = ("core_speed_short", "core_speeds_mixed", "core_speed_unknown", "cores_short")
 
 
 def for_another_machine(p, machine):
@@ -458,7 +476,8 @@ def for_another_machine(p, machine):
     sent = machine.strip() if isinstance(machine, str) else ""
     if not named or not sent or named == sent:
         return False
-    p.next = (f"this is about {named}, another machine, not {sent}: no change to what you sent helps; tell the user, "
+    other = "another resource" if p.refusal == "cores_short" else "another machine"
+    p.next = (f"this is about {named}, {other}, not {sent}: no change to what you sent helps; tell the user, "
               "and stop; never send it again unchanged")
     return True
 
@@ -486,6 +505,9 @@ def template_cores(p, t, new_id):
     if p.refusal == "core_speed_unknown":
         p.next = ("no server here has cores at that speed: llc.py cores lists the speeds there are; ask the user for "
                   "one, or none (any one speed, coreSpeed left out); " + instead)
+    elif p.refusal == "cores_short":
+        choice = cores_short_choice(p.payload, core_floor(kind, config.get("vm")))
+        p.next = f"tell the user and ask which they want: {choice}; " + instead
     else:
         choice = cores_choice(p.payload, core_floor(kind, config.get("vm")))
         p.next = f"tell the user and ask which they want: {choice}; " + instead
@@ -1281,7 +1303,7 @@ def set_settings(args):
         # another machine's refusal: nothing to read for this one's floor
         if for_another_machine(p, args.id):
             raise
-        if p.refusal in ("core_speed_short", "core_speeds_mixed"):
+        if p.refusal in ("core_speed_short", "core_speeds_mixed", "cores_short"):
             # the machine's kind and edition (fixed when made), read only now
             try:
                 w = next((x for x in workspace_workloads(tok) if x.get("id") == args.id), None)

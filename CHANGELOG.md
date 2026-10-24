@@ -34,7 +34,10 @@ Against a LiveLLM without them only the hints change, and `llc.py cores` and
   fewer than the machine runs on, 2 for a desktop machine or Windows 11, or
   the same cores at mixed speeds), a speed no server has
   (`core_speed_unknown`: `llc.py cores`), and no server with room for a
-  resource of any kind (`server_full`: tell the user, and stop). A refusal
+  resource of any kind (`server_full`: tell the user, and stop), and too few
+  whole cores free to dedicate for a resource of any kind (`cores_short`: the
+  dedicated cores that fit, never 0 nor fewer than the machine runs on, or
+  shared cores). A refusal
   that names another machine offers no change to the one sent. A template use
   refused for its cores (it takes no `cpus`, `coreSpeed` or `mixedSpeeds`)
   has the machine created directly with the user's choice.
