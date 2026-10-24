@@ -61,6 +61,68 @@ default for a machine made for one job. `connect` shows when it will stop.
 Stopping a machine, by hand or by its own time, clears the stop time: start it
 again and it keeps running until you give it a new one.
 
+**Cores are shared unless the user asks for dedicated ones.** `cpus` is how
+many cores the machine has; shared, they may be slower while its server is
+busy. `"dedicatedCores": true` gives the machine whole cores of its server for
+it alone: nothing else runs on them. On servers whose cores have 2 threads
+they come in pairs (`cpus` 2, 4, 6…; the API refuses another count), and a
+dedicated core counts as 2 of the plan's cores and on pay as you go: say so
+when the user asks for them. Where the servers run their cores at different
+clock speeds, a machine's dedicated cores are all of one speed: any one with
+that many free, or the one `"coreSpeed"` asks for, in MHz (`5700` is 5.7 GHz).
+`python3 scripts/llc.py cores` lists the speeds there are, the CPU model of
+the servers with each (`model`) and how many dedicated cores of each fit on
+one server (whole cores: an even count where they have 2 threads);
+`showSpeed: false` means every server runs at one speed, so leave `coreSpeed`
+out. `"mixedSpeeds": true`
+keeps the count when no one speed has it free (the cores may then run at
+different speeds). A set takes them in the machine's block
+(`{"vm": {"dedicatedCores": true}}`); one that leaves them out keeps them,
+`false` (or `coreSpeed` 0) clears one, and they take effect at the machine's
+next restart (ask the user before `restart`). A machine kept on mixed speeds
+stays on them whatever `coreSpeed` says: a new speed goes with
+`"mixedSpeeds": false` in the same set. `llc.py ls` shows a running
+resource's cores: `cores.model`, the CPU of the server it runs on, shared or
+dedicated ("Intel Core i9-14900K"), and for dedicated cores only the clock
+they got (`cores.speedMHz`) or `cores.mixed` with the message "Mixed core
+speeds". Shared cores aren't reserved and have no clock: never give the user
+a speed for them.
+
+```json
+{ "id": "build-box", "cpus": 8, "memory": "16Gi", "dedicatedCores": true, "coreSpeed": 5700 }
+```
+
+A Desktop App's cores are shared too unless `"dedicatedCores": true` asks for
+all of its `cpu` as whole cores of its server for it alone (shared reserves a
+quarter; dedicated in pairs where the cores have 2 threads, each counting as
+2 of the plan's cores), with no speed to choose:
+`{"desktop": {"dedicatedCores": true}}` applies at once and restarts it (ask
+the user first).
+
+**A GPU or a USB controller.** `"devices": ["rtx5090"]` gives the machine one
+of the cluster's own devices, passed through to it. `python3 scripts/llc.py
+devices` lists the ones this workspace's machines may have: `id` (what
+`devices` names), `label`, `kind` (`gpu` or `usb`), how many the cluster has
+(`total`) and has `free`, and which of this workspace's machines have one
+(`here`). A device belongs to one machine at a time, and the machine runs on
+the server that has it, so ask the user before giving one. A set takes them in
+the machine's block (`{"vm": {"devices": ["rtx5090"]}}`); `[]` takes them all
+off, and one that leaves them out keeps them. They change at the machine's
+next restart (ask the user before `restart`).
+
+**Its time zone.** `"timeZone": "Europe/Berlin"` (an IANA name) sets the
+machine's time zone when it is made; left out, it gets the cluster's. After
+that it is the machine's own: a set never changes it (`llc.py set` refuses
+one), so change it on the machine itself, with the user's agreement.
+
+**What LiveLLM sets itself.** A machine's settings, as the workspace lists
+them, also hold what only LiveLLM writes: `hostDevices` and `hideHypervisor`
+(what the machine's `devices` take on its server), `virtio` (a Windows machine
+made with the faster disk and network card), `virtioMove` and `virtioMoveAt`
+(an older Windows machine moving to them), `machineType`, `installed`, `pin`,
+and a port group's `offset`. Leave them out of a create or a set: whatever is
+sent for them is ignored.
+
 ## Run commands
 
 ```
@@ -233,6 +295,39 @@ backups (a count, 1 to 100):
   `start ci-box` runs it again.
 - Never delete a machine you did not create, even if it looks unused.
 
+## Ports published together
+
+A machine's own `tcp` and `udp` ports are each published at a number LiveLLM
+picks. When a program works its ports out from one (Moonlight with Sunshine
+or Apollo, Steam Remote Play) or needs a range (passive FTP, SIP), put them in
+a group, `"portGroups"` in the create file or a set's `vm` block:
+
+```json
+"portGroups": [
+  { "name": "stream", "allowCIDRs": ["203.0.113.7/32"], "ports": [
+      {"port": 47984}, {"port": 47989}, {"port": 48010},
+      {"port": 47998, "udp": true}, {"port": 47999, "udp": true},
+      {"port": 48000, "udp": true}, {"port": 48002, "udp": true}] },
+  { "name": "ftp", "mirrored": true, "count": 10 }
+]
+```
+
+A group keeps its ports' numbers inside the machine and is published at those
+numbers plus one offset LiveLLM picks, so the gaps between them stay (a port
+with neither `tcp` nor `udp` is TCP). A `mirrored` group is published at the
+same numbers inside and out, which LiveLLM picks: `count` of them (1 to 64,
+all `tcp`, `udp` or both as the group says; TCP when neither). A group is open
+to any address unless its `allowCIDRs` names some: give it the user's
+addresses unless they asked for it open to anyone (rule 5). Up to 8 groups; a
+machine publishes at most 64 ports, SSH and its groups included.
+
+`python3 scripts/llc.py connect ID` lists where each one is published:
+`portGroups[].ports[]` has `port` (inside), `published` and `address`. Give
+the user those addresses: for Moonlight, the machine's host with the published
+number of 47989. A group's offset stays for its life; a port added to it later
+that can't take the same offset is refused. A set that leaves `portGroups` out
+keeps them, and `[]` removes them all.
+
 ## Inside the workspace
 
 A machine or Desktop App, new or made before this setting existed, is closed
@@ -252,7 +347,9 @@ python3 scripts/llc.py reach node-1 --add node-2,node-3 --yes
 Each of these lets resources in: ask the user first (rule 11). `["*"]` (the
 whole workspace) always needs their agreement. `reach ID` lists the names a
 machine answers on inside: `<res>` for SSH and raw ports, `<res>-http`,
-`<res>-internal` and `<res>-rdp`. See `references/inside-access.md`.
+`<res>-internal` and `<res>-rdp`, and `<res>-host` (no port): the machine
+itself on every port, TCP and UDP, for the resources its `reachableFrom` lets
+in. See `references/inside-access.md`.
 
 A database is reached only by what links it. A machine or a Desktop App that
 uses one links it, `"databases": [{"id": "db"}]` in the create file or
@@ -294,6 +391,49 @@ Changing it (`set` with `{"vm": {"placement": …}}`, a Desktop App `{"desktop":
   than guessing.
 - **409, reserved by another agent.** Wait until the time the message names, or
   use another machine.
+- **409 "Only 6 cores at 5.7 GHz are available. Continue with mixed core
+  speeds?"** (`core_speed_short`) or **409 "No server has 20 free cores of
+  one speed. Continue with cores of mixed speeds?"** (`core_speeds_mixed`). Too few
+  dedicated cores of one speed are free; the next step says how many are. Ask
+  the user: that many cores (`cpus`), or the cores they asked for at mixed
+  speeds (`"mixedSpeeds": true`). Never offer 0, nor fewer than the machine
+  runs on (2 for a desktop machine or Windows 11): then it is mixed speeds or
+  another `coreSpeed`. Send it again with their choice, never unchanged.
+- **422 "No server this machine may run on has cores at 3 GHz."**
+  (`core_speed_unknown`). `llc.py cores` lists the speeds there are: ask the
+  user for one, or leave `coreSpeed` out.
+- **409 "Only 4 dedicated cores are available."** (`cores_short`). No server
+  has that many whole cores free to dedicate, for a machine or any other kind.
+  Ask the user: the dedicated cores the message names (`cpus` for a machine,
+  `cpu` for any other kind; never 0, nor fewer than the machine runs on), or
+  shared cores (`"dedicatedCores": false`). Mixed speeds don't help. Send it
+  again with their choice, never unchanged.
+- **422, dedicated cores in pairs** (such as "Dedicated cores come in pairs
+  on these servers: use 8 or 10."). On servers whose cores have 2 threads a
+  dedicated count is even, for a machine (`cpus`) and any other kind (`cpu`).
+  The count is the user's: ask which of the counts the message names they
+  want, then send that; never pick one yourself, never send it unchanged.
+- **Any of these for a `template use`**: it takes no `cpus`, `coreSpeed` or
+  `mixedSpeeds`, so create the machine directly with the user's choice
+  instead (`references/workspace.md`, "Templates").
+- **Any of these naming another machine** than the one you sent (its
+  `workload`): no change to yours helps. Tell the user, and stop.
+- **403 "NVIDIA RTX 5090 isn't offered to this workspace."** No permission
+  changes it: tell the user, and stop.
+- **409 "… is in use by another machine" or "… no node of this cluster has
+  one."** Tell the user, and stop; `llc.py devices` shows what is free. Never
+  take a device off another machine.
+- **409 or 422 about a port group** (no free place on this cluster for it, a
+  port that would be published at a number in use, a mirrored group that
+  can't grow, more numbers than the cluster publishes). Tell the user what it
+  says. A group removed and added again is published at new numbers: only with
+  their agreement. "Taken just now by another save" goes once more as it was.
+- **422 "… would publish 70 ports; a machine publishes at most 64".** Ask the
+  user which ports to leave out.
+- **409 "This server is full: it has no room for this machine."** or **"No
+  server has room for this machine."** (`server_full`). Tell the user and
+  stop: fewer cores or less memory, or another placement, may fit if they want
+  that. Never delete anything to make room.
 - **A command on Windows fails with "is not recognized".** It ran in
   PowerShell, not bash: write it in PowerShell (`Get-Content`, not `cat -n`;
   `$env:PATH`, not `$PATH`).

@@ -63,10 +63,18 @@ database "still starting, so its location can't change" is different: its
 first start never finished, and retrying won't help. Ask the user before
 deleting it and creating it again. A 409 saying billing for this workspace is
 managed by its organization: tell the user an owner changes the plan in the
-console, and stop.
+console, and stop. A machine's cores refused (`core_speed_short`,
+`core_speeds_mixed`: too few dedicated cores of one speed free) won't change
+on a retry either, nor will `cores_short` (too few whole cores free to
+dedicate, for any kind: the cores the message names, or shared cores): see
+`references/machines.md`. Nor will `server_full` (no
+server has room for the machine, app, database or browser): tell the user,
+and stop; never delete anything to make room.
 
 **422.** A value was refused, and the message names it. Fix that value. Never
-send the same request again hoping for a different answer.
+send the same request again hoping for a different answer. Dedicated cores
+refused because they come in pairs on those servers: the message names the
+counts that fit, and which one is the user's to choose (`references/machines.md`).
 
 **5xx or "cannot reach LiveLLM".** The platform or the network. Retry twice with
 a pause. If it keeps failing, tell the user plainly, with the time and what you

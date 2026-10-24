@@ -8,6 +8,8 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py login [--wait] | logout | whoami | ssh-keys | logs <id>
     llc.py ls [--type TYPE]
     llc.py hosts                               (where resources can run: ids, regions, free room)
+    llc.py cores                               (dedicated cores: the clock speeds there are, their CPU model, what fits)
+    llc.py devices                             (the devices a machine can be given: a GPU, a USB controller)
     llc.py create TYPE --json FILE --yes
     llc.py create browser --json FILE --engine chrome|camoufox --yes
     llc.py create apps --json FILE --yes       (several apps and their databases, linked)
@@ -29,7 +31,7 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py reach ID (--from a,b | --from '*' | --none | --add X | --remove X) --yes   (not a database)
     llc.py link ID DB [DB...] [--remove] --yes (an app, machine or Desktop App reaches a database or an object storage; no variables)
     llc.py browser-api create NAME (--browsers a,b | --all) [--remote ID=WSS]
-                   [--host H | --region R] --yes
+                   [--host H | --region R] [--dedicated-cores] --yes
     llc.py browser-api show NAME | (add | remove) NAME BROWSER --yes
     llc.py locales                             (languages and time zones a browser takes)
     llc.py engines                             (browser engines offered: Chrome, Camoufox)
@@ -91,6 +93,7 @@ class Problem(Exception):
         self.oauth = oauth  # the OAuth error code of a sign-in endpoint's refusal
         self.refusal = ""  # the API's code for this refusal (code above is the exit code)
         self.missing = []  # a create from a template: the secrets it still needs
+        self.payload = {}  # the API's answer, for a command that words it again with what it knows
 
 
 def out(value):
@@ -142,6 +145,7 @@ def http_problem(status, payload):
     p.refusal = payload.get("code") if isinstance(payload.get("code"), str) else ""
     missing = payload.get("missing")
     p.missing = missing if isinstance(missing, list) else []
+    p.payload = payload
     return p
 
 
@@ -168,6 +172,12 @@ def status_problem(status, payload):
     storage = object_storage_problem(status, message)
     if storage:
         return storage
+    machine = cores_problem(status, code, message, payload)
+    if machine:
+        return machine
+    machine = machine_problem(status, message)
+    if machine:
+        return machine
     if status == 401:
         return Problem(message, "run: llc.py login, give the user the link it prints, and run login again once they press Allow", EXIT_USER, status)
     if status == 402:
@@ -343,6 +353,202 @@ def object_storage_problem(status, message):
         return Problem(message, "endpoint, region, bucket, accessKey and secretKey are an object storage's: link a "
                        "PostgreSQL database with host, port, database, username, password or url, a Redis one with "
                        "host, port, password or url", EXIT_OTHER, status)
+    return None
+
+
+def cores_word(n):
+    """A count of cores as the console words it: "1 core", "6 cores"."""
+    return "1 core" if n == 1 else f"{n} cores"
+
+
+def cores_problem(status, code, message, payload, floor=1):
+    """A machine's cores refused, by the API's code: too few dedicated cores
+    of one clock speed free (409 core_speed_short, core_speeds_mixed) or a
+    speed no server has (422 core_speed_unknown); or no server with room for
+    a resource of any kind, a machine, an app, a database or a browser (409
+    server_full); or a dedicated count the servers can't take, in pairs where
+    their cores have 2 threads (422, known by the API's words, which name the
+    counts that fit); None for any other answer. The words are the API's own.
+    Fewer cores, another count or mixed speeds changes what the user asked
+    for, so they choose. The cores that fit are offered as cores_choice says."""
+    if status == 409 and code in ("core_speed_short", "core_speeds_mixed"):
+        return Problem(message, f"tell the user and ask which they want: {cores_choice(payload, floor)}; then send the "
+                       "same create or set again with that change, never unchanged", EXIT_USER, status)
+    if status == 422 and code == "core_speed_unknown":
+        return Problem(message, "no server here has cores at that speed: llc.py cores lists the speeds there are; ask "
+                       "the user for one, or leave coreSpeed out (any one speed)", EXIT_USER, status)
+    if status == 409 and code == "server_full":
+        return Problem(message, "no server has room for it: tell the user, and stop; a smaller size (fewer cores, "
+                       "less memory, fewer copies) or another placement may fit if they want that; never delete to "
+                       "make room", EXIT_USER, status)
+    if status == 422 and (code == "cores_pairs" or DEDICATED_PAIRS in message.lower()):
+        return Problem(message, PAIRS_NEXT, EXIT_USER, status)
+    if status == 409 and code == "cores_short":
+        return Problem(message, f"tell the user and ask which they want: {cores_short_choice(payload, floor)}; then send "
+                       "the same create or set again with that change, never unchanged", EXIT_USER, status)
+    return None
+
+
+# Dedicated cores come in pairs on servers whose cores have 2 threads (in
+# groups of as many as a core has): the API judges the count and names the
+# ones that fit (422 cores_pairs, its words "Dedicated cores come in pairs on
+# these servers: use 8 or 10."). Which one is the user's to choose: it
+# changes what they asked for and what it costs.
+DEDICATED_PAIRS = "dedicated cores come in "
+PAIRS_NEXT = ("the count is the user's: ask which of the counts the message names they want, then send the same "
+              "create or set with that count (cpus for a machine, cpu for any other kind); never pick one yourself, "
+              "never send it unchanged")
+
+
+def cores_choice(payload, floor=1):
+    """What the user chooses between after too few dedicated cores of one
+    speed (409 core_speed_short, core_speeds_mixed): the cores that fit,
+    offered only when there are some and at least the machine's floor
+    (core_floor: a create, a set or a template that knows the kind gives it),
+    never 0 and never fewer than the machine runs on; the cores asked for at
+    mixed speeds; else another coreSpeed."""
+    fit, asked = payload.get("fit"), payload.get("cores")
+    fit = fit if isinstance(fit, int) and fit >= max(floor, 1) else 0
+    count = cores_word(asked) if isinstance(asked, int) and asked > 0 else "the same cores"
+    mixed = f'{count} at mixed speeds ("mixedSpeeds": true)'
+    if fit:
+        return f'{cores_word(fit)} of one speed ("cpus": {fit}), or {mixed}'
+    return f"{mixed}, or another coreSpeed (llc.py cores lists what fits)"
+
+
+def cores_short_choice(payload, floor=1):
+    """What the user chooses between after too few whole cores free to
+    dedicate on any server (409 cores_short, a resource of any kind): the
+    dedicated cores that fit (cpus for a machine, cpu for any other kind),
+    offered only when there are some and at least the machine's floor, never
+    0; or shared cores. Mixed speeds don't help here: it is the count."""
+    fit = payload.get("fit")
+    fit = fit if isinstance(fit, int) and fit >= max(floor, 1) else 0
+    shared = 'shared cores ("dedicatedCores": false)'
+    if fit:
+        return f'{cores_word(fit)} dedicated ("cpus": {fit} for a machine, "cpu": "{fit}" for any other kind), or {shared}'
+    return f"{shared}, or to wait until dedicated cores are free"
+
+
+# The fewest cores a machine runs on, by kind, as the API holds them (a
+# size under it is refused): a desktop machine and Windows 11 (the edition a
+# vm-windows gets when it names none) 2; a server and Windows Server 1, the
+# least any machine has.
+DESKTOP_CORE_FLOOR = 2
+
+
+def core_floor(typ, vm):
+    """The fewest cores a machine of type typ, with its settings vm (a create's
+    flat body, a set's stored vm block), runs on; an unknown kind gets the
+    most any machine needs, so nothing below a floor is ever offered."""
+    if typ is None:
+        return DESKTOP_CORE_FLOOR
+    edition = (vm.get("windowsEdition") if isinstance(vm, dict) else None) or "desktop"
+    if typ == "vm-ubuntu-desktop" or (typ == "vm-windows" and edition != "server"):
+        return DESKTOP_CORE_FLOOR
+    return 1
+
+
+def with_core_floor(p, floor):
+    """A cores refusal (409 core_speed_short, core_speeds_mixed) worded again
+    with the machine's floor: fewer cores than it runs on are not offered.
+    Any other problem is returned as it is."""
+    if p.refusal in ("core_speed_short", "core_speeds_mixed", "cores_short") and floor > 1:
+        again = cores_problem(p.status, p.refusal, p.message, p.payload, floor)
+        if again:
+            p.next = again.next
+    return p
+
+
+# The refusals of a machine's cores, which name the machine (cores_short
+# names a resource of any kind).
+CORES_CODES = ("core_speed_short", "core_speeds_mixed", "core_speed_unknown", "cores_short")
+
+
+def for_another_machine(p, machine):
+    """A cores refusal (CORES_CODES) that names another machine than the one
+    a create or a set sent (machine; the API names it trimmed) worded again:
+    cpus, mixedSpeeds or coreSpeed in what was sent would change that one,
+    not the machine named, so none is offered (as the console and the CLI).
+    True when it was; any other problem is left as it is."""
+    named = p.payload.get("workload") if p.refusal in CORES_CODES else None
+    named = named.strip() if isinstance(named, str) else ""
+    sent = machine.strip() if isinstance(machine, str) else ""
+    if not named or not sent or named == sent:
+        return False
+    other = "another resource" if p.refusal == "cores_short" else "another machine"
+    p.next = (f"this is about {named}, {other}, not {sent}: no change to what you sent helps; tell the user, "
+              "and stop; never send it again unchanged")
+    return True
+
+
+def template_cores(p, t, new_id):
+    """A create from the machine template t refused for the new machine's
+    cores (CORES_CODES) worded again: a create from a template takes no
+    cpus, coreSpeed or mixedSpeeds, so the user's choice goes into the
+    machine created directly from the template's settings, or, fewer cores
+    or another coreSpeed, into a new template (a template never keeps mixed
+    speeds). The cores that fit are offered no fewer than the template's
+    kind runs on (core_floor). Any other problem, and a refusal that names
+    another machine (for_another_machine), is left as it is."""
+    kind = t.get("kind") if isinstance(t.get("kind"), str) else ""
+    if not kind.startswith("vm-") or p.refusal not in CORES_CODES or for_another_machine(p, new_id):
+        return p
+    config = t.get("config") if isinstance(t.get("config"), dict) else {}
+    new_id = new_id.strip() if isinstance(new_id, str) else new_id
+    instead = ("a create from a template takes no cpus, coreSpeed or mixedSpeeds, so create the machine directly: "
+               f'llc.py template show {t.get("id")} has its settings; send its "vm" settings flat, with "id": "{new_id}", '
+               f'"credentials" and that change, as llc.py create {kind} --json FILE --yes; or, for fewer cores or another '
+               "coreSpeed in the template itself (a template never keeps mixed speeds), save a new one from a machine "
+               "that has them (llc.py template save) and remove this one once the user agrees; never send the same "
+               "template use unchanged")
+    if p.refusal == "core_speed_unknown":
+        p.next = ("no server here has cores at that speed: llc.py cores lists the speeds there are; ask the user for "
+                  "one, or none (any one speed, coreSpeed left out); " + instead)
+    elif p.refusal == "cores_short":
+        choice = cores_short_choice(p.payload, core_floor(kind, config.get("vm")))
+        p.next = f"tell the user and ask which they want: {choice}; " + instead
+    else:
+        choice = cores_choice(p.payload, core_floor(kind, config.get("vm")))
+        p.next = f"tell the user and ask which they want: {choice}; " + instead
+    return p
+
+
+# A machine's devices and port groups are refused in the API's words, with no
+# code: a device this workspace isn't offered (403), one another machine has
+# or no server has (409); a port group the platform can't publish (409, 422),
+# past the most ports a machine publishes (422), or a LiveLLM without port
+# groups (503).
+DEVICE_NOT_OFFERED = "isn't offered to this workspace"
+DEVICE_TAKEN = ("is in use by another machine", "no node of this cluster has one")
+GROUP_UNPLACED = ("no free place on this cluster for group", "free ports in a row are left on this cluster",
+                  "would be published at", "can't grow", "is held by something else now", "the cluster publishes ports in")
+PORT_CAP = "a machine publishes at most"
+NO_PORT_GROUPS = "port groups aren't available on this install"
+
+
+def machine_problem(status, message):
+    """A machine's devices or port groups refused, known by the API's words,
+    with what to do; None for any other answer. A device or a published port
+    is shared with every workspace, so the agent never frees one: the user
+    decides."""
+    low = message.lower()
+    if status == 403 and DEVICE_NOT_OFFERED in low:
+        return Problem(message, "this device isn't offered to this workspace, and no permission changes that: tell the "
+                       "user, and stop; llc.py devices lists the ones a machine here can have", EXIT_USER, status)
+    if status == 409 and any(w in low for w in DEVICE_TAKEN):
+        return Problem(message, "the device is taken: tell the user, and stop; llc.py devices shows how many are free and "
+                       "which of this workspace's machines have one; never take it off another machine", EXIT_USER, status)
+    if status in (409, 422) and any(w in low for w in GROUP_UNPLACED):
+        return Problem(message, "the ports of this group can't be published as asked: tell the user what the message says, "
+                       "and stop; a group removed and added again is published at new numbers, so only with their "
+                       "agreement; never send it again unchanged", EXIT_USER, status)
+    if status == 422 and PORT_CAP in low:
+        return Problem(message, "a machine publishes no more ports than that, SSH and its groups included: ask the user "
+                       "which to leave out", EXIT_USER, status)
+    if status == 503 and NO_PORT_GROUPS in low:
+        return Problem(message, "this LiveLLM can't publish port groups: leave portGroups out, and tell the user",
+                       EXIT_USER, status)
     return None
 
 
@@ -689,6 +895,9 @@ def resources(tok):
             # and the apps a database serves
             **({"databases": link_list(w)} if link_list(w) else {}),
             **({"usedBy": live["usedBy"]} if live.get("usedBy") else {}),
+            # a running resource's cores as the API says them: its server's CPU model, shared or dedicated, and
+            # for dedicated cores only the clock they got or mixed speeds with the words for it (shared: no clock)
+            **({"cores": live["cores"]} if live.get("cores") else {}),
             # a Camoufox browser says so; a Chrome one carries no engine (a Browser API has none)
             **({"engine": "camoufox"} if (w.get("browser") or {}).get("engine") == "camoufox" else {}),
             # a database's engine: postgres (when its settings name none), redis, or s3 (object storage)
@@ -759,7 +968,12 @@ def create(args):
         out(answer)
         return
     tok = token()
-    request("POST", f"/v1/workloads/{urllib.parse.quote(args.type)}", body, token=tok)
+    try:
+        request("POST", f"/v1/workloads/{urllib.parse.quote(args.type)}", body, token=tok)
+    except Problem as p:
+        if for_another_machine(p, body.get("id") if isinstance(body, dict) else None):
+            raise
+        raise with_core_floor(p, core_floor(args.type, body)) from None
     answer = {"created": body.get("id"), "type": args.type,
               "next": f"llc.py wait {body.get('id')} then llc.py connect {body.get('id')}"}
     if args.type in ENGINE_TYPES and isinstance(body, dict) and body.get("engine") == "camoufox":
@@ -842,6 +1056,65 @@ def hosts(_args):
     out(hosts_view(request("GET", "/v1/fleet/hosts", token=token())))
 
 
+def cores(_args):
+    """Dedicated cores: the clock speeds a machine may ask for (coreSpeed),
+    the CPU model of the servers with each (model) and how many of each fit
+    on one server (whole cores), as the platform answers. showSpeed false:
+    the servers run at one speed, and there is none to choose."""
+    try:
+        answer = request("GET", "/v1/machine-cores", token=token())
+    except Problem as p:
+        if p.status != 404:
+            raise
+        raise Problem("this LiveLLM has no dedicated cores yet", "leave dedicatedCores, coreSpeed and mixedSpeeds out, "
+                      "and tell the user if they wanted them", EXIT_USER, 404) from None
+    out(answer)
+
+
+def devices(_args):
+    """The cluster's devices (a GPU, a USB controller) a machine of this
+    workspace may be given ("devices"): how many the cluster has, how many are
+    free, and this workspace's machines that have one, as the platform
+    answers."""
+    try:
+        answer = request("GET", "/v1/machine-devices", token=token())
+    except Problem as p:
+        if p.status != 404:
+            raise
+        raise Problem("this LiveLLM gives machines no devices yet", "leave devices out, and tell the user if they "
+                      "wanted one", EXIT_USER, 404) from None
+    out(answer)
+
+
+def group_addresses(vm, host):
+    """Where a machine's port groups are reached from outside: each port at
+    its number plus its group's offset, on the host of the machine's own
+    address ("" while it has none). A group whose ports the platform hasn't
+    given yet (a mirrored one being made) is listed with none."""
+    groups = []
+    for g in (vm or {}).get("portGroups") or []:
+        if not isinstance(g, dict):
+            continue
+        off = g.get("offset") if isinstance(g.get("offset"), int) else 0
+        ports = []
+        for p in g.get("ports") or []:
+            n = p.get("port") if isinstance(p, dict) else None
+            if not isinstance(n, int) or not n:
+                continue
+            udp = bool(p.get("udp"))
+            e = {"port": n, "published": n + off, "tcp": bool(p.get("tcp")) or not udp, "udp": udp}
+            if host:
+                e["address"] = f"[{host}]:{n + off}" if ":" in host else f"{host}:{n + off}"
+            ports.append(e)
+        entry = {"name": g.get("name"), "offset": off, "ports": ports}
+        if g.get("mirrored"):
+            entry["mirrored"] = True
+        if g.get("allowCIDRs"):
+            entry["allowCIDRs"] = g["allowCIDRs"]
+        groups.append(entry)
+    return groups
+
+
 def placement(host, region):
     """Where a new resource runs: pinned to a host, any host of a region, or
     None for automatic (LiveLLM picks the host). A flag given with no value is
@@ -878,6 +1151,15 @@ def connect(args):
             if w.get("expiresAt"):
                 info["stopsAt"] = w["expiresAt"]
             break
+        # Its port groups are published on the same host, each port at its
+        # number plus the group's offset.
+        try:
+            spec_w = next((x for x in workspace_workloads(tok) if x.get("id") == args.id), None)
+        except Problem:
+            spec_w = None
+        groups = group_addresses((spec_w or {}).get("vm"), (info.get("ssh") or {}).get("host", "").strip("[]"))
+        if groups:
+            info["portGroups"] = groups
     raw = [u for u in info.get("urls") or [] if u.get("raw") and not u.get("address")]
     if raw:
         # A raw TCP/UDP port's host:port lives in the status, like a machine's.
@@ -1000,6 +1282,10 @@ def set_settings(args):
     changes = json.loads(Path(args.json).read_text())
     if not isinstance(changes, dict) or not changes:
         raise Problem("the file should hold a JSON object with the settings that change", "fix the file", EXIT_OTHER)
+    if isinstance(changes.get("vm"), dict) and "timeZone" in changes["vm"]:
+        raise Problem("a machine's time zone is set when it is made, and a set doesn't change it",
+                      "leave timeZone out of the set; to change it, ask the user, then change it on the machine itself "
+                      "(Linux: llc.py exec ID \"sudo timedatectl set-timezone ZONE\")", EXIT_OTHER)
     reminder = check_settings_proxy(changes, args.json)
     check_body_reach(changes, args.json, patch=True)
     check_patch_links(changes, args.json)
@@ -1011,7 +1297,20 @@ def set_settings(args):
             x.get("id") == args.id and x.get("type") == "storage" for x in workspace_workloads(tok))
         if is_db:
             raise db_reach_problem(args.id, args.json)
-    patch_workload(args.id, changes, tok)
+    try:
+        patch_workload(args.id, changes, tok)
+    except Problem as p:
+        # another machine's refusal: nothing to read for this one's floor
+        if for_another_machine(p, args.id):
+            raise
+        if p.refusal in ("core_speed_short", "core_speeds_mixed", "cores_short"):
+            # the machine's kind and edition (fixed when made), read only now
+            try:
+                w = next((x for x in workspace_workloads(tok) if x.get("id") == args.id), None)
+            except Problem:
+                w = None
+            raise with_core_floor(p, core_floor(w.get("type"), w.get("vm")) if w else core_floor(None, None)) from None
+        raise
     out({"changed": args.id, **({"delete": reminder} if reminder else {})})
 
 
@@ -1228,7 +1527,8 @@ def inside_addresses(res, w):
             found.append(e)
         return found
     if t.startswith("vm-"):
-        found = [hp(res, 22, name="ssh")]
+        # <res>-host, with no port, is the machine itself on every port, TCP and UDP
+        found = [hp(res, 22, name="ssh"), {"host": f"{res}-host"}]
         for p in (w.get("vm") or {}).get("ports") or []:
             n = (p or {}).get("port")
             if not n:
@@ -1456,7 +1756,7 @@ def member_path(api, browser):
     return f"{workload_path(api)}/browsers/{urllib.parse.quote(browser)}"
 
 
-def browser_api_body(name, browsers, every, remotes, place=None):
+def browser_api_body(name, browsers, every, remotes, place=None, dedicated=False):
     names = [b.strip() for b in (browsers or "").split(",") if b.strip()]
     if every and names:
         raise Problem("--all already means every browser in the workspace", "leave out --browsers", EXIT_OTHER)
@@ -1476,6 +1776,8 @@ def browser_api_body(name, browsers, every, remotes, place=None):
         body["externalBrowsers"] = ext
     if place:
         body["placement"] = place
+    if dedicated:
+        body["dedicatedCores"] = True
     return body
 
 
@@ -1484,6 +1786,11 @@ def browser_api(args):
     if args.action != "create" and (host is not None or region is not None):
         raise Problem("--host and --region are for create",
                       f"to move it: llc.py set {args.name} --json FILE --yes, the file holding {{\"controller\": {{\"placement\": ...}}}}", EXIT_OTHER)
+    dedicated = bool(getattr(args, "dedicated_cores", False))
+    if args.action != "create" and dedicated:
+        raise Problem("--dedicated-cores is for create",
+                      f"to change it: llc.py set {args.name} --json FILE --yes, the file holding {{\"controller\": {{\"dedicatedCores\": true}}}} "
+                      "(it restarts the Browser API: ask the user first)", EXIT_OTHER)
     tok = token()
     if args.action == "create":
         if not args.yes:
@@ -1491,7 +1798,7 @@ def browser_api(args):
                           "only create a Browser API the user asked for; the browsers you put in it are reached by "
                           "whatever reaches it, so ask the user and wait for their agreement (SKILL.md rule 11), "
                           "then pass --yes", EXIT_OTHER)
-        body = browser_api_body(args.name, args.browsers, args.all, args.remote, placement(host, region))
+        body = browser_api_body(args.name, args.browsers, args.all, args.remote, placement(host, region), dedicated)
         request("POST", f"/v1/workloads/{BROWSER_API}", body, token=tok)
         out({"created": args.name, "type": BROWSER_API,
              "next": f"llc.py wait {args.name} then llc.py connect {args.name} --tool api"})
@@ -2324,6 +2631,7 @@ def template(args):
         if p.missing:
             p.next = ("put each value in an environment variable (generate a password, ask the user for a key) and run it "
                       "again with " + secret_flags(p.missing))
+        template_cores(p, t, args.new_id)
         raise
     created = made.get("created") or [args.new_id]
     answer = {"created": created if t.get("kind") == "stack" else args.new_id, "type": t["kind"], "template": t.get("name"),
@@ -2412,6 +2720,8 @@ def main():
     ls_p.set_defaults(fn=ls)
 
     sub.add_parser("hosts", help="where resources can run: each host's id, region and free room").set_defaults(fn=hosts)
+    sub.add_parser("cores", help="dedicated cores: the clock speeds a machine may ask for, their CPU model, and how many fit").set_defaults(fn=cores)
+    sub.add_parser("devices", help="the devices a machine can be given (a GPU, a USB controller), and how many are free").set_defaults(fn=devices)
 
     create_p = sub.add_parser("create", help="create a resource from a JSON file (type apps: several at once, with their databases)")
     create_p.add_argument("type")
@@ -2542,6 +2852,7 @@ def main():
     bapi_p.add_argument("--remote", action="append", help="create: a browser running elsewhere, ID=wss://address")
     bapi_p.add_argument("--host", help="create: pin it to this host (ids from llc.py hosts)")
     bapi_p.add_argument("--region", help="create: run it on any host in this region; neither: automatic")
+    bapi_p.add_argument("--dedicated-cores", action="store_true", help="create: all its cpu reserved for it on its server (left out: shared)")
     bapi_p.add_argument("--yes", action="store_true", help="create, add: the user agreed to what it lets in; remove: the user agreed")
     bapi_p.set_defaults(fn=browser_api)
 

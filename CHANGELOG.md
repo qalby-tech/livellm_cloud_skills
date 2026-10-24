@@ -5,6 +5,70 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.17.0
+
+Dedicated cores, a machine's devices, its time zone and its port groups.
+Against a LiveLLM without them only the hints change, and `llc.py cores` and
+`llc.py devices` say it has none.
+
+- `references/machines.md` says a machine's cores are shared unless the user
+  asks for dedicated ones (`"dedicatedCores": true`, whole cores of its server
+  for it alone), all of one clock speed (`"coreSpeed"` in MHz asks for one)
+  unless `"mixedSpeeds": true` keeps the count; a set takes them in the `vm`
+  block and they apply at the machine's next restart. `llc.py cores` lists the
+  speeds there are, the CPU model of the servers with each (`model`) and how
+  many dedicated cores of each fit on one server; `llc.py ls` shows a running
+  resource's cores as the API says them: its server's CPU model
+  (`cores.model`), shared or dedicated, and for dedicated cores only the clock
+  they got or "Mixed core speeds". Shared cores have no clock, and the agent
+  never gives the user a speed for them.
+- Dedicated cores come in pairs on servers whose cores have 2 threads (`cpus`
+  or `cpu` 2, 4, 6…; shared cores take any count), and a dedicated core
+  counts as 2 of the plan's cores and on pay as you go
+  (`references/workspace.md`, each kind's Cores). The API judges the count:
+  its 422 keeps its words, and `llc.py` has the user choose among the counts
+  it names, never picking one itself.
+- `llc.py` answers the cores refusals by their code, in the API's words, and
+  has the user choose instead of a retry: too few of one speed
+  (`core_speed_short`, `core_speeds_mixed`: the cores that fit, never 0 nor
+  fewer than the machine runs on, 2 for a desktop machine or Windows 11, or
+  the same cores at mixed speeds), a speed no server has
+  (`core_speed_unknown`: `llc.py cores`), and no server with room for a
+  resource of any kind (`server_full`: tell the user, and stop), and too few
+  whole cores free to dedicate for a resource of any kind (`cores_short`: the
+  dedicated cores that fit, never 0 nor fewer than the machine runs on, or
+  shared cores). A refusal
+  that names another machine offers no change to the one sent. A template use
+  refused for its cores (it takes no `cpus`, `coreSpeed` or `mixedSpeeds`)
+  has the machine created directly with the user's choice.
+- Apps, Desktop Apps, databases (PostgreSQL and Redis), browsers and Browser
+  APIs have shared cores too unless `"dedicatedCores": true` gives them all of
+  their `cpu` as whole cores of the server for them alone (shared reserves a
+  quarter); a set takes it in the resource's block and applies at once (it
+  restarts); an object storage has none. `llc.py browser-api create` takes
+  `--dedicated-cores`.
+- A machine's devices: `"devices": ["rtx5090"]` gives it one of the
+  cluster's own devices (a GPU, a USB controller); `llc.py devices` lists the
+  ones offered, how many are free and which machines have them. They change
+  at the next restart; a set's `[]` takes them all off. A device not offered
+  to the workspace (403) or taken by another machine (409) has the user
+  decide: never take one off another machine.
+- A machine's time zone, `"timeZone"`, is set when it is made; `llc.py set`
+  refuses one, since a set doesn't change it (change it on the machine
+  itself, with the user's agreement).
+- Ports published together, `"portGroups"`: a group keeps its ports' numbers
+  inside and is published at them plus one offset LiveLLM picks, or, mirrored,
+  at numbers LiveLLM picks, the same inside and out. `llc.py connect` lists
+  where each port is published (`portGroups[].ports[]`: `port`, `published`,
+  `address`). A group that can't be published as asked, or past the 64 ports a
+  machine publishes, has the user decide.
+- What LiveLLM sets itself on a machine (`hostDevices`, `hideHypervisor`,
+  `virtio`, `virtioMove`, `virtioMoveAt`, `machineType`, `installed`, `pin`, a
+  group's `offset`) is left out of a create or a set.
+- `llc.py reach` and `references/inside-access.md` list a machine's
+  `<res>-host` inside address: the machine itself on every port, TCP and UDP,
+  for the resources its `reachableFrom` lets in.
+
 ## 1.16.0
 
 Object storage of 1 server or 3. Against a LiveLLM without 3 servers only

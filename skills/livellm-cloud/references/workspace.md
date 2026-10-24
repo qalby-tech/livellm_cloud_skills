@@ -21,7 +21,9 @@ Team, Startup or Business, which its owners choose, or on Enterprise, by
 agreement with LiveLLM. The user changes the plan in the console; an agent
 never does.
 
-`whoami` shows what is used against the plan's cores, memory and disk. Creating
+`whoami` shows what is used against the plan's cores, memory and disk; a
+dedicated core counts as 2 of them, and as 2 on pay as you go (a shared core
+as 1). Creating
 something that doesn't fit is refused with a 402, unless pay as you go is on:
 then what is above the plan is billed, up to the account's monthly limit.
 Free includes no resources, so on Free everything is pay as you go.
@@ -137,6 +139,13 @@ python3 scripts/llc.py template use small-box box-2 --secret credentials.usernam
 - Missing ones are refused (422) with the list of paths, and `next` spells
   the flags. Generate passwords yourself; ask the user for keys and tokens
   that belong to them. Never invent one.
+- A machine's template refused for its cores (`core_speed_short`,
+  `core_speeds_mixed`, `core_speed_unknown`) made nothing, so `set` can't
+  help, and `use` takes no `cpus`, `coreSpeed` or `mixedSpeeds`. Ask the user,
+  then create the machine directly with their choice: `template show`'s `vm`
+  settings, flat, with the new `id` and `credentials`
+  (`references/machines.md`). A new template saved from a machine can keep
+  fewer cores or another speed, never mixed speeds.
 - It counts toward the plan like any other create; make one only when the
   user asked.
 

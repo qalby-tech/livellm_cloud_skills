@@ -319,6 +319,23 @@ copies of files kept elsewhere, and say so when you make one.
 - `restart db --yes` restarts a database. Apps lose their connections for a
   moment, even with three instances; ask first if you didn't create it.
 
+## Cores
+
+Shared unless the user asks for dedicated ones: shared cores reserve a quarter
+of `cpu` on the server and may use all of it, but may be slower while the
+server is busy. `"dedicatedCores": true` gives the database all of `cpu` as
+whole cores of its server, for it alone. On servers whose cores have 2 threads
+they come in pairs (`cpu` 2, 4, 6…): another count is refused (422) in the
+API's words; ask the user which count they want. A dedicated core counts as 2
+of the plan's cores, and on pay as you go. `llc.py ls` shows the CPU model of
+the server it runs on (`cores.model`); shared cores have no clock. Per
+instance, Postgres and Redis only: an object storage has none (it is dropped).
+A set takes it in its block (`{"storage": {"dedicatedCores": true}}`); one that
+leaves it out keeps it, `false` makes the cores shared again, and it applies at
+once: the database restarts, so ask the user first. A server with no room
+answers 409 `server_full`: tell the user and let them choose what to stop or
+shrink.
+
 ## Where it runs
 
 Leave `placement` out and LiveLLM picks the host. To choose, put
