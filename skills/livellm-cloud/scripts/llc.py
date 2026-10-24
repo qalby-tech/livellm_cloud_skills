@@ -368,7 +368,8 @@ def cores_problem(status, code, message, payload, floor=1):
     a resource of any kind, a machine, an app, a database or a browser (409
     server_full); or a dedicated count the servers can't take, in pairs where
     their cores have 2 threads (422, known by the API's words, which name the
-    counts that fit); None for any other answer. The words are the API's own.
+    counts that fit); or dedicated cores asked for more than one copy (422
+    dedicated_one_copy); None for any other answer. The words are the API's own.
     Fewer cores, another count or mixed speeds changes what the user asked
     for, so they choose. The cores that fit are offered as cores_choice says."""
     if status == 409 and code in ("core_speed_short", "core_speeds_mixed"):
@@ -383,6 +384,8 @@ def cores_problem(status, code, message, payload, floor=1):
                        "make room", EXIT_USER, status)
     if status == 422 and (code == "cores_pairs" or DEDICATED_PAIRS in message.lower()):
         return Problem(message, PAIRS_NEXT, EXIT_USER, status)
+    if status == 422 and code == "dedicated_one_copy":
+        return Problem(message, ONE_COPY_NEXT, EXIT_USER, status)
     if status == 409 and code == "cores_short":
         return Problem(message, f"tell the user and ask which they want: {cores_short_choice(payload, floor)}; then send "
                        "the same create or set again with that change, never unchanged", EXIT_USER, status)
@@ -398,6 +401,13 @@ DEDICATED_PAIRS = "dedicated cores come in "
 PAIRS_NEXT = ("the count is the user's: ask which of the counts the message names they want, then send the same "
               "create or set with that count (cpus for a machine, cpu for any other kind); never pick one yourself, "
               "never send it unchanged")
+# Dedicated cores work with one copy for now (422 dedicated_one_copy, "Dedicated
+# cores work with one copy for now: use 1 copy, or shared cores."): an app of 2
+# or more replicas, a database of 3 instances. Fewer copies or shared cores
+# changes what the user asked for, so they choose.
+ONE_COPY_NEXT = ("tell the user and ask which they want: 1 copy (replicas 1 for an app, instances 1 for a database) "
+                 "with dedicated cores, or shared cores (\"dedicatedCores\": false) with the copies; then send the same "
+                 "create or set with that change, never unchanged")
 
 
 def cores_choice(payload, floor=1):

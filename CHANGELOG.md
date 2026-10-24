@@ -28,6 +28,12 @@ Against a LiveLLM without them only the hints change, and `llc.py cores` and
   (`references/workspace.md`, each kind's Cores). The API judges the count:
   its 422 keeps its words, and `llc.py` has the user choose among the counts
   it names, never picking one itself.
+- Dedicated cores work with one copy for now: an app of 2 or more replicas or
+  a database of 3 instances asking for them is refused (422
+  `dedicated_one_copy`, "Dedicated cores work with one copy for now: use 1
+  copy, or shared cores."); `llc.py` keeps its words and has the user choose
+  1 copy or shared cores, never a retry unchanged (`references/apps.md`,
+  `references/databases.md`, SKILL.md's table).
 - `llc.py` answers the cores refusals by their code, in the API's words, and
   has the user choose instead of a retry: too few of one speed
   (`core_speed_short`, `core_speeds_mixed`: the cores that fit, never 0 nor

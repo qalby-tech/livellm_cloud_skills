@@ -49,6 +49,9 @@ I9 = "Intel Core i9-14900K"
 # Dedicated cores come in pairs on servers whose cores have 2 threads.
 PAIRS = {"error": "Dedicated cores come in pairs on these servers: use 8 or 10.", "code": "cores_pairs",
          "workload": "box", "cores": 9, "choices": [8, 10]}
+# Dedicated cores asked for more than one copy (owner, 2026-10-24).
+ONE_COPY = {"error": "Dedicated cores work with one copy for now: use 1 copy, or shared cores.",
+            "code": "dedicated_one_copy", "workload": "web"}
 # Too few whole cores free to dedicate on any server, a resource of any kind.
 CORES_SHORT = {"error": "Only 4 dedicated cores are available.", "code": "cores_short", "workload": "web", "cores": 6, "fit": 4}
 # Every kind that reserves on a server is held to its fill limit, an app too.
@@ -144,6 +147,18 @@ class CoresRefusals(unittest.TestCase):
         # any other 422 stays the plain one
         p = llc.http_problem(422, {"error": "cpus must be at least 1"})
         self.assertIn("fix the field the message names", p.next)
+
+    def test_dedicated_cores_for_more_than_one_copy_have_the_user_choose(self):
+        # 1 copy or shared cores changes what the user asked for: they choose;
+        # never read as the pairs refusal, never a retry unchanged
+        p = llc.http_problem(422, ONE_COPY)
+        self.assertEqual((p.code, p.status, p.message), (llc.EXIT_USER, 422, ONE_COPY["error"]))
+        self.assertIn("ask which they want", p.next)
+        self.assertIn("1 copy", p.next)
+        self.assertIn('"dedicatedCores": false', p.next)
+        self.assertIn("never unchanged", p.next)
+        self.assertNotIn("the count is the user's", p.next)
+        self.assertNotIn("fix the field", p.next)
 
     def test_too_few_whole_cores_free_offers_those_or_shared_cores(self):
         p = llc.http_problem(409, CORES_SHORT)

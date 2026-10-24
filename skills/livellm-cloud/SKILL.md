@@ -219,6 +219,7 @@ Every error prints `{"error": ..., "next": ...}`. Do what `next` says.
 | 409 `core_speed_short`, `core_speeds_mixed`, `server_full` | Too few dedicated cores of one speed are free, or no server has room for the resource | Ask the user: fewer cores or mixed speeds; no room: tell them, and stop (`references/machines.md`); don't retry unchanged |
 | 409 `cores_short` | Too few whole cores are free to dedicate, for a resource of any kind | Ask the user: the dedicated cores the message names, or shared cores; don't retry unchanged (`references/machines.md`) |
 | 422, dedicated cores in pairs | On servers whose cores have 2 threads a dedicated count is even | Ask the user which of the counts the message names; never pick one yourself (`references/machines.md`) |
+| 422 `dedicated_one_copy` | Dedicated cores work with one copy for now (an app of 2+ replicas, a database of 3 instances) | Ask the user: 1 copy, or shared cores; never pick one yourself |
 | 422 | A value was refused; the message names it | Fix that value, never retry unchanged |
 | 5xx | Platform trouble | Retry twice with a pause, then tell the user |
 
