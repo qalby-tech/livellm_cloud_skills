@@ -13,8 +13,9 @@ Claude Code users get the update only when the version changes.
   tell the user, offer the machine's screen (`share ID --control`), which still
   works, and never run the same command again until the user changed the
   machine; any other 5xx is still platform trouble, retried twice.
-  `references/machines.md` and SKILL.md's table say so. Against a LiveLLM
-  without it nothing changes.
+  `references/machines.md` and SKILL.md's table say so, and machines.md points
+  the user to the guide "Keep access with a VPN" (the machine's Network tab).
+  Against a LiveLLM without it nothing changes.
 - `references/machines.md`: every workspace reaches the internet, so a new
   Windows 11 machine gets SSH (and `exec`) from Windows Update after its
   first start; the advice to pick Windows Server in a workspace without

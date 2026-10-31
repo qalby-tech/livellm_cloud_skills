@@ -148,7 +148,9 @@ turn it on for this agent on the console's Agents page.
 SSH does. A VPN in the machine that routes everything, or a firewall that drops
 LiveLLM, cuts them as it would on any server; the machine keeps running and
 its screen still works. LiveLLM then answers 504 `machine_unreachable` with
-what it found (below).
+what it found (below). The lines that keep access under the user's own VPN are
+the guide "Keep access with a VPN" in LiveLLM's docs, filled in for the
+machine on its Network tab.
 
 This is the simplest way for you to run commands: no keys, no open port. SSH
 works as well, and is what the user uses.
@@ -443,8 +445,10 @@ Changing it (`set` with `{"vm": {"placement": …}}`, a Desktop App `{"desktop":
   route everything. Screen still works." or "… A VPN or firewall may block
   access."). The machine runs, but LiveLLM can't get onto it over its network.
   Tell the user what it says, and offer them its screen (`share ID --control`):
-  only they change the machine's VPN or firewall. Never send the same command
-  again in a loop; run it once more only after they say they changed it.
+  only they change the machine's VPN or firewall. For a VPN, point them to the
+  machine's Network tab, "Keep access with a VPN": the lines to add to their
+  VPN's config. Never send the same command again in a loop; run it once more
+  only after they say they changed it.
 - **A command on Windows fails with "is not recognized".** It ran in
   PowerShell, not bash: write it in PowerShell (`Get-Content`, not `cat -n`;
   `$env:PATH`, not `$PATH`).
