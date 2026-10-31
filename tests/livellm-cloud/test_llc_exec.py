@@ -129,6 +129,37 @@ class ExecTest(unittest.TestCase):
         self.assertEqual(problem.code, llc.EXIT_BUSY)
         self.assertEqual(len(fake.calls), 1)
 
+    def test_a_machine_it_cannot_reach_is_the_users_to_fix(self):
+        words = "Can't reach this machine. A VPN (wg0) may route everything. Screen still works."
+        fake = self.use([(504, {"error": words, "code": "machine_unreachable"})])
+        printed, problem = self.run_exec()
+        self.assertIsNone(printed)
+        self.assertEqual(problem.status, 504)
+        self.assertEqual(problem.code, llc.EXIT_USER)
+        self.assertEqual(problem.refusal, "machine_unreachable")
+        self.assertEqual(problem.message, words)  # the API's words, as they are
+        self.assertIn("share ID --control", problem.next)
+        self.assertIn("don't run the command again", problem.next)
+        self.assertNotIn("retry", problem.next)
+        self.assertEqual(len(fake.calls), 1)  # asked once, never again by itself
+
+    def test_a_run_it_loses_reach_to_is_the_users_to_fix(self):
+        run = "0123456789abcdef0123456789abcdef"
+        fake = self.use([
+            (202, {"done": False, "runId": run, "output": "a\n"}),
+            (504, {"error": "Can't reach this machine. A VPN or firewall may block access.", "code": "machine_unreachable"}),
+        ])
+        printed, problem = self.run_exec()
+        self.assertIsNone(printed)
+        self.assertEqual(problem.code, llc.EXIT_USER)
+        self.assertEqual(len(fake.calls), 2)  # the look again is not repeated after the API's answer
+
+    def test_another_gateway_timeout_is_still_platform_trouble(self):
+        self.use([(504, {"error": "upstream timed out"})])
+        _, problem = self.run_exec()
+        self.assertEqual(problem.code, llc.EXIT_OTHER)
+        self.assertIn("platform trouble", problem.next)
+
 
 if __name__ == "__main__":
     unittest.main()

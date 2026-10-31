@@ -7,6 +7,14 @@ Claude Code users get the update only when the version changes.
 
 ## Unreleased
 
+- A command or the terminal that can't get onto a running machine answers 504
+  `machine_unreachable` (a VPN in the machine that routes everything, or a
+  firewall that drops LiveLLM). `llc.py exec` keeps the API's words and says to
+  tell the user, offer the machine's screen (`share ID --control`), which still
+  works, and never run the same command again until the user changed the
+  machine; any other 5xx is still platform trouble, retried twice.
+  `references/machines.md` and SKILL.md's table say so. Against a LiveLLM
+  without it nothing changes.
 - `references/machines.md`: every workspace reaches the internet, so a new
   Windows 11 machine gets SSH (and `exec`) from Windows Update after its
   first start; the advice to pick Windows Server in a workspace without

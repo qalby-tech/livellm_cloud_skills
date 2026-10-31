@@ -144,6 +144,12 @@ Windows, write PowerShell: `Get-ChildItem`, `$env:COMPUTERNAME`,
 It needs the Run commands permission. Without it you get a 403: ask the user to
 turn it on for this agent on the console's Agents page.
 
+`exec`, `run_command` and the terminal reach the machine over its network, as
+SSH does. A VPN in the machine that routes everything, or a firewall that drops
+LiveLLM, cuts them as it would on any server; the machine keeps running and
+its screen still works. LiveLLM then answers 504 `machine_unreachable` with
+what it found (below).
+
 This is the simplest way for you to run commands: no keys, no open port. SSH
 works as well, and is what the user uses.
 
@@ -433,6 +439,12 @@ Changing it (`set` with `{"vm": {"placement": …}}`, a Desktop App `{"desktop":
   server has room for this machine."** (`server_full`). Tell the user and
   stop: fewer cores or less memory, or another placement, may fit if they want
   that. Never delete anything to make room.
+- **504 `machine_unreachable`** ("Can't reach this machine. A VPN (wg0) may
+  route everything. Screen still works." or "… A VPN or firewall may block
+  access."). The machine runs, but LiveLLM can't get onto it over its network.
+  Tell the user what it says, and offer them its screen (`share ID --control`):
+  only they change the machine's VPN or firewall. Never send the same command
+  again in a loop; run it once more only after they say they changed it.
 - **A command on Windows fails with "is not recognized".** It ran in
   PowerShell, not bash: write it in PowerShell (`Get-Content`, not `cat -n`;
   `$env:PATH`, not `$PATH`).

@@ -221,6 +221,7 @@ Every error prints `{"error": ..., "next": ...}`. Do what `next` says.
 | 422, dedicated cores in pairs | On servers whose cores have 2 threads a dedicated count is even | Ask the user which of the counts the message names; never pick one yourself (`references/machines.md`) |
 | 422 `dedicated_one_copy` | Dedicated cores work with one copy for now (an app of 2+ replicas, a database of 3 instances) | Ask the user: 1 copy, or shared cores; never pick one yourself |
 | 422 | A value was refused; the message names it | Fix that value, never retry unchanged |
+| 504 `machine_unreachable` | A command or the terminal can't get onto a running machine: its own VPN or firewall likely blocks access | Tell the user, offer its screen (it still works); never run the same command again until they changed the machine (`references/machines.md`) |
 | 5xx | Platform trouble | Retry twice with a pause, then tell the user |
 
 More in `references/troubleshooting.md`.

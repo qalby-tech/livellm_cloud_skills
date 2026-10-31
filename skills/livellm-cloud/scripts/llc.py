@@ -178,6 +178,8 @@ def status_problem(status, payload):
     machine = machine_problem(status, message)
     if machine:
         return machine
+    if status == 504 and code == "machine_unreachable":
+        return Problem(message, UNREACHABLE_NEXT, EXIT_USER, status)
     if status == 401:
         return Problem(message, "run: llc.py login, give the user the link it prints, and run login again once they press Allow", EXIT_USER, status)
     if status == 402:
@@ -535,6 +537,15 @@ GROUP_UNPLACED = ("no free place on this cluster for group", "free ports in a ro
                   "would be published at", "can't grow", "is held by something else now", "the cluster publishes ports in")
 PORT_CAP = "a machine publishes at most"
 NO_PORT_GROUPS = "port groups aren't available on this install"
+
+
+# A command or the terminal can't get onto a running machine over its network
+# (504 machine_unreachable): the machine's own VPN or firewall likely routes or
+# drops LiveLLM's access, which only the user can change inside it, so the same
+# command again can't help. Its screen never goes through the machine's network.
+UNREACHABLE_NEXT = ("LiveLLM can't reach this machine over its network: tell the user what the message says, offer "
+                    "them its screen (llc.py share ID --control), which still works, and don't run the command again "
+                    "until they say they changed the machine's VPN or firewall")
 
 
 def machine_problem(status, message):
