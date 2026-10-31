@@ -8,8 +8,8 @@ Claude Code users get the update only when the version changes.
 ## Unreleased
 
 - `references/machines.md`: every workspace reaches the internet, so a new
-  Windows 11 machine always gets SSH (and `exec`) from Windows Update after
-  its first start; the advice to pick Windows Server in a workspace without
+  Windows 11 machine gets SSH (and `exec`) from Windows Update after its
+  first start; the advice to pick Windows Server in a workspace without
   internet access is gone. Until SSH comes, the screen or Remote Desktop.
 
 ## 1.17.0
