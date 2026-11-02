@@ -5,7 +5,11 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
-## Unreleased
+## 1.18.0
+
+A machine's private address, a machine LiveLLM can't reach, and every
+workspace reaching the internet. Against a LiveLLM without the private
+network nothing changes but one read after a machine's create.
 
 - A machine's private address: where LiveLLM offers it, a new machine gets a
   fixed address of its own on a second network card, in a network only the
