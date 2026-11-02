@@ -1414,7 +1414,9 @@ def set_settings(args):
         raise Problem("a machine's time zone is set when it is made, and a set doesn't change it",
                       "leave timeZone out of the set; to change it, ask the user, then change it on the machine itself "
                       "(Linux: llc.py exec ID \"sudo timedatectl set-timezone ZONE\")", EXIT_OTHER)
-    if isinstance(changes.get("vm"), dict) and any(k in changes["vm"] for k in PRIVATE_FIELDS):
+    # under "vm", or flat as a create file holds them
+    if any(k in changes for k in PRIVATE_FIELDS) or (
+            isinstance(changes.get("vm"), dict) and any(k in changes["vm"] for k in PRIVATE_FIELDS)):
         raise Problem("a machine's private address, and whether it has one, are set when it is made and a set doesn't "
                       "change them", "leave privateAddress and privateNetwork out of the set; another address means a "
                       "new machine, only if the user asks for one", EXIT_OTHER)

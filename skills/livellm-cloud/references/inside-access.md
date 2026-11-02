@@ -185,8 +185,8 @@ an agent on the console's Agents page, for an API key on the Keys page.
 - A machine with a private address (`references/machines.md`, "Its private
   address") lists it too, `{"host": "172.16.0.12", "private": true}`: the
   machine on every port, TCP and UDP, for the workspace's machines with a
-  private address that its `reachableFrom` lets in. Apps, databases and
-  browsers have none and use the names. The same setting holds on both: a
+  private address that its `reachableFrom` lets in. Apps, Desktop Apps,
+  databases and browsers have none and use the names. The same setting holds on both: a
   machine closed inside is closed at its private address too, and letting
   another machine reach it there is letting it in (rule 11).
 - `reachableFrom: null` with a `note`: a resource that has no setting yet. Set

@@ -224,6 +224,10 @@ class PrivateAddressTest(unittest.TestCase):
         for vm in ({"privateAddress": "172.16.0.40"}, {"privateNetwork": False}, {"privateNetwork": True}):
             _, problem = self.run_llc(llc.set_settings, id="web", json=self.file({"vm": vm}), yes=True)
             self.assertIn("set when it is made", problem.message, vm)
+        # flat, as a create file holds them, too
+        for flat in ({"privateAddress": "172.16.0.40"}, {"privateNetwork": False}):
+            _, problem = self.run_llc(llc.set_settings, id="web", json=self.file(flat), yes=True)
+            self.assertIn("set when it is made", problem.message, flat)
         self.assertEqual(self.fake.calls, [])
 
     # --- refusals ---

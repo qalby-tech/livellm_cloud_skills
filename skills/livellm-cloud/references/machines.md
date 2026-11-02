@@ -372,7 +372,8 @@ Where LiveLLM offers it, a new machine gets a private address of its own, such
 as `172.16.0.12`, in a network only the workspace's machines share. It sees it
 on its second network card (`enp2s0` on Linux; the first stays LiveLLM's:
 the internet, SSH, the screen, published ports, apps and databases by name),
-set up when the machine is made, Windows included. It is fixed for the
+set up when the machine is made (Windows too, where LiveLLM gives Windows
+machines one). It is fixed for the
 machine's life: stop, start, restart, a move to another host and updates keep
 it, and only deleting the machine frees it.
 
