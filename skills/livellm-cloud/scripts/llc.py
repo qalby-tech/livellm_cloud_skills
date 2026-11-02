@@ -163,6 +163,9 @@ def status_problem(status, payload):
         return Problem(message, ORGANIZATION_SHARE_NEXT, EXIT_USER, status)
     if code in BILLING and status == BILLING_STATUS.get(code, 402):
         return Problem(message, BILLING[code], EXIT_USER, status)
+    if code in PRIVATE_ADDRESS and status == PRIVATE_ADDRESS[code][0]:
+        _, exit_code, next_step = PRIVATE_ADDRESS[code]
+        return Problem(message, next_step, exit_code, status)
     inside = inside_problem(status, code, message)
     if inside:
         return inside
@@ -180,9 +183,6 @@ def status_problem(status, payload):
         return machine
     if status == 504 and code == "machine_unreachable":
         return Problem(message, UNREACHABLE_NEXT, EXIT_USER, status)
-    if code in PRIVATE_ADDRESS and status == PRIVATE_ADDRESS[code][0]:
-        _, exit_code, next_step = PRIVATE_ADDRESS[code]
-        return Problem(message, next_step, exit_code, status)
     if status == 401:
         return Problem(message, "run: llc.py login, give the user the link it prints, and run login again once they press Allow", EXIT_USER, status)
     if status == 402:
@@ -1055,7 +1055,7 @@ def private_made(wid, body, tok):
         return ""
     w = next((x for x in (ws.get("spec") or {}).get("workloads", []) if x.get("id") == wid), None)
     got = private_address(w or {})
-    if not got and body.get("privateAddress") and not ws.get("privateNetwork"):
+    if not got and (body.get("privateAddress") or body.get("privateNetwork") is True) and not ws.get("privateNetwork"):
         raise Problem(f"this LiveLLM made {wid} without a private address: it offers none yet",
                       f"tell the user; {wid} exists and is yours, so delete it (llc.py rm {wid} --yes) only if they "
                       "want it gone", EXIT_USER)

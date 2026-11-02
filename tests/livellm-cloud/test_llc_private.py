@@ -47,6 +47,22 @@ REFUSALS = {
     "private_address_fixed": 422, "private_range_full": 409,
 }
 
+# Each refusal's words as the API writes them, so no matcher on words takes one first.
+API_WORDS = {
+    "private_network_not_offered": "workload web: Windows machines get no private address on this cluster",
+    "private_address_invalid": "workload web: privateAddress is asked with privateNetwork false",
+    "private_address_outside": "workload web: the private address 10.0.0.5 is outside this workspace's range "
+                               "172.16.0.0/16",
+    "private_address_reserved": "workload web: the private address 172.16.0.3 is reserved in 172.16.0.0/16: the first "
+                                "ten addresses and the last are the network's; machines take 172.16.0.10 to "
+                                "172.16.255.254",
+    "private_address_taken": "workload web: the private address 172.16.0.12 is taken by db",
+    "private_address_releasing": "workload web: the private address 172.16.0.12 is being freed (a deleted machine's); "
+                                 "try again in a minute",
+    "private_address_fixed": "workload web: a machine's private address is fixed when it is made",
+    "private_range_full": "workload web: no private address is left in this workspace's range 172.16.0.0/16",
+}
+
 
 class FakeAPI:
     """Answers GET /v1/workspace with self.workspace, POST …/connect with a
@@ -184,6 +200,9 @@ class PrivateAddressTest(unittest.TestCase):
         _, problem = self.create({"id": "web"}, address="172.16.0.12")
         self.assertIn("without a private address", problem.message)
         self.assertIn("only if they want it gone", problem.next)
+        # privateNetwork true in the file is asking for one too
+        _, problem = self.create({"id": "web", "privateNetwork": True})
+        self.assertIn("without a private address", problem.message)
         # asked for nothing: nothing to say
         self.fake.calls.clear()
         res, problem = self.create({"id": "web"})
@@ -234,7 +253,7 @@ class PrivateAddressTest(unittest.TestCase):
 
     def test_each_refusal_keeps_the_apis_words_and_never_retries_unchanged(self):
         for code, status in REFUSALS.items():
-            words = f"workload web: {code}"
+            words = API_WORDS[code]
             p = llc.http_problem(status, {"error": words, "code": code})
             self.assertEqual((p.status, p.message, p.refusal), (status, words, code), code)
             self.assertNotIn("retry", p.next, code)
