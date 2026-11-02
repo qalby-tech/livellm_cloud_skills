@@ -60,13 +60,13 @@ connection details go into which environment variables:
 
 | Detail | PostgreSQL | Redis | Object storage (S3) |
 |---|---|---|---|
-| `host` | its private address | its private address | its private address |
+| `host` | its name inside the workspace | its name inside the workspace | its name inside the workspace |
 | `port` | `5432` | `6379` | `9000` |
 | `database` | `app` | — | — |
 | `username` | the login's name | — | — |
 | `password` | the password | the password | — |
 | `url` | `postgres://user:password@host:5432/app` | `redis://default:password@host:6379` | — |
-| `endpoint` | — | — | `http://<private address>:9000` |
+| `endpoint` | — | — | `http://<host>:9000` |
 | `region` | — | — | `us-east-1` |
 | `bucket` | — | — | `app` |
 | `accessKey` | — | — | the access key |

@@ -103,6 +103,7 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 | A Linux desktop that starts in seconds, one for each task or agent | Desktop App (`desktop`) | `references/machines.md` |
 | One of the cluster's GPUs or USB controllers on a machine; a machine's time zone | Machine `"devices"` (`devices` lists them), `"timeZone"` | `references/machines.md` |
 | Ports published together on a machine: game streaming (Moonlight), an FTP range | Machine `"portGroups"` | `references/machines.md` |
+| Machines that talk to each other at fixed private addresses, on any port | Machine `"privateAddress"` (automatic where offered; `create --private-address`, `--no-private-network`) | `references/machines.md` |
 | The user to watch a screen, or take it over | Screen link (`share`) | `references/machines.md` |
 | A service or site online, from an image or a Git repo, one service or several; a raw TCP/UDP port (game server, VPN) | Composable App (`pod`) | `references/apps.md` |
 | A site automated, logged into, scraped or tested in real Chrome | Browser (`browser`) | `references/browsers.md` |

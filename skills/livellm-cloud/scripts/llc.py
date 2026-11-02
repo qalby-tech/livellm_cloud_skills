@@ -180,6 +180,9 @@ def status_problem(status, payload):
         return machine
     if status == 504 and code == "machine_unreachable":
         return Problem(message, UNREACHABLE_NEXT, EXIT_USER, status)
+    if code in PRIVATE_ADDRESS and status == PRIVATE_ADDRESS[code][0]:
+        _, exit_code, next_step = PRIVATE_ADDRESS[code]
+        return Problem(message, next_step, exit_code, status)
     if status == 401:
         return Problem(message, "run: llc.py login, give the user the link it prints, and run login again once they press Allow", EXIT_USER, status)
     if status == 402:
@@ -548,6 +551,43 @@ UNREACHABLE_NEXT = ("LiveLLM can't reach this machine over its network: tell the
                     "until they say they changed the machine's VPN or firewall")
 
 
+# A machine's private address refused, by its code: (status, exit, next). The
+# address is asked when the machine is made and fixed for its life after, so
+# no refusal is retried unchanged; one a deleted machine still holds is freed
+# within a minute, the one case where the same create can go again.
+PRIVATE_ADDRESS = {
+    "private_network_not_offered": (422, EXIT_USER, (
+        "this LiveLLM gives no private address here (or none to Windows machines): tell the user, and make the "
+        "machine without one (privateAddress and privateNetwork left out) only if they agree")),
+    "private_address_invalid": (422, EXIT_OTHER, (
+        "a private address is one IPv4 address such as 172.16.0.12, and never goes with privateNetwork false (or "
+        "--no-private-network): fix it, or leave it out for the next free one")),
+    "private_address_outside": (422, EXIT_USER, (
+        "that address isn't in the workspace's private range (llc.py whoami shows privateNetwork.range): ask the user "
+        "for one inside it, or leave privateAddress out for the next free one")),
+    "private_address_reserved": (422, EXIT_USER, (
+        "the range's first ten addresses and its last are the network's own: ask the user for another, or leave "
+        "privateAddress out for the next free one")),
+    "private_address_taken": (409, EXIT_USER, (
+        "another machine of the workspace has that address (llc.py ls shows each machine's privateAddress): ask the "
+        "user for another, or leave privateAddress out for the next free one; never send it again unchanged")),
+    "private_address_releasing": (409, EXIT_BUSY, (
+        "a machine deleted just now still holds that address while it is freed: wait a minute and send the same "
+        "create once more")),
+    "private_address_fixed": (422, EXIT_USER, (
+        "a machine's private address, and whether it has one, are set when it is made and never change: leave "
+        "privateAddress and privateNetwork out of the change; another address means a new machine, only if the user "
+        "asks for one")),
+    "private_range_full": (409, EXIT_USER, (
+        "the workspace's private range has no free address left: tell the user, and stop; make the machine without "
+        "one (--no-private-network) only if they agree, and never delete a machine to free one")),
+}
+
+# The fields a machine's private address is asked with: on a create only.
+PRIVATE_FIELDS = ("privateNetwork", "privateAddress")
+MACHINE_TYPES = ("vm-ubuntu", "vm-ubuntu-desktop", "vm-windows")
+
+
 def machine_problem(status, message):
     """A machine's devices or port groups refused, known by the API's words,
     with what to do; None for any other answer. A device or a published port
@@ -896,6 +936,8 @@ def whoami(_args):
         "signedInWith": "api key" if API_KEY else "sign-in",
         "access": read_credentials().get(API, {}).get("scope", "full" if API_KEY else ""),
         "usage": usage.get("usage", usage) if isinstance(usage, dict) else {},
+        # the range its machines' private addresses come from, and its gateway; left out where there is none
+        **({"privateNetwork": workspace["privateNetwork"]} if workspace.get("privateNetwork") else {}),
     })
 
 
@@ -925,10 +967,21 @@ def resources(tok):
             **({"engine": (w.get("storage") or {}).get("engine") or "postgres"} if w.get("type") == "storage" else {}),
             # who else in the workspace may reach it, as its settings hold it
             **({"reachableFrom": w["reachableFrom"]} if "reachableFrom" in w else {}),
+            # a machine's fixed private address, reached from the workspace's machines its reachableFrom lets in
+            **({"privateAddress": private_address(w)} if private_address(w) else {}),
             # a database's login name, an object storage's access key (a password or secret key is never shown)
             **({"username": w["storage"]["credentials"]["username"]}
                if ((w.get("storage") or {}).get("credentials") or {}).get("username") else {}),
         }
+
+
+def private_address(w):
+    """A machine's private address as the workspace answers it, or ""."""
+    vm = w.get("vm") if isinstance(w, dict) and str(w.get("type", "")).startswith("vm-") else None
+    if not isinstance(vm, dict):
+        return ""
+    addr = vm.get("privateAddress") or (vm.get("network") or {}).get("address")
+    return addr if isinstance(addr, str) else ""
 
 
 def ls(args):
@@ -964,9 +1017,56 @@ def stored_engine(wid, tok):
     return None
 
 
+def with_private(body, typ, address, off):
+    """The create body with --private-address or --no-private-network in it.
+    Neither flag sends nothing (the machine gets an address wherever LiveLLM
+    offers one); a file that already says otherwise is refused rather than
+    overridden."""
+    if not address and not off:
+        return body
+    flag = "--private-address" if address else "--no-private-network"
+    if typ not in MACHINE_TYPES:
+        raise Problem(f"{flag} is for a machine, not {typ}", f"leave out {flag}", EXIT_OTHER)
+    if address and off:
+        raise Problem("--private-address and --no-private-network are one or the other",
+                      "leave --private-address out for the next free address, or pass --no-private-network for none",
+                      EXIT_OTHER)
+    if not isinstance(body, dict):
+        raise Problem("the file should hold one machine's settings, a JSON object", "fix the file", EXIT_OTHER)
+    said_net, said_addr = body.get("privateNetwork"), body.get("privateAddress")
+    if off:
+        if said_addr or said_net is True:
+            raise Problem("the file asks for a private address and --no-private-network says none", "say it once",
+                          EXIT_OTHER)
+        return {**body, "privateNetwork": False}
+    if said_net is False or (said_addr and said_addr != address):
+        raise Problem(f"the file says {'privateNetwork false' if said_net is False else repr(said_addr)} "
+                      f"and --private-address says {address!r}", "say it once", EXIT_OTHER)
+    return {**body, "privateAddress": address}
+
+
+def private_made(wid, body, tok):
+    """The private address a new machine got, read back once; a LiveLLM that
+    takes the create but gives no private address when one was asked says so
+    instead of letting the machine pass for having it."""
+    try:
+        ws = request("GET", "/v1/workspace", token=tok)
+    except Problem:
+        return ""
+    w = next((x for x in (ws.get("spec") or {}).get("workloads", []) if x.get("id") == wid), None)
+    got = private_address(w or {})
+    if not got and body.get("privateAddress") and not ws.get("privateNetwork"):
+        raise Problem(f"this LiveLLM made {wid} without a private address: it offers none yet",
+                      f"tell the user; {wid} exists and is yours, so delete it (llc.py rm {wid} --yes) only if they "
+                      "want it gone", EXIT_USER)
+    return got
+
+
 def create(args):
     body = json.loads(Path(args.json).read_text())
     body = with_engine(body, args.type, getattr(args, "engine", None))
+    body = with_private(body, args.type, getattr(args, "private_address", None),
+                        getattr(args, "no_private_network", False))
     reminder = None if args.type == "apps" else check_settings_proxy(body, args.json)
     check_body_reach(body, args.json, typ=args.type)
     check_body_links(body, args.type, args.json)
@@ -1000,6 +1100,10 @@ def create(args):
     if args.type in ENGINE_TYPES and isinstance(body, dict) and body.get("engine") == "camoufox":
         camoufox_made(body.get("id"), tok)
         answer["engine"] = "camoufox"
+    if args.type in MACHINE_TYPES and isinstance(body, dict) and body.get("privateNetwork") is not False:
+        got = private_made(body.get("id"), body, tok)
+        if got:
+            answer["privateAddress"] = got
     if reminder:
         answer["delete"] = reminder
     out(answer)
@@ -1181,6 +1285,9 @@ def connect(args):
         groups = group_addresses((spec_w or {}).get("vm"), (info.get("ssh") or {}).get("host", "").strip("[]"))
         if groups:
             info["portGroups"] = groups
+        # its fixed private address, for the workspace's machines its reachableFrom lets in (every port)
+        if private_address(spec_w or {}):
+            info["privateAddress"] = private_address(spec_w)
     raw = [u for u in info.get("urls") or [] if u.get("raw") and not u.get("address")]
     if raw:
         # A raw TCP/UDP port's host:port lives in the status, like a machine's.
@@ -1307,6 +1414,10 @@ def set_settings(args):
         raise Problem("a machine's time zone is set when it is made, and a set doesn't change it",
                       "leave timeZone out of the set; to change it, ask the user, then change it on the machine itself "
                       "(Linux: llc.py exec ID \"sudo timedatectl set-timezone ZONE\")", EXIT_OTHER)
+    if isinstance(changes.get("vm"), dict) and any(k in changes["vm"] for k in PRIVATE_FIELDS):
+        raise Problem("a machine's private address, and whether it has one, are set when it is made and a set doesn't "
+                      "change them", "leave privateAddress and privateNetwork out of the set; another address means a "
+                      "new machine, only if the user asks for one", EXIT_OTHER)
     reminder = check_settings_proxy(changes, args.json)
     check_body_reach(changes, args.json, patch=True)
     check_patch_links(changes, args.json)
@@ -1568,6 +1679,9 @@ def inside_addresses(res, w):
             found.append(e)
         if t in ("vm-windows", "vm-ubuntu-desktop"):
             found.append(hp(f"{res}-rdp", 3389, name="rdp"))
+        # its private address: every port, from the workspace's machines with one that may reach it
+        if private_address(w):
+            found.append({"host": private_address(w), "private": True})
         return found
     if t == "storage":
         engine = (w.get("storage") or {}).get("engine")
@@ -2750,6 +2864,11 @@ def main():
     create_p.add_argument("--join", help="type apps: add them to this existing app (or stack) in the same step")
     create_p.add_argument("--engine", choices=["chrome", "camoufox"],
                           help="browser: the browser engine, set for good when it is made (default chrome)")
+    create_p.add_argument("--private-address", metavar="ADDR",
+                          help="machine: this private address (one in the workspace's range), fixed for its life; "
+                               "left out, the next free one")
+    create_p.add_argument("--no-private-network", action="store_true",
+                          help="machine: make it without a private address (fixed when it is made)")
     create_p.add_argument("--yes", action="store_true", required=True, help="the user asked for this resource")
     create_p.set_defaults(fn=create)
 

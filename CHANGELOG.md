@@ -7,6 +7,26 @@ Claude Code users get the update only when the version changes.
 
 ## Unreleased
 
+- A machine's private address: where LiveLLM offers it, a new machine gets a
+  fixed address of its own on a second network card, in a network only the
+  workspace's machines share, reached there on every port by the workspace's
+  other machines with one as its `reachableFrom` allows. `llc.py create`
+  takes `--private-address ADDR` (that one, in the workspace's range) and
+  `--no-private-network` (none), machines only, one or the other, never
+  against what the file says; neither sends nothing. The create's answer,
+  `ls` and `connect` show the machine's `privateAddress`, `whoami` the
+  workspace's range (`privateNetwork`), and `reach` lists the address among
+  the machine's inside addresses (`"private": true`). A set refuses both
+  fields: they are set when the machine is made. Each refusal keeps the API's
+  words and has the user choose (`private_network_not_offered`,
+  `private_address_invalid`, `_outside`, `_reserved`, `_taken`, `_fixed`,
+  `private_range_full`); only `private_address_releasing` (a machine deleted
+  just now) says to send the same create once more, after a minute.
+  `references/machines.md` ("Its private address"), `inside-access.md` and
+  SKILL.md's table say so; `databases.md` calls a database's `host` its name
+  inside the workspace. Against a LiveLLM without it nothing changes but one
+  read after a machine's create, and an address asked of one is named as not
+  given.
 - A command or the terminal that can't get onto a running machine answers 504
   `machine_unreachable` (a VPN in the machine that routes everything, or a
   firewall that drops LiveLLM). `llc.py exec` keeps the API's words and says to

@@ -356,7 +356,8 @@ whole workspace) always needs their agreement. `reach ID` lists the names a
 machine answers on inside: `<res>` for SSH and raw ports, `<res>-http`,
 `<res>-internal` and `<res>-rdp`, and `<res>-host` (no port): the machine
 itself on every port, TCP and UDP, for the resources its `reachableFrom` lets
-in. See `references/inside-access.md`.
+in; a machine with a private address also lists that (`"private": true`), for
+the workspace's machines with one. See `references/inside-access.md`.
 
 A database is reached only by what links it. A machine or a Desktop App that
 uses one links it, `"databases": [{"id": "db"}]` in the create file or
@@ -364,6 +365,42 @@ uses one links it, `"databases": [{"id": "db"}]` in the create file or
 gets no variables from the link (`env` is refused); `reach db` lists the
 address. Linking is letting it in too: ask the user first unless you made both
 (rule 11, `references/databases.md`).
+
+## Its private address
+
+Where LiveLLM offers it, a new machine gets a private address of its own, such
+as `172.16.0.12`, in a network only the workspace's machines share. It sees it
+on its second network card (`enp2s0` on Linux; the first stays LiveLLM's:
+the internet, SSH, the screen, published ports, apps and databases by name),
+set up when the machine is made, Windows included. It is fixed for the
+machine's life: stop, start, restart, a move to another host and updates keep
+it, and only deleting the machine frees it.
+
+It is chosen once, when the machine is made, in the create file or with a flag:
+
+| The user wants | Create file | Flag |
+|---|---|---|
+| any free address (the default) | leave both out | none |
+| this address | `"privateAddress": "172.16.0.20"` | `--private-address 172.16.0.20` |
+| none | `"privateNetwork": false` | `--no-private-network` |
+
+```
+python3 scripts/llc.py create vm-ubuntu --json machine.json --private-address 172.16.0.20 --yes
+```
+
+After that nothing changes it: a set refuses both fields, and a machine made
+without one can't get one. Another address means a new machine, only if the
+user asks for one. `whoami` shows the workspace's range and gateway
+(`privateNetwork`); the range's first ten addresses and its last are the
+network's own. `ls` and `connect` show each machine's `privateAddress`, and
+the create's answer the one it got. Where LiveLLM offers none, `whoami` has no
+`privateNetwork` and machines have no address: don't ask for one.
+
+The workspace's other machines with a private address reach it there on every
+port, TCP and UDP, as its `reachableFrom` allows (below, and
+`references/inside-access.md`): letting one in is rule 11, as for any
+resource. Machines of other workspaces never reach it, even in the same range.
+A VPN in the machine whose routes cover the range takes those addresses too.
 
 ## Where it runs
 
@@ -441,6 +478,23 @@ Changing it (`set` with `{"vm": {"placement": …}}`, a Desktop App `{"desktop":
   server has room for this machine."** (`server_full`). Tell the user and
   stop: fewer cores or less memory, or another placement, may fit if they want
   that. Never delete anything to make room.
+- **422 `private_network_not_offered`.** This LiveLLM gives no private
+  address here, or none to Windows machines. Tell the user; make the machine
+  without one (both fields left out) only if they agree.
+- **422 `private_address_invalid`.** A private address is one IPv4 address,
+  and never goes with `"privateNetwork": false`. Fix it, or leave it out.
+- **422 `private_address_outside` or `private_address_reserved`.** Not in the
+  workspace's range (`whoami`), or one of its first ten addresses or its last.
+  Ask the user for another, or leave it out for the next free one.
+- **409 `private_address_taken`.** Another machine of the workspace has it
+  (`ls`). Ask the user for another, or leave it out; never send it unchanged.
+- **409 `private_address_releasing`.** A machine deleted just now still holds
+  it while it is freed: wait a minute, then send the same create once more.
+- **422 `private_address_fixed`.** A set tried to change the address, or
+  whether the machine has one. Leave both out: they are set when it is made.
+- **409 `private_range_full`.** No free address is left. Tell the user, and
+  stop: making the machine without one is their call, and never delete a
+  machine to free one.
 - **504 `machine_unreachable`** ("Can't reach this machine. A VPN (wg0) may
   route everything. Screen still works." or "… A VPN or firewall may block
   access."). The machine runs, but LiveLLM can't get onto it over its network.

@@ -14,6 +14,11 @@ app, a machine or a Desktop App (see "A database: link it").
 Its public addresses are separate: closing a resource inside closes nothing
 public, and a port's password or allowed-address list keeps working as it did.
 
+A machine may also have a private address of its own (automatic, chosen when
+it is made, or none; fixed for its life: `references/machines.md`, "Its
+private address"). The workspace's other machines with one reach it there on
+every port only as its `reachableFrom` allows, as they do by name.
+
 ## Ask first
 
 Resources in a workspace can't reach each other unless the user allows it. A
@@ -177,6 +182,13 @@ an agent on the console's Agents page, for an API key on the Keys page.
   resources allowed. They are left out when nothing may reach it. A machine's
   include `<res>-host` with no port: the machine itself on every port, TCP and
   UDP, for whatever its `reachableFrom` lets in.
+- A machine with a private address (`references/machines.md`, "Its private
+  address") lists it too, `{"host": "172.16.0.12", "private": true}`: the
+  machine on every port, TCP and UDP, for the workspace's machines with a
+  private address that its `reachableFrom` lets in. Apps, databases and
+  browsers have none and use the names. The same setting holds on both: a
+  machine closed inside is closed at its private address too, and letting
+  another machine reach it there is letting it in (rule 11).
 - `reachableFrom: null` with a `note`: a resource that has no setting yet. Set
   the whole list with `--from` or `--none`; `--add` and `--remove` are refused
   on it.
