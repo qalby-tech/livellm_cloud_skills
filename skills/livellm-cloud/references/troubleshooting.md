@@ -11,6 +11,13 @@ agent out, or it went unused for 30 days). Run `login`, give the user the link,
 and run `login` again once they have pressed Allow. "still waiting" (exit 3)
 means they haven't yet. Never ask for an API key in chat.
 
+**429 `rate_limited`, too many requests.** LiveLLM limits how many requests
+one sign-in, one key and one workspace send a second. `llc.py` already waits
+as long as the answer's `Retry-After` says and sends it again, a few times;
+when it still gets this (exit 4), wait a minute and run fewer commands at a
+time (no loops polling faster than every few seconds). Any other 429 is a
+counter of its own: its words say how long.
+
 **402, the plan is full.** Creating this would go past the plan. Stop, show
 usage from `whoami`, and let the user decide: they turn on pay as you go or
 choose a bigger plan on the console's Billing page. Deleting something to make

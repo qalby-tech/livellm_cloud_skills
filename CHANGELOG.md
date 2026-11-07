@@ -5,6 +5,19 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.19.0
+
+Too many requests. Against a LiveLLM without request limits nothing changes.
+
+- A request LiveLLM's request limits refuse (429 `rate_limited`, from api
+  0.92: per sign-in or key, and per workspace) is waited out as its
+  `Retry-After` says, plus a little jitter, and sent again, up to 4 more
+  times; a wait over a minute is the refusal at once. Past the tries it is
+  exit 4 with the next step "wait a minute, then run fewer commands at a
+  time". Any other 429 (a proxy changed moments ago, a counter) is passed on
+  as before. A wait of 5 seconds or more prints one line on stderr.
+- references/troubleshooting.md: what 429 `rate_limited` means.
+
 ## 1.18.0
 
 A machine's private address, a machine LiveLLM can't reach, and every

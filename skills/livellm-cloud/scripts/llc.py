@@ -65,6 +65,7 @@ import http.client
 import io
 import json
 import os
+import random
 import select
 import ssl
 import sys
@@ -94,6 +95,7 @@ class Problem(Exception):
         self.refusal = ""  # the API's code for this refusal (code above is the exit code)
         self.missing = []  # a create from a template: the secrets it still needs
         self.payload = {}  # the API's answer, for a command that words it again with what it knows
+        self.retry_after = None  # a 429's Retry-After header, as sent
 
 
 def out(value):
@@ -101,8 +103,47 @@ def out(value):
     sys.stdout.write("\n")
 
 
+RETRY_TRIES = 4  # more sends of a request LiveLLM's request limits refused (429 rate_limited)
+RETRY_MAX_WAIT = 60  # seconds: a longer Retry-After is passed on as the refusal at once
+
+
+def retry_wait(header, attempt):
+    """Seconds to wait before attempt (1, 2, ...) after a 429 rate_limited:
+    Retry-After's (1, then doubling, when it has none), plus up to a quarter
+    more of jitter; None when it is past RETRY_MAX_WAIT."""
+    wait = float(2 ** (attempt - 1))
+    try:
+        wait = float(int(str(header).strip()))
+    except (TypeError, ValueError):
+        pass
+    if wait > RETRY_MAX_WAIT:
+        return None
+    wait = max(wait, 0.2)
+    return wait + random.uniform(0, wait / 4)
+
+
 def request(method, path, body=None, token=None, form=False, timeout=TIMEOUT):
-    """One API call. Returns the decoded body, or raises Problem."""
+    """One API call. Returns the decoded body, or raises Problem. Too many
+    requests (429 rate_limited) waits as long as Retry-After says and sends it
+    again, a few times; any other 429 (a counter) is the refusal at once."""
+    for attempt in range(1, RETRY_TRIES + 2):
+        try:
+            return _request_once(method, path, body, token, form, timeout)
+        except Problem as p:
+            if p.status != 429 or p.refusal != "rate_limited" or attempt > RETRY_TRIES:
+                raise
+            wait = retry_wait(p.retry_after, attempt)
+            if wait is None:
+                raise
+            if wait >= 5:
+                print(f"LiveLLM: too many requests; trying again in {round(wait)}s", file=sys.stderr)
+            SLEEP(wait)
+
+
+SLEEP = time.sleep  # tests replace it
+
+
+def _request_once(method, path, body=None, token=None, form=False, timeout=TIMEOUT):
     url = path if path.startswith("http") else API + path
     data, headers = None, {"accept": "application/json"}
     if body is not None:
@@ -128,7 +169,9 @@ def request(method, path, body=None, token=None, form=False, timeout=TIMEOUT):
             payload = json.loads(text)
         except json.JSONDecodeError:
             payload = {"error": text.strip()[:200] or e.reason}
-        raise http_problem(e.code, payload) from None
+        p = http_problem(e.code, payload if isinstance(payload, dict) else {"error": str(payload)})
+        p.retry_after = e.headers.get("Retry-After") if e.headers else None
+        raise p from None
     except (urllib.error.URLError, ConnectionError, TimeoutError, http.client.HTTPException, OSError) as e:
         raise unreachable(e) from None
 
@@ -183,6 +226,8 @@ def status_problem(status, payload):
         return machine
     if status == 504 and code == "machine_unreachable":
         return Problem(message, UNREACHABLE_NEXT, EXIT_USER, status)
+    if status == 429 and code == "rate_limited":
+        return Problem(message, "too many requests at once: wait a minute, then run fewer commands at a time", EXIT_BUSY, status)
     if status == 401:
         return Problem(message, "run: llc.py login, give the user the link it prints, and run login again once they press Allow", EXIT_USER, status)
     if status == 402:
