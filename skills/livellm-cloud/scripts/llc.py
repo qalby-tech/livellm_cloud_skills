@@ -49,6 +49,9 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py template rm T --yes
     llc.py activity [--actor you|platform|all] [--object ID] [--limit N] [--before EVENT]
     llc.py monitoring [ID] [--range 15m|1h|6h|24h|7d]
+    llc.py alerts ID                           (a resource's alert settings: which alerts, at what level)
+    llc.py alerts-set ID [--down usual|off] [--cpu usual|off|N] [--memory usual|off|N]
+                   [--disk usual|off|N] [--gpu usual|off] --yes   (an owner's; N a percent, 50-99)
     llc.py rm ID [--with-databases] [--force] --yes
 
 Sign-in is stored in ~/.config/livellm/credentials.json, readable only by you.
@@ -2839,6 +2842,87 @@ def monitoring(args):
     out(request("GET", path, token=token()))
 
 
+def alerts_path(wid):
+    return f"{workload_path(wid)}/alert-settings"
+
+
+# Alert settings are the workspace owners' to say: an agent sign-in reads them
+# and is always refused a change, whatever its permissions, and a member's key
+# is refused too (owners_only). The generic 403 advice (a permission on the
+# Agents page) would send the user to something that can't help.
+ALERTS_OWNERS_NEXT = ("only the workspace's owners change alert settings, and no permission lets an agent: tell the user, "
+                      "and stop; an owner changes them in the console (the resource's Monitor tab, Alerts) or with an "
+                      "owner's API key")
+
+ALERT_KINDS = ("down", "cpu", "memory", "disk", "gpu")
+LEVELED_KINDS = ("cpu", "memory", "disk")
+
+
+def alerts_problem(p, wid, change=False):
+    """A refusal of the alert-settings routes, worded for what it means: a
+    LiveLLM without them (its router's 404 page, which names no resource), a 422
+    with the part it names, and a change's 403, which only an owner gets
+    past."""
+    low = p.message.lower()
+    names_one = any(w in low for w in ("workload", "workspace", "not found")) or wid in p.message
+    if p.status == 404 and ("page not found" in low or not names_one):
+        return Problem("alert settings aren't available on this LiveLLM",
+                       "tell the user; every resource there gets the usual alerts, and llc.py monitoring still shows "
+                       "them", EXIT_USER, 404)
+    q = None
+    if p.status == 422:
+        field = p.payload.get("field")
+        if isinstance(field, str) and field:
+            parts = field.split(".")
+            flag = f"--{parts[1]}" if len(parts) > 1 and parts[0] == "settings" and parts[1] in ALERT_KINDS else ""
+            q = Problem(f"{p.message} (field {field})",
+                        (f"fix {flag} as the message says" if flag else "fix the field the message names")
+                        + "; do not retry unchanged", EXIT_OTHER, 422)
+    elif change and p.status == 403 and p.refusal in ("", "owners_only"):
+        q = Problem(p.message, ALERTS_OWNERS_NEXT, EXIT_USER, 403)
+    if q is None:
+        return p
+    q.refusal, q.payload, q.oauth = p.refusal, p.payload, p.oauth
+    return q
+
+
+def alert_value(kind, text):
+    """One flag's value as the API takes it: usual, off, or a level (cpu,
+    memory and disk only). The API judges the level's range."""
+    word = str(text).strip().lower()
+    if word in ("usual", "off"):
+        return {"mode": word}
+    if kind in LEVELED_KINDS:
+        try:
+            return {"mode": "level", "level": int(word.rstrip("%"))}
+        except ValueError:
+            pass
+        raise Problem(f"--{kind} takes usual, off or a whole percent from 50 to 99, not {text!r}",
+                      f"fix --{kind}", EXIT_OTHER)
+    raise Problem(f"--{kind} takes usual or off, not {text!r}", f"fix --{kind}", EXIT_OTHER)
+
+
+def alerts(args):
+    """A resource's alert settings: the platform's levels (usual), the kinds
+    of alert that apply to it, and each kind's setting."""
+    try:
+        out(request("GET", alerts_path(args.id), token=token()))
+    except Problem as p:
+        raise alerts_problem(p, args.id) from None
+
+
+def alerts_set(args):
+    """Change only the kinds named; a kind left out keeps what it has."""
+    settings = {k: alert_value(k, getattr(args, k)) for k in ALERT_KINDS if getattr(args, k, None) is not None}
+    if not settings:
+        raise Problem("name at least one kind of alert to change", "add --down, --cpu, --memory, --disk or --gpu",
+                      EXIT_OTHER)
+    try:
+        out(request("PUT", alerts_path(args.id), {"settings": settings}, token=token()))
+    except Problem as p:
+        raise alerts_problem(p, args.id, change=True) from None
+
+
 # A delete clears away what belonged to the resource before it answers, which
 # can take a while; hanging up early could leave some of it behind.
 RM_TIMEOUT = 180
@@ -3102,6 +3186,20 @@ def main():
     mon_p.add_argument("id", nargs="?")
     mon_p.add_argument("--range", choices=["15m", "1h", "6h", "24h", "7d"])
     mon_p.set_defaults(fn=monitoring)
+
+    al_p = sub.add_parser("alerts", help="a resource's alert settings: which alerts it gets and at what level")
+    al_p.add_argument("id")
+    al_p.set_defaults(fn=alerts)
+
+    als_p = sub.add_parser("alerts-set", help="change a resource's alert settings (the kinds named only; an owner's)")
+    als_p.add_argument("id")
+    als_p.add_argument("--down", help="usual (on) or off")
+    als_p.add_argument("--cpu", help="usual, off, or a percent from 50 to 99")
+    als_p.add_argument("--memory", help="usual, off, or a percent from 50 to 99")
+    als_p.add_argument("--disk", help="usual, off, or a percent from 50 to 99")
+    als_p.add_argument("--gpu", help="usual (on) or off")
+    als_p.add_argument("--yes", action="store_true", required=True, help="the user asked for this change")
+    als_p.set_defaults(fn=alerts_set)
 
     rm_p = sub.add_parser("rm", help="delete a resource")
     rm_p.add_argument("id")

@@ -84,6 +84,32 @@ over (at most one per resource and kind of alert every 30 minutes).
 off or on, on the console's Monitoring page (`PUT /v1/monitoring/settings`
 refuses an agent sign-in); if they ask, point them there.
 
+### A resource's alert settings
+
+```
+python3 scripts/llc.py alerts box                                  # which alerts box gets, and at what level
+python3 scripts/llc.py alerts-set box --cpu off --memory 97 --yes  # an owner's key only
+```
+
+Each resource has its own alert settings. `kinds` lists the alerts that apply
+to it: down, processor (`cpu`) and memory always, `disk` when it keeps disks,
+`gpu` when it uses a GPU. Each kind is `usual` (the platform's level, shown in
+`usual`), `level` (the resource's own percent, 50 to 99, for processor,
+memory and disk) or `off` (no alert of that kind); down and GPU alerts are
+usual (on) or off. A processor or memory alert opens after 5 minutes at or
+over its level, a disk alert at once. `alerts-set` changes only the kinds you
+name; the rest keep what they have, and `usual` puts one back. Turning a kind
+off closes its open alert within a minute, with no email. `monitoring` shows
+a resource's settings that aren't the usual under `alertSettings`.
+
+An agent sign-in can read these settings but never change them, whatever its
+permissions: what the user is alerted about is theirs to say. A workspace's
+owner changes them in the console (the resource's Monitor tab, Alerts), or
+with an owner's API key; a member's key reads them only. When a resource runs
+hot on purpose (a build machine at full processor, a cache that fills its
+memory) and its alerts keep opening, suggest that the user raise its level or
+turn that kind off there. Never suggest it to hide a real problem.
+
 ## What happened
 
 ```

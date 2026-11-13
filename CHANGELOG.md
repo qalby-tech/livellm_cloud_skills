@@ -5,6 +5,28 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.20.0
+
+A resource's alert settings. Against a LiveLLM without them nothing changes
+but a plain "not available".
+
+- `llc.py alerts ID` reads which alerts a resource gets and at what level:
+  the platform's levels (`usual`), the kinds that apply to it (down,
+  processor and memory always; disk when it keeps disks; GPU when it uses
+  one) and each kind's setting, usual, its own level (50-99, processor,
+  memory and disk) or off.
+- `llc.py alerts-set ID --cpu usual|off|N --memory … --disk … --down usual|off
+  --gpu usual|off --yes` changes only the kinds named; the rest keep what they
+  have. A refused value (422) keeps the API's words, names the part and the
+  flag to fix. A refusal to an agent sign-in, or to a member's key (403), says
+  that only the workspace's owners change them, in the console or with an
+  owner's key, never a permission to turn on. A LiveLLM without alert settings
+  says they aren't available there.
+- references/workspace.md ("A resource's alert settings"): what the settings
+  are, that an agent reads them and never changes them, and when to suggest
+  them to the user (a resource that runs hot on purpose); SKILL.md's table
+  points there.
+
 ## 1.19.0
 
 Too many requests. Against a LiveLLM without request limits nothing changes.

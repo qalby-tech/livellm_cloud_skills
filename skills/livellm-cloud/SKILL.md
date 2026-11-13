@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.19.0
+  version: 1.20.0
   documentation: https://docs.live-llm.com
 ---
 
@@ -117,6 +117,7 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 | A cache or a queue | Redis (`storage`, `"engine": "redis"`) | `references/databases.md` |
 | Files, uploads, buckets; S3 storage for an app | Object storage (`storage`, `"engine": "s3"`) | `references/databases.md` |
 | Cost, limits, what is running, alerts, what happened, templates, signed-in agents, held machines | Workspace | `references/workspace.md` |
+| A resource's alert settings: which alerts it gets, at what level (a resource that runs hot on purpose) | `alerts` (read; an owner changes them) | `references/workspace.md` |
 
 ## The loop
 
