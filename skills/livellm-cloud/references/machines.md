@@ -108,7 +108,9 @@ devices` lists the ones this workspace's machines may have: `id` (what
 the server that has it, so ask the user before giving one. A set takes them in
 the machine's block (`{"vm": {"devices": ["rtx5090"]}}`); `[]` takes them all
 off, and one that leaves them out keeps them. They change at the machine's
-next restart (ask the user before `restart`).
+next restart (ask the user before `restart`). Where LiveLLM rents GPUs, a GPU
+is rented first and given with `gpu` instead (a GPU in `devices` without a
+rental is 409 `gpu_not_rented`): `references/gpus.md`.
 
 **Its time zone.** `"timeZone": "Europe/Berlin"` (an IANA name) sets the
 machine's time zone when it is made; left out, it gets the cluster's. After

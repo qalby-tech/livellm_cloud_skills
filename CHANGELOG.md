@@ -5,6 +5,44 @@ every changed skill's `SKILL.md` together, add an entry below, then tag
 `vX.Y.Z`. CI checks the skills and attaches a zip of each one to the release.
 Claude Code users get the update only when the version changes.
 
+## 1.21.0
+
+Renting GPUs. Against a LiveLLM that doesn't rent them nothing changes but a
+plain "GPU renting isn't offered on this LiveLLM".
+
+- `llc.py gpu-models` (each model's price an hour and its free GPUs; with
+  `--from` and `--to`, the free GPUs in each hour), `llc.py gpus` (the
+  workspace's rentals) and `llc.py gpu-fit` (what would fit where; rents
+  nothing) read; any key or agent may.
+- `llc.py gpu-rent` rents now (by the minute) or books (`--start` and `--end`,
+  every booked hour charged): one GPU (`--model`), several on one server
+  (`--cards rtx5090=2`) or clusters from a file (`--json`), for a machine or
+  for apps, anywhere or on a `--region` or `--host`; a booking may name the
+  `--machine` or `--apps` that get it at its start. `gpu-fit` takes the same
+  choice and sends the same body.
+- `llc.py gpu-extend`, `gpu-use` (machine to apps or back; says when the GPU is
+  still getting ready), `gpu-release` and `gpu-remove-card`. Every command
+  that rents, books, extends, changes or cancels needs `--yes`. A cancel the
+  API says is charged in full (a booking within a day of its start, 428) is
+  sent again with its confirm only with `--confirm-charge`; without it the
+  command stops and says to ask the user.
+- Who may rent: an agent sign-in is told that it never rents and to ask the
+  user to rent in the console or give a key with the billing permission; a
+  key without billing is told where a person turns it on. Pay as you go off
+  says GPUs are always pay as you go. A rental or an extension that got no
+  answer says to look with `llc.py gpus` before sending it again.
+- GPU refusals by their code (no free GPU, in use, too soon, not ready, a GPU
+  that isn't working, a cluster of several where one per cluster is offered,
+  hours that aren't whole, a GPU in `devices` without a rental, a machine
+  moved off its GPU's server) get their own next step, from the GPU commands
+  and from a create, set or start that names a GPU.
+- A machine, an app or a Desktop App gets a rental through its `gpu` field in
+  an ordinary create or set (`""` takes it off; left out, kept).
+- references/gpus.md: what renting costs, always asking with the price first,
+  who may rent, clusters, giving a GPU to a machine or apps, and what to do
+  when it goes wrong; SKILL.md rule 12, a table row, two refusal rows, and
+  pointers from machines.md and apps.md.
+
 ## 1.20.0
 
 A resource's alert settings. Against a LiveLLM without them nothing changes

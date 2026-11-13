@@ -297,6 +297,13 @@ block (`{"pod": {"dedicatedCores": true}}`); one that leaves it out keeps it,
 so ask the user first. A server with no room answers 409 `server_full`: tell
 the user and let them choose what to stop or shrink.
 
+## A GPU
+
+An app or a Desktop App shares a GPU rented for apps: `"gpu": "<rental id>"`
+in its create file, `{"pod": {"gpu": "<rental id>"}}` in a set (a Desktop
+App's: `{"desktop": {"gpu": …}}`; `""` takes it off, left out keeps it). Renting costs the user money: ask first, with the
+price (`references/gpus.md`).
+
 ## Where it runs
 
 Leave `placement` out and LiveLLM picks the host. To choose, put

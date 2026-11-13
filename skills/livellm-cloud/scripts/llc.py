@@ -52,6 +52,13 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py alerts ID                           (a resource's alert settings: which alerts, at what level)
     llc.py alerts-set ID [--down usual|off] [--cpu usual|off|N] [--memory usual|off|N]
                    [--disk usual|off|N] [--gpu usual|off] --yes   (an owner's; N a percent, 50-99)
+    llc.py gpu-models [--from HOUR --to HOUR] [--use machine|apps]   (prices an hour, free GPUs)
+    llc.py gpus                                (the workspace's GPU rentals)
+    llc.py gpu-fit (--model M --use U | --cards M=N,... --use U | --json CLUSTERS)
+                   [--host H | --region R] [--start HOUR --end HOUR]          (what fits; rents nothing)
+    llc.py gpu-rent (same choice) [--machine M | --apps a,b] --yes            (costs money: ask first)
+    llc.py gpu-extend ID --end HOUR --yes | gpu-use ID machine|apps --yes
+    llc.py gpu-release ID [--confirm-charge] --yes | gpu-remove-card ID CARD [--confirm-charge] --yes
     llc.py rm ID [--with-databases] [--force] --yes
 
 Sign-in is stored in ~/.config/livellm/credentials.json, readable only by you.
@@ -212,6 +219,9 @@ def status_problem(status, payload):
     if code in PRIVATE_ADDRESS and status == PRIVATE_ADDRESS[code][0]:
         _, exit_code, next_step = PRIVATE_ADDRESS[code]
         return Problem(message, next_step, exit_code, status)
+    gpu = gpu_code_problem(status, code, message)
+    if gpu:
+        return gpu
     inside = inside_problem(status, code, message)
     if inside:
         return inside
@@ -630,6 +640,89 @@ PRIVATE_ADDRESS = {
         "the workspace's private range has no free address left: tell the user, and stop; make the machine without "
         "one (--no-private-network) only if they agree, and never delete a machine to free one")),
 }
+
+# A GPU refusal, by its code and status: from the GPU commands, and from a
+# create, set or start of a machine, an app or a Desktop App that names a
+# rented GPU in its `gpu`. Each code is the API's own; the advice never retries
+# a rental blindly, since renting costs the user money.
+GPU_CODES = {
+    "gpu_none_free": (409, EXIT_USER, (
+        "no free GPU of that model for those hours: llc.py gpu-models (with --from and --to for later hours) or "
+        "llc.py gpu-fit shows what is free; ask the user for another model, other hours or fewer GPUs; never send it "
+        "again unchanged")),
+    "gpu_in_use": (409, EXIT_USER, (
+        "something uses the GPU (the message, and usedBy, name it): ask the user before taking it off; stop that "
+        "machine or those apps, or set their gpu to \"\", then try again")),
+    "gpu_change_too_soon": (409, EXIT_BUSY, (
+        "a GPU's use changes at most once an hour: wait until the time the message names (at), then try again once")),
+    "gpu_unavailable": (409, EXIT_BUSY, (
+        "the GPU's server isn't answering: wait a few minutes and try once more, then tell the user")),
+    "gpu_ended": (409, EXIT_USER, (
+        "that rental has ended (llc.py gpus shows it): tell the user; rent again only if they ask, after saying the "
+        "price")),
+    "billing_pending": (409, EXIT_USER, (
+        "the organization isn't paid for yet: tell the user an owner pays for it in the console, and stop")),
+    "update_open": (409, EXIT_BUSY, "LiveLLM is being updated: wait a few minutes and try once more"),
+    "gpu_clusters_off": (422, EXIT_USER, (
+        "only one GPU per cluster here: tell the user; ask for one GPU, or several clusters of one GPU each, only if "
+        "they agree")),
+    "gpu_per_card": (422, EXIT_USER, (
+        "two GPUs of one model for one machine need a server that can tell them apart, and none here can: ask the "
+        "user for one GPU of that model, or GPUs for apps")),
+    "gpu_span": (422, EXIT_OTHER, (
+        "use whole UTC hours such as 2026-11-20T14:00:00Z: at least 1 hour, at most 30 days, starting within 90 days "
+        "(an extension: a later whole hour); fix it, never retry unchanged")),
+    "gpu_booking_cap": (422, EXIT_USER, (
+        "the account has 168 booked hours ahead already: tell the user; a booking that ends frees its hours")),
+    "gpu_model": (422, EXIT_OTHER, "no such GPU model here: llc.py gpu-models lists them; fix --model or --cards"),
+    "gpu_wrong_use": (422, EXIT_OTHER, (
+        "a GPU rented for machines goes on one machine (its gpu), one rented for apps on apps and Desktop Apps; a "
+        "booking's use changes only once it runs, and a use it has already is no change; llc.py gpus shows "
+        "each rental's use")),
+    "gpu_location": (422, EXIT_OTHER, (
+        "no such server or region for this workspace: llc.py gpu-fit lists the ones it may use; fix --host or --region")),
+    "gpu_too_many": (422, EXIT_OTHER, "at most 8 clusters of at most 8 GPUs each: ask for fewer"),
+    "gpu_unknown": (422, EXIT_OTHER, "no such GPU rental (or GPU in it): llc.py gpus lists them; fix the id"),
+    "gpu_last_card": (422, EXIT_USER, (
+        "a cluster keeps at least one GPU: to stop all of them, release the rental (llc.py gpu-release) once the "
+        "user agrees")),
+    "gpu_pods": (422, EXIT_OTHER, "too many copies of the app for one GPU: fewer replicas, as the message says"),
+    "gpu_server": (422, EXIT_OTHER, (
+        "a machine with a GPU stays on its GPU's server: leave placement out of the change, or ask the user")),
+}
+
+
+def gpu_code_problem(status, code, message):
+    """A GPU refusal known by its code, worded for what it means; None for any
+    other answer. gpu_not_ready means three things, told by its words."""
+    if code == "gpu_not_ready" and status == 409:
+        low = message.lower()
+        if "isn't working" in low:
+            return Problem(message, "one GPU of the cluster isn't working, so its machine waits: tell the user; take it "
+                           "off (llc.py gpu-remove-card ID CARD --yes, CARD from llc.py gpus) only if they agree, and the "
+                           "machine runs on the rest", EXIT_USER, status)
+        if "offered" in low:
+            return Problem(message, "GPUs aren't offered on this LiveLLM: leave gpu out, and tell the user",
+                           EXIT_USER, status)
+        return Problem(message, "the GPU is getting ready (llc.py gpus shows its phase): wait a minute and try again",
+                       EXIT_NOT_READY, status)
+    if code == "gpu_not_rented" and status == 409:
+        if "set this gpu to machines" in message.lower():
+            return Problem(message, "GPUs here aren't rented: an administrator sets each one for machines or apps; tell "
+                           "the user, and stop (llc.py gpus lists the GPUs the workspace has, and gpu names one of them)",
+                           EXIT_USER, status)
+        return Problem(message, "a GPU named in the machine's devices needs a rental here: ask the user, saying the "
+                       "price from llc.py gpu-models, then rent one for machines (llc.py gpu-rent) and give it to the "
+                       "machine with its gpu field instead of devices", EXIT_USER, status)
+    if code == "gpu_not_offered" and status in (403, 409):
+        return Problem(message, "this GPU can't be rented here (a model with no price yet, or a workspace GPUs can't "
+                       "be rented for): tell the user, and stop; llc.py gpu-models shows the models with a price",
+                       EXIT_USER, status)
+    if code in GPU_CODES and status == GPU_CODES[code][0]:
+        _, exit_code, next_step = GPU_CODES[code]
+        return Problem(message, next_step, exit_code, status)
+    return None
+
 
 # The fields a machine's private address is asked with: on a create only.
 PRIVATE_FIELDS = ("privateNetwork", "privateAddress")
@@ -2923,6 +3016,243 @@ def alerts_set(args):
         raise alerts_problem(p, args.id, change=True) from None
 
 
+# --- GPUs: rented by the minute, or booked for whole hours ------------------
+#
+# Renting spends the user's money, so every command that rents, books, extends
+# or cancels needs --yes (the user agreed, after hearing the price), and a
+# cancel the API says is charged in full is sent again with its confirm only
+# with --confirm-charge (the user agreed to that charge too). Reads are open to
+# any key and agent; renting needs a person, or an API key with the billing
+# permission: an agent sign-in never rents.
+
+GPU_USES = ("machine", "apps")
+
+GPU_AGENT_NEXT = ("an agent sign-in can never rent GPUs, whatever its permissions: tell the user, and stop; they rent it "
+                  "in the LiveLLM console (GPUs), or give you an API key with the billing permission (LIVELLM_API_KEY)")
+GPU_KEY_NEXT = ("this API key can't rent GPUs: tell the user, and stop; a person gives the key the billing permission on "
+                "the console's Keys page, or rents the GPU in the console")
+GPU_PAYG_NEXT = ("GPUs are always pay as you go, and it is off: tell the user, and stop; they turn it on on the console's "
+                 "Billing page; it costs them money, so they decide")
+GPU_MAYBE_MADE_NEXT = ("no answer came back, so the change may have been made: run llc.py gpus and look before sending "
+                       "it again; never rent or extend twice")
+
+
+def gpus_path(*parts):
+    return "/v1/gpus" + "".join("/" + urllib.parse.quote(str(x), safe="") for x in parts)
+
+
+def gpu_problem(p, write=False):
+    """A refusal of the GPU routes, worded for what it means: a LiveLLM
+    without GPUs or without renting (404: an unknown rental is a 422 there),
+    who may not rent (an agent sign-in, a key without billing: a 403 with no
+    code), pay as you go off, and an answer lost on the way back."""
+    q = None
+    if p.status == 404:
+        if write:
+            q = Problem("GPU renting isn't offered on this LiveLLM", "tell the user, and stop; leave gpu out of what you "
+                        "make (llc.py gpus lists any GPU the workspace already has)", EXIT_USER, 404)
+        else:
+            q = Problem("GPUs aren't offered on this LiveLLM", "tell the user if they wanted one, and leave gpu out",
+                        EXIT_USER, 404)
+    elif write and p.status == 403 and not p.refusal:
+        q = Problem(p.message, GPU_KEY_NEXT if API_KEY else GPU_AGENT_NEXT, EXIT_USER, 403)
+    elif write and p.status == 402 and p.refusal == "payg_off":
+        q = Problem(p.message, GPU_PAYG_NEXT, EXIT_USER, 402)
+    elif write and not p.refusal and (p.status is None or p.status >= 500):
+        q = Problem(p.message, GPU_MAYBE_MADE_NEXT, EXIT_OTHER, p.status)
+    if q is None:
+        return p
+    q.refusal, q.payload, q.oauth = p.refusal, p.payload, p.oauth
+    return q
+
+
+def gpu_call(method, path, body=None, write=False):
+    try:
+        return request(method, path, body, token=token())
+    except Problem as p:
+        raise gpu_problem(p, write) from None
+
+
+def gpu_location(args):
+    host, region = getattr(args, "host", None), getattr(args, "region", None)
+    if host and region:
+        raise Problem("name a host or a region, not both", "drop one of --host and --region", EXIT_OTHER)
+    if host:
+        return {"mode": "host", "host": host}
+    if region:
+        return {"mode": "region", "region": region}
+    return None
+
+
+def gpu_cards(text):
+    """--cards rtx5090=2,h100=1: how many GPUs of each model, on one server."""
+    cards = {}
+    for part in split_names(text):
+        model, _, n = part.partition("=")
+        try:
+            count = int(n) if n else 1
+        except ValueError:
+            count = 0
+        if not model or count < 1:
+            raise Problem(f"--cards takes MODEL=COUNT pairs such as rtx5090=2, not {part!r}", "fix --cards", EXIT_OTHER)
+        cards[model] = cards.get(model, 0) + count
+    if not cards:
+        raise Problem("--cards names no GPU", "fix --cards, for example rtx5090=2", EXIT_OTHER)
+    return cards
+
+
+def gpu_body(args, rent=False):
+    """The body of a rental, and of gpu-fit (its dry run): one GPU (--model),
+    several on one server (--cards), or clusters from a file (--json); now, or
+    booked (--start and --end, whole UTC hours)."""
+    picked = [f for f, v in (("--model", args.model), ("--cards", args.cards), ("--json", args.json)) if v]
+    if len(picked) != 1:
+        raise Problem("name what to rent with one of --model (one GPU), --cards (several on one server) or --json "
+                      "(clusters)" if not picked else f"{' and '.join(picked)} don't go together",
+                      "llc.py gpu-models lists the models", EXIT_OTHER)
+    location = gpu_location(args)
+    target = None
+    if rent and (args.machine or args.apps):
+        if not args.start:
+            raise Problem("--machine and --apps name what a booking gets at its start",
+                          "for a GPU rented now, give it to the machine or the apps with llc.py set once it is ready "
+                          "(its gpu field), and leave --machine and --apps out", EXIT_OTHER)
+        if args.machine and args.apps:
+            raise Problem("a GPU goes to one machine, or to apps, not both", "drop --machine or --apps", EXIT_OTHER)
+        target = {"machine": args.machine} if args.machine else {"apps": split_names(args.apps)}
+    if args.json:
+        if location or target or args.use:
+            raise Problem("with --json each cluster says its own use, location and target",
+                          "put them in the file's clusters, and leave --use, --host, --region, --machine and --apps out",
+                          EXIT_OTHER)
+        data = read_json_file(args.json, "the clusters")
+        extra = sorted(k for k in data if k != "clusters") if isinstance(data, dict) else []
+        if extra:
+            # hours or a model in the file would otherwise be dropped, and a
+            # booking sent as a rental now with no end
+            raise Problem(f"{args.json} holds {', '.join(extra)} beside clusters, which this command doesn't read from "
+                          "the file", "keep only clusters in the file; hours go in --start and --end", EXIT_OTHER)
+        clusters = data if isinstance(data, list) else data.get("clusters") if isinstance(data, dict) else None
+        if not isinstance(clusters, list) or not clusters or not all(isinstance(c, dict) for c in clusters):
+            raise Problem(f"{args.json} should hold a list of clusters, or {{\"clusters\": [...]}}, each "
+                          "{\"use\": \"machine\" or \"apps\", \"cards\": {\"MODEL\": COUNT}}", "fix the file", EXIT_OTHER)
+        body = {"clusters": clusters}
+    else:
+        if args.use not in GPU_USES:
+            raise Problem("say what gets the GPU: --use machine (one machine has it whole) or --use apps (apps and "
+                          "Desktop Apps share it)", "add --use", EXIT_OTHER)
+        if args.model:
+            body = {"model": args.model, "use": args.use}
+            if location:
+                body["location"] = location
+            if target:
+                body["target"] = target
+        else:
+            cluster = {"use": args.use, "cards": gpu_cards(args.cards)}
+            if location:
+                cluster["location"] = location
+            if target:
+                cluster["target"] = target
+            body = {"clusters": [cluster]}
+    if args.start and not args.end:
+        raise Problem("a booking needs its end too", "add --end (a whole UTC hour after --start)", EXIT_OTHER)
+    if args.start:
+        body["startsAt"] = args.start
+    if args.end:
+        body["endsAt"] = args.end
+    return body
+
+
+def gpu_models(args):
+    """Every GPU model with its price an hour, how many are free now, and with
+    --from and --to the free GPUs in each of those hours."""
+    query = {k: v for k, v in (("from", args.from_), ("to", args.to), ("use", args.use)) if v}
+    if bool(args.from_) != bool(args.to):
+        raise Problem("--from and --to go together", "add the other one (whole UTC hours, at most 14 days apart)",
+                      EXIT_OTHER)
+    path = gpus_path("models") + ("?" + urllib.parse.urlencode(query) if query else "")
+    out(gpu_call("GET", path))
+
+
+def gpus_list(_args):
+    """The workspace's GPUs: rentals booked, running, and ended in the last 30
+    days, each with its id, use, phase, end, what uses it and its charge this
+    month."""
+    out(gpu_call("GET", gpus_path()))
+
+
+def gpu_fit(args):
+    """What would fit, never rented: the same choice as gpu-rent."""
+    out(gpu_call("POST", gpus_path("fit"), gpu_body(args)))
+
+
+def gpu_rent(args):
+    body = gpu_body(args, rent=True)
+    answer = gpu_call("POST", gpus_path(), body, write=True)
+    rentals = answer.get("clusters") or ([answer["rental"]] if answer.get("rental") else [])
+    ids = [r.get("id") for r in rentals if isinstance(r, dict) and r.get("id")]
+    first = ids[0] if ids else "ID"
+    if args.start:
+        answer["next"] = (f"booked: every booked hour is charged from its start, used or not; cancelling more than 24 "
+                          f"hours before its start is free (llc.py gpu-release {first} --yes), later it is charged in full")
+    else:
+        answer["next"] = (f"charged by the minute until it ends or is released (llc.py gpu-release {first} --yes); "
+                          f"llc.py gpus until its phase is ready, then give it to what the user named, with their "
+                          f"agreement: llc.py set ID --json FILE --yes with {{\"vm\": {{\"gpu\": \"{first}\"}}}} for a "
+                          f"machine, {{\"pod\": {{\"gpu\": \"{first}\"}}}} for an app, {{\"desktop\": {{\"gpu\": "
+                          f"\"{first}\"}}}} for a Desktop App")
+    out(answer)
+
+
+def gpu_extend(args):
+    """A later end for a booking or a running rental (every GPU of a
+    cluster), if its GPUs are free for the added hours."""
+    out(gpu_call("PATCH", gpus_path(args.id), {"endsAt": args.end}, write=True))
+
+
+def gpu_use(args):
+    """From machine to apps or back, at most once an hour, with nothing using
+    it. The answer's phase says whether the GPU is getting ready."""
+    answer = gpu_call("POST", gpus_path(args.id, "use"), {"use": args.use}, write=True)
+    phase = (answer.get("rental") or {}).get("phase", "")
+    if str(phase).startswith("switching"):
+        answer["next"] = f"the GPU is getting ready for its new use: llc.py gpus until {args.id}'s phase is ready"
+    out(answer)
+
+
+def gpu_charged_cancel(p, what):
+    return Problem(p.message, f"{what} now is charged in full (it starts within a day): tell the user what it costs "
+                   f"(every hour booked, at the price llc.py gpu-models shows) and ask; only with their agreement run "
+                   f"the same command again with --confirm-charge", EXIT_USER, 428)
+
+
+def gpu_delete(path, confirm, may_charge, what):
+    """A delete that is free, or charged in full once the API says so (428):
+    sent with no body first; again with its confirm only with --confirm-charge."""
+    try:
+        return gpu_call("DELETE", path, write=True)
+    except Problem as p:
+        if p.status != 428:
+            raise
+        if not may_charge:
+            q = gpu_charged_cancel(p, what)
+            q.refusal, q.payload = p.refusal, p.payload
+            raise q from None
+    return gpu_call("DELETE", path, {"confirm": confirm}, write=True)
+
+
+def gpu_release(args):
+    """Release a running rental (charging stops now), or cancel a booking."""
+    out(gpu_delete(gpus_path(args.id), args.id, args.confirm_charge, "cancelling this booking"))
+
+
+def gpu_remove_card(args):
+    """Take one GPU off a cluster of several (one that isn't working, say),
+    while nothing runs on the cluster; the rest stay."""
+    out(gpu_delete(gpus_path(args.id, "cards", args.card), args.card, args.confirm_charge,
+                   "taking this booked GPU off"))
+
+
 # A delete clears away what belonged to the resource before it answers, which
 # can take a while; hanging up early could leave some of it behind.
 RM_TIMEOUT = 180
@@ -3201,7 +3531,65 @@ def main():
     als_p.add_argument("--yes", action="store_true", required=True, help="the user asked for this change")
     als_p.set_defaults(fn=alerts_set)
 
-    rm_p = sub.add_parser("rm", help="delete a resource")
+    gm_p = sub.add_parser("gpu-models", help="the GPUs to rent: each model's price an hour and how many are free")
+    gm_p.add_argument("--from", dest="from_", help="with --to: free GPUs in each whole UTC hour from this one")
+    gm_p.add_argument("--to", help="the hour after the last one counted (at most 14 days after --from)")
+    gm_p.add_argument("--use", choices=GPU_USES, help="count free GPUs for a machine or for apps (default apps)")
+    gm_p.set_defaults(fn=gpu_models)
+
+    sub.add_parser("gpus", help="the workspace's GPU rentals: booked, running, and ended in the last 30 days").set_defaults(fn=gpus_list)
+
+    def gpu_choice(sp, rent):
+        sp.add_argument("--model", help="one GPU of this model (llc.py gpu-models)")
+        sp.add_argument("--cards", help="several GPUs on one server, MODEL=COUNT,... (rtx5090=2)")
+        sp.add_argument("--json", help="a file with clusters: [{\"use\", \"cards\", \"location\"?, \"target\"?}]")
+        sp.add_argument("--use", help="machine (one machine has the GPU whole) or apps (apps and Desktop Apps share it)")
+        sp.add_argument("--host", help="on this server (llc.py gpu-fit lists them)")
+        sp.add_argument("--region", help="on a server of this region")
+        sp.add_argument("--start", help="a booking: its first whole UTC hour (2026-11-20T14:00:00Z); left out, now")
+        sp.add_argument("--end", help="when it ends, a whole UTC hour; a booking needs one, a rental now may run until released")
+        if rent:
+            sp.add_argument("--machine", help="a booking: the machine that gets it at its start (use machine)")
+            sp.add_argument("--apps", help="a booking: the apps or Desktop Apps that get it at its start, a,b (use apps)")
+            sp.add_argument("--yes", action="store_true", required=True,
+                            help="the user agreed to rent it, after hearing the price")
+
+    gf_p = sub.add_parser("gpu-fit", help="what GPUs would fit where, for the same choice as gpu-rent; rents nothing")
+    gpu_choice(gf_p, rent=False)
+    gf_p.set_defaults(fn=gpu_fit)
+
+    gr_p = sub.add_parser("gpu-rent", help="rent GPUs now (by the minute) or book them (every hour charged); costs money")
+    gpu_choice(gr_p, rent=True)
+    gr_p.set_defaults(fn=gpu_rent)
+
+    ge_p = sub.add_parser("gpu-extend", help="a later end for a rental or a booking; costs money")
+    ge_p.add_argument("id")
+    ge_p.add_argument("--end", required=True, help="the new end, a later whole UTC hour")
+    ge_p.add_argument("--yes", action="store_true", required=True, help="the user agreed to the added hours and their price")
+    ge_p.set_defaults(fn=gpu_extend)
+
+    gu_p = sub.add_parser("gpu-use", help="change a rental from machine to apps or back (at most once an hour)")
+    gu_p.add_argument("id")
+    gu_p.add_argument("use", choices=GPU_USES)
+    gu_p.add_argument("--yes", action="store_true", required=True, help="the user asked for this change")
+    gu_p.set_defaults(fn=gpu_use)
+
+    grl_p = sub.add_parser("gpu-release", help="release a rental (charging stops now) or cancel a booking")
+    grl_p.add_argument("id")
+    grl_p.add_argument("--confirm-charge", action="store_true",
+                       help="a booking starting within a day: the user agreed it is charged in full")
+    grl_p.add_argument("--yes", action="store_true", required=True, help="the user asked for this")
+    grl_p.set_defaults(fn=gpu_release)
+
+    grc_p = sub.add_parser("gpu-remove-card", help="take one GPU off a cluster of several, while nothing runs on it")
+    grc_p.add_argument("id")
+    grc_p.add_argument("card", help="the GPU's id (cards[].id in llc.py gpus)")
+    grc_p.add_argument("--confirm-charge", action="store_true",
+                       help="a booked GPU starting within a day: the user agreed it is charged in full")
+    grc_p.add_argument("--yes", action="store_true", required=True, help="the user asked for this")
+    grc_p.set_defaults(fn=gpu_remove_card)
+
+    rm_p =sub.add_parser("rm", help="delete a resource")
     rm_p.add_argument("id")
     rm_p.add_argument("--with-databases", action="store_true", help="an app: also delete the databases made with it that no other app uses")
     rm_p.add_argument("--force", action="store_true", help="delete even though another app's settings name it")

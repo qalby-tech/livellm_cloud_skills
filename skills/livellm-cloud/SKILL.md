@@ -1,11 +1,11 @@
 ---
 name: livellm-cloud
-description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP, or a Firefox-based Camoufox browser with Playwright for sites that block Chrome, while a person watches the live view, give it a language, a time zone and the user's own proxies (rotating, mobile ones too), save, restore, export or import its profile, put several browsers behind one Browser API address, run commands on Linux (Ubuntu, Debian or Fedora) and Windows machines, work on Ubuntu or Windows desktops and Desktop Apps by screenshot and click, share a screen with the user by link, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases and S3 object storage. Use when the user asks to automate or log into a website with a real browser, get a server or a desktop, run code on another machine, deploy an app, spin up a database or S3 bucket storage, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
+description: Gives an agent real computers on LiveLLM Cloud. Drive a Chrome browser over CDP, or a Firefox-based Camoufox browser with Playwright for sites that block Chrome, while a person watches the live view, give it a language, a time zone and the user's own proxies (rotating, mobile ones too), save, restore, export or import its profile, put several browsers behind one Browser API address, run commands on Linux (Ubuntu, Debian or Fedora) and Windows machines, work on Ubuntu or Windows desktops and Desktop Apps by screenshot and click, share a screen with the user by link, deploy apps from a Docker image or a Git repo, and create Postgres or Redis databases and S3 object storage. Use when the user asks to automate or log into a website with a real browser, get a server, a desktop or a GPU, run code on another machine, deploy an app, spin up a database or S3 bucket storage, or check what is running in LiveLLM. Do NOT use for LiteLLM, local Docker, or other cloud providers.
 license: MIT
 compatibility: Needs outbound HTTPS to the LiveLLM Cloud API and Python 3.9 or newer. Signs in through a one-click approval link, or uses LIVELLM_API_KEY for unattended runs.
 metadata:
   author: LiveLLM
-  version: 1.20.0
+  version: 1.21.0
   documentation: https://docs.live-llm.com
 ---
 
@@ -68,6 +68,11 @@ Everything goes through `scripts/llc.py`, which talks to the API and prints JSON
     resource here can reach it is letting it in too. Never get around a
     refusal, for example with a public address
     (`references/inside-access.md`).
+12. Renting a GPU costs the user money: by the minute, and a booking every
+    booked hour. Before you rent, book, extend or cancel one, say the model,
+    the hours and the price from `gpu-models`, and wait for their agreement.
+    An agent sign-in can't rent: the user rents in the console, or gives you
+    an API key with the billing permission (`references/gpus.md`).
 
 ## Signing in
 
@@ -102,6 +107,7 @@ runs with nobody present the user can set `LIVELLM_API_KEY` instead, and
 | A Windows server, no desktop | Windows Server Core (`vm-windows`, `"windowsEdition": "server"`) | `references/machines.md` |
 | A Linux desktop that starts in seconds, one for each task or agent | Desktop App (`desktop`) | `references/machines.md` |
 | One of the cluster's GPUs or USB controllers on a machine; a machine's time zone | Machine `"devices"` (`devices` lists them), `"timeZone"` | `references/machines.md` |
+| A GPU rented by the hour, or booked, for a machine or for apps; several GPUs together | `gpu-models`, `gpu-rent`, then `"gpu"` on the machine or app (rule 12) | `references/gpus.md` |
 | Ports published together on a machine: game streaming (Moonlight), an FTP range | Machine `"portGroups"` | `references/machines.md` |
 | Machines that talk to each other at fixed private addresses, on any port | Machine `"privateAddress"` (automatic where offered; `create --private-address`, `--no-private-network`) | `references/machines.md` |
 | The user to watch a screen, or take it over | Screen link (`share`) | `references/machines.md` |
@@ -214,6 +220,8 @@ Every error prints `{"error": ..., "next": ...}`. Do what `next` says.
 | 403 `payg_not_offered` | Pay as you go isn't open to this account yet | Tell the user, and stop; no permission changes it |
 | 403 | Beyond this agent's permissions, or someone else's resource | Tell the user which permission it needs; they turn it on on the Agents page |
 | 403 `owners_only`, `own_only`, `credential_no_access`, `support_credentials` | Only the workspace's owners, or whoever made it, may do this; the person behind this agent or key no longer has access; or LiveLLM support's own agent or key is in a customer's workspace | Tell the user, and stop; no permission changes it |
+| 403 renting a GPU | An agent sign-in never rents; a key needs the billing permission | Tell the user: they rent in the console, or give you a key with billing (rule 12) |
+| 428 cancelling a GPU booking | It starts within a day, so it is charged in full | Ask the user; only with their agreement run it again with `--confirm-charge` |
 | 403 naming Network | Letting one resource reach another | Ask the user (rule 11); only a person turns on Network, for an agent on the Agents page, for a key on the Keys page |
 | 404 | No such resource here | `ls`; the id is probably wrong |
 | 409 | Another agent holds the machine, or the resource is mid-change | Held: wait until the time it names, or use another. A database "still starting" can't move: ask the user, don't retry. Otherwise wait a few seconds, retry once |
