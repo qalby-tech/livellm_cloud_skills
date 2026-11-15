@@ -131,6 +131,31 @@ python3 scripts/llc.py gpu-remove-card g-3f9a12bc g-7c01d2e4 --yes
   on the cluster; the rest stay and its charging stops. The last GPU stays:
   release the rental instead.
 
+## The NVIDIA driver
+
+A machine with an NVIDIA GPU installs the NVIDIA driver by itself (Ubuntu,
+Debian, Fedora and Windows; a machine made on LiveLLM API 0.101.9 or newer),
+at its first start and after each kernel update. Nothing is needed from you;
+look before telling the user it works:
+
+```bash
+python3 scripts/llc.py gpu-driver box
+```
+
+`state` is `working` (`detail` is the version), `installing` (up to 20
+minutes: read again later), `restart-needed` (installed; one restart
+finishes it: ask the user first, the platform never restarts it by itself),
+`failed` (tell the user, with `log`), `none` (no NVIDIA GPU on the machine),
+`off` (turned off inside the machine), `unsupported`, or `not-installed` (a
+machine made before the driver program). For `not-installed`, and to try a
+failed install again, with the user's go:
+
+```bash
+python3 scripts/llc.py gpu-driver-install box --yes
+```
+
+It answers at once (`installing`); the machine must be running.
+
 ## When it goes wrong
 
 - **403 to an agent sign-in, or to a key without billing.** Tell the user, and

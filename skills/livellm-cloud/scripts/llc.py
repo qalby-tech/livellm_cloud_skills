@@ -49,6 +49,8 @@ code: 2 the user must act, 3 not ready yet, 4 busy, 1 anything else.
     llc.py template rm T --yes
     llc.py activity [--actor you|platform|all] [--object ID] [--limit N] [--before EVENT]
     llc.py monitoring [ID] [--range 15m|1h|6h|24h|7d]
+    llc.py gpu-driver ID                       (a machine's NVIDIA driver: working, installing, restart-needed, failed…)
+    llc.py gpu-driver-install ID --yes         (put the driver program on a machine made before it, or try again)
     llc.py alerts ID                           (a resource's alert settings: which alerts, at what level)
     llc.py alerts-set ID [--down usual|off] [--cpu usual|off|N] [--memory usual|off|N]
                    [--disk usual|off|N] [--gpu usual|off] --yes   (an owner's; N a percent, 50-99)
@@ -3016,6 +3018,64 @@ def alerts_set(args):
         raise alerts_problem(p, args.id, change=True) from None
 
 
+# --- A machine's NVIDIA driver --------------------------------------------------
+#
+# Every machine made on LiveLLM API 0.101.9 or newer installs the NVIDIA
+# driver by itself when it has an NVIDIA card (Ubuntu, Debian, Fedora and
+# Windows), at its first start and after each kernel update. gpu-driver reads
+# where that is; gpu-driver-install puts the program on a machine made before
+# it, or tries a failed install again. The install runs in the machine (up to
+# 20 minutes); the platform never restarts the machine for it.
+
+DRIVER_NEXT = {
+    "restart-needed": "tell the user the driver is installed and the machine needs one restart to finish; restart it "
+                      "only if they agree (llc.py restart ID)",
+    "failed": "tell the user, with the log; llc.py gpu-driver-install ID --yes tries again",
+    "not-installed": "llc.py gpu-driver-install ID --yes puts the driver program on it (a machine made before it)",
+    "installing": "wait; read it again in a few minutes (an install takes up to 20 minutes)",
+    "pending": "wait a minute and read it again",
+}
+
+
+def gpu_driver_path(wid):
+    return f"{workload_path(wid)}/gpu-driver"
+
+
+def gpu_driver_problem(p):
+    """A LiveLLM without the driver routes (its router's 404 page) says so;
+    everything else keeps the API's words."""
+    if p.status == 404 and "page not found" in p.message.lower():
+        return Problem("the NVIDIA driver isn't available on this LiveLLM",
+                       "tell the user; it needs LiveLLM API 0.101.9 or newer", EXIT_USER, 404)
+    return p
+
+
+def with_driver_next(answer, wid):
+    nxt = DRIVER_NEXT.get((answer or {}).get("state"))
+    if nxt:
+        answer = dict(answer, next=nxt.replace("ID", wid))
+    return answer
+
+
+def gpu_driver(args):
+    """A machine's NVIDIA driver: its state, a detail and the end of its log."""
+    try:
+        out(with_driver_next(request("GET", gpu_driver_path(args.id), token=token(), timeout=180), args.id))
+    except Problem as p:
+        raise gpu_driver_problem(p) from None
+
+
+def gpu_driver_install(args):
+    """Put the NVIDIA driver program on a running machine and start it; it
+    answers at once (installing)."""
+    try:
+        res = request("POST", gpu_driver_path(args.id), token=token(), timeout=300)
+    except Problem as p:
+        raise gpu_driver_problem(p) from None
+    res = dict(res or {}, next=f"llc.py gpu-driver {args.id} in a few minutes shows how it goes")
+    out(res)
+
+
 # --- GPUs: rented by the minute, or booked for whole hours ------------------
 #
 # Renting spends the user's money, so every command that rents, books, extends
@@ -3530,6 +3590,15 @@ def main():
     als_p.add_argument("--gpu", help="usual (on) or off")
     als_p.add_argument("--yes", action="store_true", required=True, help="the user asked for this change")
     als_p.set_defaults(fn=alerts_set)
+
+    gd_p = sub.add_parser("gpu-driver", help="a machine's NVIDIA driver: working, installing, restart-needed, failed…")
+    gd_p.add_argument("id")
+    gd_p.set_defaults(fn=gpu_driver)
+
+    gdi_p = sub.add_parser("gpu-driver-install", help="put the NVIDIA driver program on a running machine, or try a failed install again")
+    gdi_p.add_argument("id")
+    gdi_p.add_argument("--yes", action="store_true", required=True, help="the user asked for this")
+    gdi_p.set_defaults(fn=gpu_driver_install)
 
     gm_p = sub.add_parser("gpu-models", help="the GPUs to rent: each model's price an hour and how many are free")
     gm_p.add_argument("--from", dest="from_", help="with --to: free GPUs in each whole UTC hour from this one")

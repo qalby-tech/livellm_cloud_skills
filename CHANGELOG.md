@@ -38,6 +38,11 @@ plain "GPU renting isn't offered on this LiveLLM".
   and from a create, set or start that names a GPU.
 - A machine, an app or a Desktop App gets a rental through its `gpu` field in
   an ordinary create or set (`""` takes it off; left out, kept).
+- A machine's NVIDIA driver: `llc.py gpu-driver ID` (working, installing,
+  restart-needed, failed…, with what to do next) and `llc.py
+  gpu-driver-install ID --yes` (a machine made before the driver program, or
+  a failed install tried again); references/gpus.md "The NVIDIA driver".
+  Needs LiveLLM API 0.101.9 or newer; an older one says so.
 - references/gpus.md: what renting costs, always asking with the price first,
   who may rent, clusters, giving a GPU to a machine or apps, and what to do
   when it goes wrong; SKILL.md rule 12, a table row, two refusal rows, and
